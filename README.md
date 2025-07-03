@@ -4,7 +4,7 @@ A Smart and Sustainable Car Rental Recommendation and Optimization System
 Empowering car rental agencies with AI-driven personalization, fleet optimization, and eco-friendly solutions.
 
 📋 Project Overview
-VitaRenta is an innovative web and mobile application designed to transform the car rental industry by combining hyper-personalized recommendations, fleet optimization, and sustainable practices. Built for the 2025-2026 academic year by Jihene Jebri and Mohamed Aziz Kasseb, this project leverages responsible AI to enhance customer experience and operational efficiency while promoting eco-friendly mobility.
+VitaRenta is an innovative web and mobile application designed to transform the car rental industry by combining hyper-personalized recommendations, fleet optimization, and sustainable practices.  this project leverages responsible AI to enhance customer experience and operational efficiency while promoting eco-friendly mobility.
 Key Features
 
 Personalized Recommendations: Tailored vehicle suggestions based on user profiles, context (e.g., weather, events), and historical data.
