@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="VitaRenta - Location de véhicules premium rapide et sécurisée. Découvrez notre flotte de 500+ véhicules disponibles 24/7." />
+    <meta name="keywords" content="location voiture, véhicules premium, VitaRenta, location auto, voiture de luxe, SUV, citadine, électrique" />
+    <meta name="author" content="VitaRenta" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="VitaRenta - Location de Véhicules Premium" />
+    <meta property="og:description" content="Location de véhicules premium rapide et sécurisée. Plus de 500 véhicules disponibles." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vitarenta.com" />
+    <meta property="og:image" content="https://vitarenta.com/og-image.jpg" />
+    <meta property="og:site_name" content="VitaRenta" />
+    <meta property="og:locale" content="fr_FR" />
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="VitaRenta - Location de Véhicules Premium" />
+    <meta name="twitter:description" content="Location de véhicules premium rapide et sécurisée. Plus de 500 véhicules disponibles." />
+    <meta name="twitter:image" content="https://vitarenta.com/twitter-image.jpg" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- DNS Prefetch -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/Inter-Medium.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/Inter-Bold.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/index.css" />
+
+    <!-- Title -->
+    <title>VitaRenta - Location de Véhicules Premium</title>
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            "name": "VitaRenta",
+            "description": "Location de véhicules premium rapide et sécurisée",
+            "url": "https://vitarenta.com",
+            "logo": "https://vitarenta.com/logo.png",
+            "contactPoint": {
+                "@type": "ContactPoint",
+                "telephone": "+33-1-23-45-67-89",
+                "contactType": "Customer Service",
+                "availableLanguage": "French"
+            },
+            "sameAs": [
+                "https://www.facebook.com/vitarenta",
+                "https://www.twitter.com/vitarenta",
+                "https://www.instagram.com/vitarenta"
+            ]
+        }
+    </script>
+</head>
+<body>
+<!-- Skip to main content for accessibility -->
+<a href="#main-content" class="sr-only focus-visible">Aller au contenu principal</a>
+
+<!-- Main App Container -->
+<div id="root"></div>
+
+<!-- Fallback for users with JavaScript disabled -->
+<noscript>
+    <div style="text-align: center; padding: 2rem; background: #f3f4f6; color: #374151;">
+        <h1>🚗 VitaRenta</h1>
+        <p>Cette application nécessite JavaScript pour fonctionner correctement.</p>
+        <p>Veuillez activer JavaScript dans votre navigateur et recharger la page.</p>
+    </div>
+</noscript>
+
+<!-- Main Script -->
+<script type="module" src="/index.js"></script>
+
+<!-- Service Worker Registration -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then((registration) => {
+                    console.log('SW registered: ', registration);
+                })
+                .catch((registrationError) => {
+                    console.log('SW registration failed: ', registrationError);
+                });
+        });
+    }
+</script>
+</body>
+</html>

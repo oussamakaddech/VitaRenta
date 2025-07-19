@@ -7,12 +7,10 @@ const Home = ({ token }) => {
     const [isVisible, setIsVisible] = useState(false);
     const navigate = useNavigate();
 
-    // Animation d'entrée
     useEffect(() => {
         setIsVisible(true);
     }, []);
 
-    // Carousel automatique
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentSlide((prev) => (prev + 1) % 3);
@@ -58,7 +56,7 @@ const Home = ({ token }) => {
         },
         {
             name: 'SUV',
-            icon: '🚙',
+            icon: '🚘',
             price: 'À partir de 45€/jour',
             description: 'Confort et espace',
             image: '🏔️',
@@ -109,7 +107,7 @@ const Home = ({ token }) => {
             <section className="hero-section">
                 <div className="hero-background">
                     <div className="floating-cars">
-                        {['🚗', '🚙', '🏎️', '🚐', '🚓'].map((car, i) => (
+                        {['🚗', '🚘', '🏎️', '🚐', '🚓'].map((car, i) => (
                             <div
                                 key={i}
                                 className="floating-car"
@@ -202,13 +200,11 @@ const Home = ({ token }) => {
                 </div>
             </section>
 
-            {/* Features Section */}
+            {/* Features */}
             <section className="features-section">
                 <div className="section-header">
                     <h2 className="section-title">Pourquoi Choisir VitaRenta ?</h2>
-                    <p className="section-subtitle">
-                        Une expérience de location révolutionnaire
-                    </p>
+                    <p className="section-subtitle">Une expérience de location révolutionnaire</p>
                 </div>
 
                 <div className="features-grid">
@@ -227,13 +223,11 @@ const Home = ({ token }) => {
                 </div>
             </section>
 
-            {/* Vehicle Types Section */}
+            {/* Vehicle Types */}
             <section className="vehicles-section">
                 <div className="section-header">
                     <h2 className="section-title">Notre Flotte Premium</h2>
-                    <p className="section-subtitle">
-                        Trouvez le véhicule parfait pour chaque occasion
-                    </p>
+                    <p className="section-subtitle">Trouvez le véhicule parfait pour chaque occasion</p>
                 </div>
 
                 <div className="vehicles-grid">
@@ -249,10 +243,7 @@ const Home = ({ token }) => {
                                 <div className="vehicle-price">{vehicle.price}</div>
                                 <div className="vehicle-image">{vehicle.image}</div>
                             </div>
-                            <Link
-                                to={token ? "/vehicules" : "/login"}
-                                className="vehicle-button"
-                            >
+                            <Link to={token ? "/vehicules" : "/login"} className="vehicle-button">
                                 <span>Découvrir</span>
                                 <span className="button-arrow">→</span>
                             </Link>
@@ -261,13 +252,11 @@ const Home = ({ token }) => {
                 </div>
             </section>
 
-            {/* How It Works Section */}
+            {/* Steps */}
             <section className="process-section">
                 <div className="section-header">
                     <h2 className="section-title">Comment Ça Marche ?</h2>
-                    <p className="section-subtitle">
-                        3 étapes simples pour votre location
-                    </p>
+                    <p className="section-subtitle">3 étapes simples pour votre location</p>
                 </div>
 
                 <div className="process-steps">
@@ -275,9 +264,7 @@ const Home = ({ token }) => {
                         <div className="step-number">1</div>
                         <div className="step-icon">🔍</div>
                         <h3 className="step-title">Choisissez</h3>
-                        <p className="step-description">
-                            Sélectionnez votre véhicule parmi notre large gamme
-                        </p>
+                        <p className="step-description">Sélectionnez votre véhicule parmi notre large gamme</p>
                     </div>
 
                     <div className="step-connector">
@@ -289,47 +276,38 @@ const Home = ({ token }) => {
                         <div className="step-number">2</div>
                         <div className="step-icon">📅</div>
                         <h3 className="step-title">Réservez</h3>
-                        <p className="step-description">
-                            Réservation en ligne rapide et sécurisée
-                        </p>
+                        <p className="step-description">Réservation en ligne rapide et sécurisée</p>
                     </div>
 
                     <div className="step-connector">
                         <div className="connector-line"></div>
-                        <div className="connector-car">🚙</div>
+                        <div className="connector-car">🚘</div>
                     </div>
 
                     <div className="step-item">
                         <div className="step-number">3</div>
                         <div className="step-icon">🚗</div>
                         <h3 className="step-title">Conduisez</h3>
-                        <p className="step-description">
-                            Récupérez votre véhicule et profitez de votre voyage
-                        </p>
+                        <p className="step-description">Récupérez votre véhicule et profitez de votre voyage</p>
                     </div>
                 </div>
             </section>
 
-            {/* Testimonials Section */}
+            {/* Testimonials */}
             <section className="testimonials-section">
                 <div className="section-header">
                     <h2 className="section-title">Ce Que Disent Nos Clients</h2>
-                    <p className="section-subtitle">
-                        Plus de 10 000 clients satisfaits
-                    </p>
+                    <p className="section-subtitle">Plus de 10 000 clients satisfaits</p>
                 </div>
 
                 <div className="testimonials-carousel">
                     {testimonials.map((testimonial, index) => (
-                        <div
-                            key={index}
-                            className={`testimonial-card ${index === currentSlide ? 'active' : ''}`}
-                        >
+                        <div key={index} className={`testimonial-card ${index === currentSlide ? 'active' : ''}`}>
                             <div className="testimonial-avatar">{testimonial.avatar}</div>
                             <div className="testimonial-content">
                                 <div className="testimonial-rating">
                                     {[...Array(testimonial.rating)].map((_, i) => (
-                                        <span key={i} className="star">⭐</span>
+                                        <span key={i} className="star">★</span>
                                     ))}
                                 </div>
                                 <p className="testimonial-comment">"{testimonial.comment}"</p>
@@ -350,13 +328,11 @@ const Home = ({ token }) => {
                 </div>
             </section>
 
-            {/* CTA Section */}
+            {/* Call to Action */}
             <section className="cta-section">
                 <div className="cta-content">
                     <h2 className="cta-title">Prêt à Partir à l'Aventure ?</h2>
-                    <p className="cta-subtitle">
-                        Rejoignez des milliers de conducteurs satisfaits
-                    </p>
+                    <p className="cta-subtitle">Rejoignez des milliers de conducteurs satisfaits</p>
                     <div className="cta-actions">
                         {!token ? (
                             <Link to="/signup" className="cta-button primary large">
@@ -377,7 +353,7 @@ const Home = ({ token }) => {
                 <div className="cta-visual">
                     <div className="cta-cars">
                         <div className="cta-car car-1">🚗</div>
-                        <div className="cta-car car-2">🚙</div>
+                        <div className="cta-car car-2">🚘</div>
                         <div className="cta-car car-3">🏎️</div>
                     </div>
                 </div>
