@@ -1,5 +1,6 @@
+from decimal import Decimal, InvalidOperation
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
@@ -10,6 +11,26 @@ def generate_uuid():
     return str(uuid.uuid4())
 
 UUID_LENGTH = 36
+
+class UserManager(BaseUserManager):
+    def create_user(self, email, password, nom=None, **extra_fields):
+        if not email:
+            raise ValueError(_('L\'email est requis'))
+        email = self.normalize_email(email)
+        user = self.model(email=email, nom=nom or '', **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password, nom=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('role', 'admin')
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError(_('Le superutilisateur doit avoir is_staff=True.'))
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError(_('Le superutilisateur doit avoir is_superuser=True.'))
+        return self.create_user(email, password, nom, **extra_fields)
 
 class User(AbstractUser):
     id = models.CharField(primary_key=True, max_length=UUID_LENGTH, default=generate_uuid, editable=False, unique=True)
@@ -60,36 +81,27 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nom']
+    objects = UserManager()
 
     def clean(self):
         super().clean()
-        # Nettoyer le champ budget_journalier
         if self.budget_journalier is not None:
-            budget_str = str(self.budget_journalier)
-            cleaned_budget = re.sub(r'[\xa0\s]+', '', budget_str)
             try:
-                self.budget_journalier = float(cleaned_budget)
-            except ValueError:
+                # Convertir en Decimal pour maintenir la précision
+                self.budget_journalier = Decimal(str(self.budget_journalier))
+            except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'budget_journalier': 'Le budget journalier doit être un nombre valide.'})
 
     def save(self, *args, **kwargs):
-        # Nettoyer les données avant sauvegarde
         self.clean()
-        
         if not self.username:
-            if self.email:
-                base_username = self.email.split('@')[0]
-                unique_suffix = uuid.uuid4().hex[:8]
-                self.username = f"{base_username}_{unique_suffix}"
-            else:
-                self.username = f"user_{uuid.uuid4().hex[:12]}"
-        
+            base_username = self.email.split('@')[0] if self.email else 'user'
+            unique_suffix = uuid.uuid4().hex[:8]
+            self.username = f"{base_username}_{unique_suffix}"
         if self.email:
-            self.email = self.email.lower()
-        
+            self.email = self.email.lower().strip()
         if User.objects.filter(username=self.username).exclude(id=self.id).exists():
             self.username = f"{self.username}_{uuid.uuid4().hex[:4]}"
-        
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -125,12 +137,11 @@ class Agence(models.Model):
     email = models.EmailField(blank=True, null=True)
     site_web = models.URLField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
-    date_creation = models.DateTimeField(auto_now_add=True)  # Renommé pour cohérence
+    date_creation = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
 
     def clean(self):
         super().clean()
-        # Nettoyer les champs texte
         if self.nom:
             self.nom = re.sub(r'[\xa0]+', ' ', self.nom).strip()
         if self.adresse:
@@ -142,7 +153,7 @@ class Agence(models.Model):
         if self.pays:
             self.pays = re.sub(r'[\xa0]+', ' ', self.pays).strip()
         if self.telephone:
-            self.telephone = re.sub(r'[\xa0]+', '', self.telephone)
+            self.telephone = re.sub(r'[\xa0\s]+', '', self.telephone)
         if self.email:
             self.email = self.email.lower().strip()
 
@@ -189,7 +200,7 @@ class Vehicule(models.Model):
     annee = models.PositiveIntegerField(null=True, blank=True)
     kilometrage = models.PositiveIntegerField(null=True, blank=True)
     couleur = models.CharField(max_length=50, blank=True)
-    immatriculation = models.CharField(max_length=20, blank=True)
+    immatriculation = models.CharField(max_length=20, unique=True, blank=True)
     emissionsCO2 = models.IntegerField(
         null=True,
         blank=True,
@@ -225,53 +236,38 @@ class Vehicule(models.Model):
     )
     date_derniere_maintenance = models.DateField(null=True, blank=True)
     prochaine_maintenance = models.DateField(null=True, blank=True)
-    agence_id = models.CharField(max_length=UUID_LENGTH, null=True, blank=True)
+    agence = models.ForeignKey('Agence', on_delete=models.SET_NULL, null=True, blank=True, related_name='vehicules')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     image = models.ImageField(upload_to='vehicules/', blank=True, null=True)
 
     def clean(self):
         super().clean()
-        # Nettoyer les champs décimaux
         if self.consommationEnergie is not None:
-            consommation_str = str(self.consommationEnergie)
-            cleaned_consommation = re.sub(r'[\xa0\s]+', '', consommation_str)
             try:
-                self.consommationEnergie = float(cleaned_consommation)
-            except ValueError:
+                self.consommationEnergie = float(self.consommationEnergie)
+            except (ValueError, TypeError):
                 raise ValidationError({'consommationEnergie': 'La consommation doit être un nombre valide.'})
-        
         if self.prix_par_jour is not None:
-            prix_str = str(self.prix_par_jour)
-            cleaned_prix = re.sub(r'[\xa0\s]+', '', prix_str)
             try:
-                self.prix_par_jour = float(cleaned_prix)
-            except ValueError:
+                self.prix_par_jour = float(self.prix_par_jour)
+            except (ValueError, TypeError):
                 raise ValidationError({'prix_par_jour': 'Le prix par jour doit être un nombre valide.'})
+        if self.immatriculation:
+            self.immatriculation = self.immatriculation.strip().upper()
 
     def save(self, *args, **kwargs):
         self.clean()
-        
         if not self.marque:
             self.marque = 'Marque inconnue'
         if not self.modele:
             self.modele = 'Modèle inconnu'
         if not self.type:
             self.type = 'Type inconnu'
-        
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.marque} {self.modele} ({self.immatriculation or 'Sans immatriculation'})"
-
-    @property
-    def agence(self):
-        if self.agence_id:
-            try:
-                return Agence.objects.get(id=self.agence_id)
-            except Agence.DoesNotExist:
-                return None
-        return None
 
     class Meta:
         ordering = ['-created_at']
@@ -281,14 +277,17 @@ class Vehicule(models.Model):
             models.Index(fields=['carburant'], name='vehicule_carburant_idx'),
             models.Index(fields=['type'], name='vehicule_type_idx'),
             models.Index(fields=['created_at'], name='vehicule_created_at_idx'),
-            models.Index(fields=['agence_id'], name='vehicule_agence_idx'),
-            models.Index(fields=['prix_par_jour'], name='vehicule_prix_idx')
+            models.Index(fields=['agence'], name='vehicule_agence_idx'),
+            models.Index(fields=['prix_par_jour'], name='vehicule_prix_idx'),
+            models.Index(fields=['immatriculation'], name='vehicule_immatriculation_idx')
         ]
 
 class Reservation(models.Model):
     id = models.CharField(primary_key=True, max_length=UUID_LENGTH, default=generate_uuid, editable=False, unique=True)
-    user_id = models.CharField(max_length=UUID_LENGTH)
-    vehicule_id = models.CharField(max_length=UUID_LENGTH)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+
+    vehicule = models.ForeignKey(Vehicule, on_delete=models.CASCADE, null=True, blank=True)
+
     date_debut = models.DateTimeField()
     date_fin = models.DateTimeField()
     montant_total = models.DecimalField(
@@ -317,46 +316,20 @@ class Reservation(models.Model):
 
     def clean(self):
         super().clean()
-        # Nettoyer le montant total
         if self.montant_total is not None:
-            montant_str = str(self.montant_total)
-            cleaned_montant = re.sub(r'[\xa0\s]+', '', montant_str)
             try:
-                self.montant_total = float(cleaned_montant)
-            except ValueError:
+                self.montant_total = float(self.montant_total)
+            except (ValueError, TypeError):
                 raise ValidationError({'montant_total': 'Le montant total doit être un nombre valide.'})
+        if self.date_debut and self.date_fin and self.date_fin <= self.date_debut:
+            raise ValidationError({'date_fin': 'La date de fin doit être postérieure à la date de début.'})
 
     def save(self, *args, **kwargs):
         self.clean()
-        
-        if self.date_debut and self.date_fin:
-            if self.date_fin <= self.date_debut:
-                raise ValidationError("La date de fin doit être postérieure à la date de début")
-        
         super().save(*args, **kwargs)
 
     def __str__(self):
-        user_info = f"User {self.user_id}"
-        vehicule_info = f"Véhicule {self.vehicule_id}"
-        return f"Reservation {self.id[:8]} - {user_info} - {vehicule_info}"
-
-    @property
-    def user(self):
-        if self.user_id:
-            try:
-                return User.objects.get(id=self.user_id)
-            except User.DoesNotExist:
-                return None
-        return None
-
-    @property
-    def vehicule(self):
-        if self.vehicule_id:
-            try:
-                return Vehicule.objects.get(id=self.vehicule_id)
-            except Vehicule.DoesNotExist:
-                return None
-        return None
+        return f"Reservation {self.id[:8]} - {self.user} - {self.vehicule}"
 
     class Meta:
         ordering = ['-created_at']
@@ -364,6 +337,6 @@ class Reservation(models.Model):
             models.Index(fields=['date_debut', 'date_fin'], name='reservation_date_idx'),
             models.Index(fields=['statut'], name='reservation_statut_idx'),
             models.Index(fields=['created_at'], name='reservation_created_at_idx'),
-            models.Index(fields=['user_id'], name='reservation_user_idx'),
-            models.Index(fields=['vehicule_id'], name='reservation_vehicule_idx')
+            models.Index(fields=['user'], name='reservation_user_idx'),
+            models.Index(fields=['vehicule'], name='reservation_vehicule_idx')
         ]

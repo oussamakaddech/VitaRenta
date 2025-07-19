@@ -7,7 +7,8 @@ from django.core.management.utils import get_random_secret_key
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGS_DIR = BASE_DIR / "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
-
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 # Répertoires de médias
 MEDIA_ROOT = BASE_DIR / "media"
 PROFILE_PHOTOS_DIR = MEDIA_ROOT / "profile_photos"
@@ -39,9 +40,11 @@ DJANGO_APPS = [
 
 THIRD_PARTY_APPS = [
     "rest_framework",
-    "rest_framework.authtoken",
+    "rest_framework_simplejwt",
+    # "rest_framework_simplejwt.token_blacklist",  # <-- commenter ou supprimer cette ligne
     "corsheaders",
 ]
+
 
 LOCAL_APPS = [
     "users",
@@ -142,10 +145,10 @@ else:
 # Configuration de REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication", # MODIFIÉ pour JWT
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticated", # Changé pour exiger l'authentification par défaut
     ],
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
@@ -159,6 +162,24 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
 }
 
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": False,         # <-- désactivé
+    "BLACKLIST_AFTER_ROTATION": False,      # <-- désactivé
+    "UPDATE_LAST_LOGIN": False,
+
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+}
 # Configuration CORS
 CORS_ALLOW_ALL_ORIGINS = True  # À ajuster en production avec une liste spécifique
 CORS_ALLOW_CREDENTIALS = True

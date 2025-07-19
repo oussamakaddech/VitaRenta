@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './SignUp.css';
 
-const SignUp = ({ setToken }) => {
+const SignUp = ({ setToken, setUser }) => {
     const [formData, setFormData] = useState({
         email: '',
         nom: '',
@@ -24,118 +24,72 @@ const SignUp = ({ setToken }) => {
     const [touchedFields, setTouchedFields] = useState({});
     const navigate = useNavigate();
 
+    const apiClient = useMemo(() => {
+        const client = axios.create({
+            baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+            timeout: 15000,
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        });
+        return client;
+    }, []);
+
     useEffect(() => {
-        const timer = setTimeout(() => {
-            document.querySelector('.signup-container-desktop')?.classList.add('visible');
-        }, 100);
+        const timer = setTimeout(() => document.querySelector('.signup-container-desktop')?.classList.add('visible'), 100);
         return () => clearTimeout(timer);
     }, []);
 
     const validateField = useCallback((name, value) => {
         const newErrors = { ...errors };
+        const safeValue = typeof value === 'string' ? value : String(value ?? '');
 
         switch (name) {
             case 'email':
-                if (!value) {
-                    newErrors.email = "L'email est requis";
-                } else if (!/\S+@\S+\.\S+/.test(value)) {
-                    newErrors.email = "Format d'email invalide";
-                } else {
-                    delete newErrors.email;
-                }
+                if (!safeValue.trim()) newErrors.email = "L'email est requis";
+                else if (!/\S+@\S+\.\S+/.test(safeValue)) newErrors.email = "Format d'email invalide";
+                else delete newErrors.email;
                 break;
-
             case 'nom':
-                if (!value) {
-                    newErrors.nom = 'Le nom est requis';
-                } else if (value.length < 2) {
-                    newErrors.nom = 'Le nom doit contenir au moins 2 caractères';
-                } else {
-                    delete newErrors.nom;
-                }
+                if (!safeValue.trim()) newErrors.nom = 'Le nom est requis';
+                else if (safeValue.trim().length < 2) newErrors.nom = 'Le nom doit contenir au moins 2 caractères';
+                else delete newErrors.nom;
                 break;
-
             case 'mot_de_passe':
-                if (!value) {
-                    newErrors.mot_de_passe = 'Le mot de passe est requis';
-                } else if (value.length < 8) {
-                    newErrors.mot_de_passe = 'Le mot de passe doit contenir au moins 8 caractères';
-                } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) {
-                    newErrors.mot_de_passe = 'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre';
-                } else {
-                    delete newErrors.mot_de_passe;
-                }
+                if (!safeValue.trim()) newErrors.mot_de_passe = 'Le mot de passe est requis';
+                else if (safeValue.length < 8) newErrors.mot_de_passe = 'Le mot de passe doit contenir au moins 8 caractères';
+                else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(safeValue)) newErrors.mot_de_passe = 'Mot de passe faible : ajoutez une majuscule, une minuscule et un chiffre';
+                else delete newErrors.mot_de_passe;
                 break;
-
             case 'confirmer_mot_de_passe':
-                if (value !== formData.mot_de_passe) {
-                    newErrors.confirmer_mot_de_passe = 'Les mots de passe ne correspondent pas';
-                } else {
-                    delete newErrors.confirmer_mot_de_passe;
-                }
+                if (!safeValue.trim()) newErrors.confirmer_mot_de_passe = 'La confirmation est requise';
+                else if (safeValue !== formData.mot_de_passe) newErrors.confirmer_mot_de_passe = 'Les mots de passe ne correspondent pas';
+                else delete newErrors.confirmer_mot_de_passe;
                 break;
-
             case 'telephone':
-                if (value) {
-                    const cleanValue = value.replace(/[\s\-\.]/g, '');
-                    if (cleanValue.startsWith('+216')) {
-                        const phoneNumber = cleanValue.substring(4);
-                        if (!/^\d{8}$/.test(phoneNumber)) {
-                            newErrors.telephone = 'Le numéro doit être au format +216 suivi de 8 chiffres';
-                        } else {
-                            delete newErrors.telephone;
-                        }
-                    } else if (cleanValue.startsWith('0')) {
-                        const phoneNumber = cleanValue.substring(1);
-                        if (!/^\d{8}$/.test(phoneNumber)) {
-                            newErrors.telephone = 'Le numéro doit être au format 0 suivi de 8 chiffres';
-                        } else {
-                            delete newErrors.telephone;
-                        }
-                    } else {
-                        newErrors.telephone = 'Le numéro doit commencer par +216 ou 0';
-                    }
+                if (safeValue && !/^\+?\d{10,15}$/.test(safeValue.replace(/[\s\-\.]/g, ''))) {
+                    newErrors.telephone = 'Format de téléphone invalide (10-15 chiffres)';
                 } else {
                     delete newErrors.telephone;
                 }
                 break;
-
             case 'preference_carburant':
-                if (!value) {
-                    newErrors.preference_carburant = 'La préférence de carburant est requise';
-                } else if (!['électrique', 'hybride', 'essence', 'diesel'].includes(value)) {
-                    newErrors.preference_carburant = 'Préférence de carburant invalide';
-                } else {
-                    delete newErrors.preference_carburant;
-                }
+                if (!safeValue.trim()) newErrors.preference_carburant = 'La préférence est requise';
+                else if (!['électrique', 'hybride', 'essence', 'diesel'].includes(safeValue)) newErrors.preference_carburant = 'Préférence invalide';
+                else delete newErrors.preference_carburant;
                 break;
-
             case 'budget_journalier':
-                if (!value) {
-                    newErrors.budget_journalier = 'Le budget journalier est requis';
+                if (!safeValue.trim()) {
+                    newErrors.budget_journalier = 'Le budget est requis';
                 } else {
-                    const budget = parseFloat(value);
-                    if (isNaN(budget)) {
-                        newErrors.budget_journalier = 'Le budget doit être un nombre valide';
-                    } else if (budget < 20) {
-                        newErrors.budget_journalier = 'Le budget minimum est de 20€';
-                    } else if (budget > 10000) {
-                        newErrors.budget_journalier = 'Le budget maximum est de 10 000€';
-                    } else {
-                        delete newErrors.budget_journalier;
-                    }
+                    const budget = parseFloat(safeValue);
+                    if (isNaN(budget)) newErrors.budget_journalier = 'Le budget doit être un nombre';
+                    else if (budget < 20) newErrors.budget_journalier = 'Budget minimum : 20€';
+                    else if (budget > 10000) newErrors.budget_journalier = 'Budget maximum : 10 000€';
+                    else delete newErrors.budget_journalier;
                 }
                 break;
-
             case 'role':
-                if (!['client', 'agence'].includes(value)) {
-                    newErrors.role = "Le rôle doit être 'client' ou 'agence'";
-                } else {
-                    delete newErrors.role;
-                }
-                break;
-
-            default:
+                if (!['client', 'agence'].includes(safeValue)) newErrors.role = 'Rôle invalide';
+                else delete newErrors.role;
                 break;
         }
 
@@ -143,50 +97,31 @@ const SignUp = ({ setToken }) => {
         return Object.keys(newErrors).length === 0;
     }, [errors, formData.mot_de_passe]);
 
-    const handleBlur = (e) => {
+    const handleBlur = useCallback((e) => {
         const { name } = e.target;
         setTouchedFields(prev => ({ ...prev, [name]: true }));
         validateField(name, formData[name]);
-    };
+    }, [formData, validateField]);
 
-    const handleChange = (e) => {
+    const handleChange = useCallback((e) => {
         const { name, value } = e.target;
-        setFormData({ ...formData, [name]: value });
+        const safeValue = typeof value === 'string' ? value.trim() : String(value ?? '');
+        setFormData(prev => ({ ...prev, [name]: safeValue }));
+        if (touchedFields[name]) validateField(name, safeValue);
+    }, [touchedFields, validateField]);
 
-        if (touchedFields[name]) {
-            validateField(name, value);
-        }
-    };
-
-    const validateForm = () => {
+    const validateForm = useCallback(() => {
         const requiredFields = ['email', 'nom', 'mot_de_passe', 'confirmer_mot_de_passe', 'role', 'preference_carburant', 'budget_journalier'];
         let isValid = true;
-
         requiredFields.forEach(field => {
-            if (!validateField(field, formData[field])) {
-                isValid = false;
-            }
+            if (!validateField(field, formData[field])) isValid = false;
         });
-
-        if (formData.telephone) {
-            if (!validateField('telephone', formData.telephone)) {
-                isValid = false;
-            }
-        }
-
-        const allTouched = {};
-        requiredFields.forEach(field => {
-            allTouched[field] = true;
-        });
-        if (formData.telephone) {
-            allTouched.telephone = true;
-        }
-        setTouchedFields(allTouched);
-
+        if (formData.telephone && !validateField('telephone', formData.telephone)) isValid = false;
+        setTouchedFields(prev => ({ ...prev, ...requiredFields.reduce((acc, field) => ({ ...acc, [field]: true }), {}) }));
         return isValid;
-    };
+    }, [formData, validateField]);
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
 
         if (!validateForm()) {
@@ -198,162 +133,117 @@ const SignUp = ({ setToken }) => {
         setMessage('');
 
         try {
-            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-            console.log('API URL:', apiUrl); // Debug the URL
-
             const submitData = {
                 email: formData.email.toLowerCase().trim(),
                 nom: formData.nom.trim(),
-                mot_de_passe: formData.mot_de_passe,
-                confirmer_mot_de_passe: formData.confirmer_mot_de_passe,
+                mot_de_passe: formData.mot_de_passe.trim(),
+                confirmer_mot_de_passe: formData.confirmer_mot_de_passe.trim(),
                 preference_carburant: formData.preference_carburant,
                 budget_journalier: parseFloat(formData.budget_journalier),
-                telephone: formData.telephone.trim(),
+                telephone: formData.telephone.trim() || null,
                 role: formData.role
             };
 
-            const response = await axios.post(`${apiUrl}/api/inscription/`, submitData, {
-                timeout: 15000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            const response = await apiClient.post('/api/inscription/', submitData);
+            const { access, refresh, user } = response.data;
 
-            setMessage(response.data.message || 'Inscription réussie !');
+            localStorage.setItem('access_token', access);
+            localStorage.setItem('refresh_token', refresh);
+            localStorage.setItem('userData', JSON.stringify(user));
+
+            setToken(access);
+            setUser(user);
             setIsSuccess(true);
-            playSuccessSound();
+            setMessage('Inscription réussie ! Redirection...');
 
-            setTimeout(() => {
-                navigate('/login', {
-                    state: {
-                        message: 'Inscription réussie ! Vous pouvez maintenant vous connecter.',
-                        email: formData.email
-                    }
-                });
-            }, 2500);
-
+            setTimeout(() => navigate('/profile', { replace: true }), 2500);
         } catch (error) {
-            console.error('Signup error:', error);
-
+            console.error('Signup error details:', {
+                message: error.message,
+                code: error.code,
+                response: error.response ? {
+                    status: error.response.status,
+                    data: error.response.data
+                } : null
+            });
             if (error.response?.status === 400) {
                 const serverErrors = error.response.data.errors || {};
                 setErrors(prev => ({ ...prev, ...serverErrors }));
-                if (serverErrors.email) {
-                    setMessage('Cette adresse email est déjà utilisée');
-                } else {
-                    const errorMessages = Object.entries(serverErrors).map(([field, messages]) => {
-                        return `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
-                    }).join('; ');
-                    setMessage(errorMessages || 'Veuillez corriger les erreurs signalées');
-                }
-            } else if (error.response?.status === 404) {
-                setMessage('Erreur : Endpoint API non trouvé. Vérifiez la configuration du serveur.');
+                setMessage(Object.values(serverErrors).flat().join('; ') || 'Veuillez corriger les erreurs');
             } else if (error.response?.status === 409) {
-                setMessage('Un compte avec cet email existe déjà');
-                setErrors(prev => ({ ...prev, email: 'Cette adresse email est déjà utilisée' }));
+                setErrors(prev => ({ ...prev, email: 'Email déjà utilisé' }));
+                setMessage('Email déjà utilisé');
             } else if (error.code === 'ECONNABORTED') {
                 setMessage('Timeout - Le serveur met trop de temps à répondre');
             } else if (error.response?.status >= 500) {
-                setMessage('Erreur serveur - Veuillez réessayer plus tard');
+                setMessage('Erreur serveur - Veuillez réessayer');
             } else {
-                setMessage(error.response?.data?.error || "Erreur lors de l'inscription");
+                setMessage(error.response?.data?.error || 'Erreur lors de l\'inscription');
             }
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData, validateForm, apiClient, setToken, setUser, navigate]);
 
-    const canProceedToNextStep = () => {
+    const canProceedToNextStep = useCallback(() => {
         switch (currentStep) {
             case 1:
-                return formData.email && formData.nom && formData.mot_de_passe &&
-                    formData.confirmer_mot_de_passe && formData.role &&
+                return formData.email && formData.nom && formData.mot_de_passe && formData.confirmer_mot_de_passe && formData.role &&
                     !errors.email && !errors.nom && !errors.mot_de_passe && !errors.confirmer_mot_de_passe && !errors.role;
             case 2:
                 return formData.preference_carburant && !errors.preference_carburant &&
-                    (!formData.telephone || (formData.telephone && !errors.telephone));
+                    (!formData.telephone || !errors.telephone);
             case 3:
                 return formData.budget_journalier && !errors.budget_journalier;
-            default:
-                return false;
+            default: return false;
         }
-    };
+    }, [currentStep, formData, errors]);
 
-    const nextStep = () => {
-        if (currentStep < 3 && canProceedToNextStep()) {
-            setCurrentStep(currentStep + 1);
-        }
-    };
+    const nextStep = useCallback(() => {
+        if (currentStep < 3 && canProceedToNextStep()) setCurrentStep(currentStep + 1);
+    }, [currentStep, canProceedToNextStep]);
 
-    const prevStep = () => {
+    const prevStep = useCallback(() => {
         if (currentStep > 1) setCurrentStep(currentStep - 1);
-    };
+    }, [currentStep]);
 
-    const handleRoleSelect = (role) => {
-        setFormData({ ...formData, role });
+    const handleRoleSelect = useCallback((role) => {
+        const safeRole = String(role ?? 'client');
+        setFormData(prev => ({ ...prev, role: safeRole }));
         setTouchedFields(prev => ({ ...prev, role: true }));
-        if (errors.role) {
-            setErrors({ ...errors, role: '' });
-        }
-    };
+        setErrors(prev => ({ ...prev, role: '' }));
+        validateField('role', safeRole);
+    }, [validateField]);
 
-    const handleFuelSelect = (fuel) => {
-        setFormData({ ...formData, preference_carburant: fuel });
+    const handleFuelSelect = useCallback((fuel) => {
+        const safeFuel = String(fuel ?? '');
+        setFormData(prev => ({ ...prev, preference_carburant: safeFuel }));
         setTouchedFields(prev => ({ ...prev, preference_carburant: true }));
-        if (errors.preference_carburant) {
-            setErrors({ ...errors, preference_carburant: '' });
-        }
-    };
+        setErrors(prev => ({ ...prev, preference_carburant: '' }));
+        validateField('preference_carburant', safeFuel);
+    }, [validateField]);
 
-    const playSuccessSound = () => {
-        console.log("🎉 VROOOM! Inscription turbo réussie! Bienvenue dans l'équipe VitaRenta! 🏁");
-    };
+    const togglePasswordVisibility = useCallback(() => setShowPassword(prev => !prev), []);
+    const toggleConfirmPasswordVisibility = useCallback(() => setShowConfirmPassword(prev => !prev), []);
 
-    const togglePasswordVisibility = () => {
-        setShowPassword(!showPassword);
-    };
+    const getFuelIcon = useCallback((fuel) => ({
+        électrique: '⚡', hybride: '🌱', essence: '⛽', diesel: '🚗'
+    }[fuel] || '🚗'), []);
 
-    const toggleConfirmPasswordVisibility = () => {
-        setShowConfirmPassword(!showConfirmPassword);
-    };
+    const getFuelColor = useCallback((fuel) => ({
+        électrique: '#3b82f6', hybride: '#10b981', essence: '#ef4444', diesel: '#6b7280'
+    }[fuel] || '#3b82f6'), []);
 
-    const generateCarParticles = () => {
-        return [...Array(10)].map((_, i) => ({
-            car: ['🚗', '🚙', '🚕', '🏎️', '🚐', '🚓', '🚌', '🚑', '🏁', '⚡'][i],
-            style: {
-                top: `${10 + i * 9}%`,
-                animationDelay: `${i * 1.2}s`,
-                fontSize: `${1.5 + Math.random() * 0.8}rem`,
-                animationDuration: `${12 + Math.random() * 8}s`
-            }
-        }));
-    };
-
-    const getFuelIcon = (fuel) => {
-        const icons = {
-            électrique: '⚡',
-            hybride: '🌱',
-            essence: '⛽',
-            diesel: '🚗'
-        };
-        return icons[fuel] || '🚗';
-    };
-
-    const getFuelColor = (fuel) => {
-        const colors = {
-            électrique: '#3b82f6',
-            hybride: '#10b981',
-            essence: '#ef4444',
-            diesel: '#6b7280'
-        };
-        return colors[fuel] || '#3b82f6';
-    };
+    const carParticles = useMemo(() => [...Array(10)].map((_, i) => ({
+        car: ['🚗', '🚙', '🚕', '🏎️', '🚐', '🚓', '🚌', '🚑', '🏁', '⚡'][i % 10],
+        style: { top: `${10 + i * 9}%`, animationDelay: `${i * 1.2}s`, fontSize: `${1.5 + Math.random() * 0.8}rem`, animationDuration: `${12 + Math.random() * 8}s` }
+    })), []);
 
     return (
         <div className="signup-container-desktop">
             <div className="signup-background-desktop">
                 <div className="floating-cars-desktop">
-                    {generateCarParticles().map((particle, i) => (
+                    {carParticles.map((particle, i) => (
                         <div key={i} className="floating-car-desktop" style={particle.style}>
                             {particle.car}
                         </div>
@@ -539,7 +429,7 @@ const SignUp = ({ setToken }) => {
                                                 onClick={togglePasswordVisibility}
                                                 disabled={loading || isSuccess}
                                             >
-                                                {showPassword ? '👁️' : '🙈'}
+                                                {showPassword ? '🙈' : '👁️'}
                                             </button>
                                         </div>
                                         {errors.mot_de_passe && touchedFields.mot_de_passe && (
@@ -548,10 +438,10 @@ const SignUp = ({ setToken }) => {
                                         {formData.mot_de_passe && (
                                             <div className="signup-password-strength-indicator">
                                                 <div className={`signup-password-strength-bar strength-${
-                                                    formData.mot_de_passe.length < 8 ? 'weak' :
-                                                        formData.mot_de_passe.length < 10 ? 'medium' :
-                                                            formData.mot_de_passe.length < 12 ? 'strong' : 'very-strong'
-                                                }`}></div>
+    formData.mot_de_passe.length < 8 ? 'weak' :
+        formData.mot_de_passe.length < 10 ? 'medium' :
+            formData.mot_de_passe.length < 12 ? 'strong' : 'very-strong'
+}`}></div>
                                             </div>
                                         )}
                                     </div>
@@ -578,7 +468,7 @@ const SignUp = ({ setToken }) => {
                                                 onClick={toggleConfirmPasswordVisibility}
                                                 disabled={loading || isSuccess}
                                             >
-                                                {showConfirmPassword ? '👁️' : '🙈'}
+                                                {showConfirmPassword ? '🙈' : '👁️'}
                                             </button>
                                         </div>
                                         {errors.confirmer_mot_de_passe && touchedFields.confirmer_mot_de_passe && (
@@ -622,8 +512,8 @@ const SignUp = ({ setToken }) => {
                                             <div
                                                 key={fuel}
                                                 className={`signup-fuel-option ${
-                                                    formData.preference_carburant === fuel ? 'selected' : ''
-                                                }`}
+    formData.preference_carburant === fuel ? 'selected' : ''
+}`}
                                                 onClick={() => handleFuelSelect(fuel)}
                                                 style={{ '--fuel-color': getFuelColor(fuel) }}
                                             >
@@ -676,6 +566,7 @@ const SignUp = ({ setToken }) => {
                                                 placeholder="Ex: 50"
                                                 min="20"
                                                 max="10000"
+                                                step="0.01"
                                                 onChange={handleChange}
                                                 onBlur={handleBlur}
                                                 className={`signup-form-input-desktop ${errors.budget_journalier && touchedFields.budget_journalier ? 'input-error-desktop' : ''}`}
@@ -699,7 +590,7 @@ const SignUp = ({ setToken }) => {
                                                         type="button"
                                                         className="signup-suggestion-btn"
                                                         onClick={() =>
-                                                            setFormData({ ...formData, budget_journalier: amount })
+                                                            setFormData(prev => ({ ...prev, budget_journalier: String(amount) }))
                                                         }
                                                         disabled={loading || isSuccess}
                                                     >

@@ -53,7 +53,7 @@ class UserAdmin(BaseUserAdmin):
         )
 
     get_agence_display.short_description = "Agence"
-    get_agence_display.admin_order_field = 'agence'
+    get_agence_display.admin_order_field = 'agence__nom'
 
 @admin.register(Agence)
 class AgenceAdmin(admin.ModelAdmin):
@@ -100,7 +100,7 @@ class VehiculeAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Location', {
-            'fields': ('prix_par_jour', 'localisation', 'statut', 'agence_id')
+            'fields': ('prix_par_jour', 'localisation', 'statut', 'agence')
         }),
         ('Maintenance', {
             'fields': ('date_derniere_maintenance', 'prochaine_maintenance'),
@@ -119,23 +119,17 @@ class VehiculeAdmin(admin.ModelAdmin):
     actions = ['make_available', 'make_maintenance', 'make_unavailable']
 
     def get_agence_name(self, obj):
-        if obj.agence_id:
-            try:
-                agence = Agence.objects.get(id=obj.agence_id)
-                return format_html(
-                    '<a href="/admin/users/agence/{}/change/">{}</a>',
-                    agence.id, agence.nom
-                )
-            except Agence.DoesNotExist:
-                return format_html(
-                    '<span style="color: red;">Agence introuvable</span>'
-                )
+        if obj.agence:
+            return format_html(
+                '<a href="/admin/users/agence/{}/change/">{}</a>',
+                obj.agence.id, obj.agence.nom
+            )
         return format_html(
             '<span style="color: gray;">Aucune agence</span>'
         )
 
     get_agence_name.short_description = "Agence"
-    get_agence_name.admin_order_field = 'agence_id'
+    get_agence_name.admin_order_field = 'agence__nom'
 
     def get_status_display(self, obj):
         colors = {
@@ -154,14 +148,17 @@ class VehiculeAdmin(admin.ModelAdmin):
     get_status_display.admin_order_field = 'statut'
 
     def get_eco_score(self, obj):
-        if not obj.emissionsCO2:
+        if not obj.emissionsCO2 and not obj.consommationEnergie:
             return format_html('<span style="color: gray;">Non calculé</span>')
         score = 100
-        if obj.emissionsCO2 > 150:
-            score -= 30
-        elif obj.emissionsCO2 > 100:
-            score -= 20
-        elif obj.emissionsCO2 > 50:
+        if obj.emissionsCO2:
+            if obj.emissionsCO2 > 150:
+                score -= 30
+            elif obj.emissionsCO2 > 100:
+                score -= 20
+            elif obj.emissionsCO2 > 50:
+                score -= 10
+        if obj.consommationEnergie and obj.consommationEnergie > 10:
             score -= 10
         if obj.carburant == 'électrique':
             score += 20
@@ -198,20 +195,24 @@ class VehiculeAdmin(admin.ModelAdmin):
 class ReservationAdmin(admin.ModelAdmin):
     list_display = ('id', 'get_user_name', 'get_vehicule_info', 'date_debut', 'date_fin', 'get_status_display', 'montant_total', 'created_at')
     list_filter = ('statut', 'created_at', 'date_debut', 'date_fin')
-    search_fields = ('user_id', 'vehicule_id', 'commentaires')
+    search_fields = ('user__email', 'user__nom', 'vehicule__marque', 'vehicule__modele', 'commentaires')
     ordering = ('-created_at',)
     readonly_fields = ('id', 'created_at', 'updated_at', 'get_duration')
     date_hierarchy = 'date_debut'
 
     fieldsets = (
         ('Informations de base', {
-            'fields': ('user_id', 'vehicule_id', 'statut')
+            'fields': ('user', 'vehicule', 'statut')
         }),
         ('Période de location', {
             'fields': ('date_debut', 'date_fin', 'get_duration')
         }),
         ('Informations financières', {
             'fields': ('montant_total',)
+        }),
+        ('Options', {
+            'fields': ('assurance_complete', 'conducteur_supplementaire', 'gps', 'siege_enfant'),
+            'classes': ('collapse',)
         }),
         ('Détails', {
             'fields': ('commentaires',),
@@ -226,43 +227,31 @@ class ReservationAdmin(admin.ModelAdmin):
     actions = ['approve_reservations', 'cancel_reservations']
 
     def get_user_name(self, obj):
-        if obj.user_id:
-            try:
-                user = User.objects.get(id=obj.user_id)
-                return format_html(
-                    '<a href="/admin/users/user/{}/change/">{}</a><br><small>{}</small>',
-                    user.id, user.nom, user.email
-                )
-            except User.DoesNotExist:
-                return format_html(
-                    '<span style="color: red;">Utilisateur introuvable</span>'
-                )
+        if obj.user:
+            return format_html(
+                '<a href="/admin/users/user/{}/change/">{}</a><br><small>{}</small>',
+                obj.user.id, obj.user.nom, obj.user.email
+            )
         return format_html(
             '<span style="color: gray;">Aucun utilisateur</span>'
         )
 
     get_user_name.short_description = "Utilisateur"
-    get_user_name.admin_order_field = 'user_id'
+    get_user_name.admin_order_field = 'user__email'
 
     def get_vehicule_info(self, obj):
-        if obj.vehicule_id:
-            try:
-                vehicule = Vehicule.objects.get(id=obj.vehicule_id)
-                return format_html(
-                    '<a href="/admin/users/vehicule/{}/change/">{} {}</a><br><small>{}</small>',
-                    vehicule.id, vehicule.marque, vehicule.modele, 
-                    vehicule.immatriculation or 'Sans immatriculation'
-                )
-            except Vehicule.DoesNotExist:
-                return format_html(
-                    '<span style="color: red;">Véhicule introuvable</span>'
-                )
+        if obj.vehicule:
+            return format_html(
+                '<a href="/admin/users/vehicule/{}/change/">{} {}</a><br><small>{}</small>',
+                obj.vehicule.id, obj.vehicule.marque, obj.vehicule.modele, 
+                obj.vehicule.immatriculation or 'Sans immatriculation'
+            )
         return format_html(
             '<span style="color: gray;">Aucun véhicule</span>'
         )
 
     get_vehicule_info.short_description = "Véhicule"
-    get_vehicule_info.admin_order_field = 'vehicule_id'
+    get_vehicule_info.admin_order_field = 'vehicule__marque'
 
     def get_status_display(self, obj):
         colors = {
@@ -294,13 +283,23 @@ class ReservationAdmin(admin.ModelAdmin):
     get_duration.short_description = "Durée"
 
     def approve_reservations(self, request, queryset):
-        queryset.update(statut='confirmee')
+        for reservation in queryset:
+            if reservation.vehicule and reservation.vehicule.statut == 'disponible':
+                reservation.statut = 'confirmee'
+                reservation.vehicule.statut = 'loué'
+                reservation.vehicule.save()
+                reservation.save()
         self.message_user(request, f"{queryset.count()} réservations confirmées.")
 
     approve_reservations.short_description = "Confirmer les réservations"
 
     def cancel_reservations(self, request, queryset):
-        queryset.update(statut='annulee')
+        for reservation in queryset:
+            if reservation.vehicule and reservation.vehicule.statut == 'loué':
+                reservation.vehicule.statut = 'disponible'
+                reservation.vehicule.save()
+            reservation.statut = 'annulee'
+            reservation.save()
         self.message_user(request, f"{queryset.count()} réservations annulées.")
 
     cancel_reservations.short_description = "Annuler les réservations"
