@@ -15,6 +15,7 @@ PROFILE_PHOTOS_DIR = MEDIA_ROOT / "profile_photos"
 VEHICLE_IMAGES_DIR = MEDIA_ROOT / "vehicle_images"
 os.makedirs(PROFILE_PHOTOS_DIR, exist_ok=True)
 os.makedirs(VEHICLE_IMAGES_DIR, exist_ok=True)
+MEDIA_URL = "/media/"
 
 # Clé secrète et mode de débogage
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
@@ -41,10 +42,8 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
-    # "rest_framework_simplejwt.token_blacklist",  # <-- commenter ou supprimer cette ligne
     "corsheaders",
 ]
-
 
 LOCAL_APPS = [
     "users",
@@ -145,43 +144,45 @@ else:
 # Configuration de REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication", # MODIFIÉ pour JWT
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated", # Changé pour exiger l'authentification par défaut
+        "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "login": "100/hour" if not os.getenv("DISABLE_RATE_LIMITING", "True") == "True" else "10000/hour",
         "anon": "1000/hour",
         "user": "5000/hour",
+        "email_verification_request": "10/hour",
+        "password_reset_request": "10/hour",
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 10,
+    "PAGE_SIZE": int(os.getenv("API_PAGINATION_SIZE", 50)),
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": False,         # <-- désactivé
-    "BLACKLIST_AFTER_ROTATION": False,      # <-- désactivé
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": False,
-
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
-
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
-
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
     "TOKEN_TYPE_CLAIM": "token_type",
 }
+
 # Configuration CORS
-CORS_ALLOW_ALL_ORIGINS = True  # À ajuster en production avec une liste spécifique
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True") == "True"
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000").split(",")
 CORS_ALLOW_CREDENTIALS = True
 
 # Configuration des fichiers statiques et médias
@@ -225,13 +226,13 @@ LOGGING = {
     },
     "handlers": {
         "file": {
-            "level": "INFO",
+            "level": os.getenv("LOG_LEVEL", "INFO"),
             "class": "logging.FileHandler",
             "filename": LOGS_DIR / "vitarenta.log",
             "formatter": "verbose",
         },
         "console": {
-            "level": "DEBUG",
+            "level": os.getenv("LOG_LEVEL", "DEBUG"),
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
@@ -239,12 +240,12 @@ LOGGING = {
     "loggers": {
         "": {
             "handlers": ["file", "console"],
-            "level": "INFO",
+            "level": os.getenv("LOG_LEVEL", "INFO"),
             "propagate": True,
         },
         "django": {
             "handlers": ["file", "console"],
-            "level": "INFO",
+            "level": os.getenv("LOG_LEVEL", "INFO"),
             "propagate": True,
         },
     },
@@ -252,27 +253,28 @@ LOGGING = {
 
 # Configuration des sessions
 SESSION_COOKIE_AGE = 1209600  # 2 semaines en secondes
-SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "False") == "True"
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "False") == "True"
 CSRF_COOKIE_HTTPONLY = True
 
 # Configuration de la sécurité
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
-SECURE_SSL_REDIRECT = not DEBUG
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False") == "True"
 
-# Configuration des emails (exemple avec console pour développement)
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-if not DEBUG:
-    EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-    EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-    EMAIL_USE_TLS = True
-    DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
+# Configuration des emails
+# ...existing code...
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "oussama.kaddech11@gmail.com")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@vitarenta.com")
+EMAIL_TIMEOUT = 10
 # Paramètres personnalisés
 DISABLE_RATE_LIMITING = os.getenv("DISABLE_RATE_LIMITING", "True") == "True"
 ALLOW_ANONYMOUS_ACCESS = os.getenv("ALLOW_ANONYMOUS_ACCESS", "True") == "True"

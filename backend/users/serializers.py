@@ -1,3 +1,4 @@
+# serializers.py
 from decimal import Decimal, InvalidOperation
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
@@ -6,6 +7,9 @@ from .models import User, Vehicule, Agence, Reservation
 import re
 from django.utils import timezone
 from datetime import datetime
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class AgenceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,6 +20,7 @@ class AgenceSerializer(serializers.ModelSerializer):
     def validate_nom(self, value):
         if not value or len(value.strip()) < 1:
             return "Agence sans nom"
+
         return value.strip()
 
     def validate_adresse(self, value):

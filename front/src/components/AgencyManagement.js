@@ -39,9 +39,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
         description: ''
     });
 
-    const isActive = (path) => {
-        return location.pathname === path;
-    };
+    const isActive = (path) => location.pathname === path;
 
     const handleLogout = () => {
         onLogout();
@@ -52,7 +50,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
         if (!data.nom || data.nom.trim().length < 2) return "Le nom de l'agence doit contenir au moins 2 caractères";
         if (!data.adresse || data.adresse.trim().length < 5) return "L'adresse doit contenir au moins 5 caractères";
         if (!data.ville || data.ville.trim().length < 2) return "La ville doit contenir au moins 2 caractères";
-        if (!data.code_postal || !/^\d{4}$/.test(data.code_postal)) return "Le code postal doit contenir 4 chiffres";
+        if (!data.code_postal || !/^\d{4,}$/.test(data.code_postal)) return "Le code postal doit être valide";
         if (!data.pays || data.pays.trim().length < 2) return "Le pays est requis";
         if (!data.telephone || !/^\+?[\d\s\-()]{10,}$/.test(data.telephone)) return "Le numéro de téléphone n'est pas valide";
         if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return "L'email n'est pas valide";
@@ -66,12 +64,10 @@ const AgencyManager = ({ token, user, onLogout }) => {
             const params = new URLSearchParams();
             if (searchTerm.trim()) params.append('search', searchTerm.trim());
             const response = await axios.get(`${API_BASE_URL}/api/agences/?${params}`, {
-                headers: { Authorization: `Token ${token}` },
+                headers: { Authorization: `Bearer ${token}` }, // Changed to JWT
                 timeout: 10000
             });
-            console.log('API Response:', response.data);
             const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
-            console.log('Set Agencies:', data);
             setAgencies(data);
             if (data.length > 0) {
                 setTimeout(() => setAnimateCards(true), 100);
@@ -81,7 +77,6 @@ const AgencyManager = ({ token, user, onLogout }) => {
             updateStats(data);
         } catch (err) {
             console.error('Erreur lors du chargement des agences:', err);
-            console.log('Error Response:', err.response?.data);
             const errorMsg = err.response?.status === 403
                 ? 'Accès refusé. Vérifiez vos permissions ou contactez l\'administrateur.'
                 : err.response?.data?.message || 'Impossible de charger les agences. Vérifiez votre connexion ou le token.';
@@ -115,7 +110,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
         setError(null);
         try {
             const response = await axios.post(`${API_BASE_URL}/api/agences/`, formData, {
-                headers: { Authorization: `Token ${token}` },
+                headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
             setSuccess('Agence créée avec succès !');
@@ -143,7 +138,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
         setError(null);
         try {
             await axios.put(`${API_BASE_URL}/api/agences/${selectedAgency.id}/`, formData, {
-                headers: { Authorization: `Token ${token}` },
+                headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
             setSuccess('Agence mise à jour avec succès !');
@@ -166,7 +161,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
         setError(null);
         try {
             await axios.delete(`${API_BASE_URL}/api/agences/${agencyId}/`, {
-                headers: { Authorization: `Token ${token}` },
+                headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
             setSuccess('Agence supprimée avec succès !');
@@ -180,10 +175,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
     };
 
     const assignAgencyToUser = async (agencyId) => {
-        if (loading) {
-            console.log("Soumission en cours, ignorée");
-            return;
-        }
+        if (loading) return;
         if (!token) {
             setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
             setShowAssignModal(false);
@@ -192,46 +184,20 @@ const AgencyManager = ({ token, user, onLogout }) => {
         setLoading(true);
         setError(null);
         try {
-            console.log("Assigning agency with ID:", agencyId);
-            const response = await axios.patch(`${API_BASE_URL}/api/users/update_agence/`,
-                { agence_id: agencyId },
-                {
-                    headers: { Authorization: `Token ${token}` },
-                    timeout: 30000  // Timeout augmenté
-                }
-            );
-            console.log("Agency assigned response:", response.data);
-            setSuccess('Agence assignée à votre compte avec succès ! Veuillez vous reconnecter pour actualiser.');
-            await fetchAgencies();  // Rafraîchir les agences
+            await Жел
+
+            await axios.patch(`${API_BASE_URL}/api/users/update_agence/`, { agence_id: agencyId }, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 10000
+            });
+            setSuccess('Agence assignée avec succès ! Veuillez vous reconnecter.');
+            fetchAgencies();
         } catch (err) {
-            console.error('Erreur lors de l\'assignation de l\'agence:', err);
-            const errorMessage = err.response?.status === 401
-                ? 'Session expirée. Veuillez vous reconnecter.'
-                : err.response?.status === 403
-                    ? 'Vous n\'avez pas les permissions pour assigner une agence. Contactez l\'administrateur.'
-                    : err.response?.data?.error || 'Erreur lors de l\'assignation de l\'agence à votre compte.';
-            setError(errorMessage);
+            console.error('Erreur lors de l\'assignation:', err);
+            setError(err.response?.data?.message || "Erreur lors de l'assignation de l'agence.");
         } finally {
             setLoading(false);
             setShowAssignModal(false);
-        }
-    };
-
-    const fetchAgencyStats = async (agencyId) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await axios.get(`${API_BASE_URL}/api/agences/${agencyId}/statistiques/`, {
-                headers: { Authorization: `Token ${token}` },
-                timeout: 10000
-            });
-            return response.data.stats;
-        } catch (err) {
-            console.error('Erreur lors de la consultation des statistiques:', err);
-            setError(err.response?.data?.message || "Erreur lors de la consultation des statistiques.");
-            return null;
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -273,10 +239,8 @@ const AgencyManager = ({ token, user, onLogout }) => {
         setShowModal(true);
     };
 
-    const openDetailsModal = async (agency) => {
+    const openDetailsModal = (agency) => {
         setSelectedAgency(agency);
-        const stats = await fetchAgencyStats(agency.id);
-        setSelectedAgency({ ...agency, stats });
         setShowDetailsModal(true);
     };
 
@@ -331,7 +295,6 @@ const AgencyManager = ({ token, user, onLogout }) => {
     };
 
     useEffect(() => {
-        console.log('User prop:', user);
         fetchAgencies();
     }, [fetchAgencies]);
 
@@ -390,7 +353,6 @@ const AgencyManager = ({ token, user, onLogout }) => {
         }
         return particles;
     };
-
     return (
         <div className="agency-manager-container">
             <div className="floating-particles">{generateParticles()}</div>

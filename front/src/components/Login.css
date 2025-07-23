@@ -64,7 +64,48 @@
     opacity: 1;
     transform: translateY(0);
 }
+/* Desktop forgot password link */
+.forgot-password-desktop {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 14px;
+}
+.forgot-password-desktop:hover {
+    text-decoration: underline;
+}
+.forgot-password-desktop:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
 
+/* Mobile forgot password link */
+.forgot-password-mobile {
+    margin-top: 15px;
+    text-align: center;
+    display: none; /* Hidden by default, shown on mobile */
+}
+.forgot-password-mobile-link {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 14px;
+}
+.forgot-password-mobile-link:hover {
+    text-decoration: underline;
+}
+.forgot-password-mobile-link:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+/* Show mobile link on smaller screens */
+@media (max-width: 767px) {
+    .forgot-password-mobile {
+        display: block;
+    }
+    .forgot-password-desktop {
+        display: none; /* Hide desktop link on mobile */
+    }
+}
 /* ===== ARRIÈRE-PLAN DESKTOP ÉTENDU ===== */
 .login-background-desktop {
     position: absolute;

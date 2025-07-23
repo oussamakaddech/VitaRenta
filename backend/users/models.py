@@ -1,3 +1,6 @@
+# models.py
+from datetime import timedelta
+from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
@@ -75,8 +78,8 @@ class User(AbstractUser):
     budget_journalier = models.DecimalField(
         max_digits=8,
         decimal_places=2,
-        default=50.00,
-        validators=[MinValueValidator(0)]
+        default=Decimal('50.00'),
+        validators=[MinValueValidator(Decimal('0'))]
     )
 
     USERNAME_FIELD = 'email'
@@ -87,7 +90,6 @@ class User(AbstractUser):
         super().clean()
         if self.budget_journalier is not None:
             try:
-                # Convertir en Decimal pour maintenir la précision
                 self.budget_journalier = Decimal(str(self.budget_journalier))
             except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'budget_journalier': 'Le budget journalier doit être un nombre valide.'})
@@ -217,7 +219,7 @@ class Vehicule(models.Model):
     prix_par_jour = models.DecimalField(
         max_digits=8,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal('0'))],
         help_text=_('Prix quotidien en euros')
     )
     localisation = models.CharField(max_length=100, blank=True)
@@ -285,15 +287,13 @@ class Vehicule(models.Model):
 class Reservation(models.Model):
     id = models.CharField(primary_key=True, max_length=UUID_LENGTH, default=generate_uuid, editable=False, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-
     vehicule = models.ForeignKey(Vehicule, on_delete=models.CASCADE, null=True, blank=True)
-
     date_debut = models.DateTimeField()
     date_fin = models.DateTimeField()
     montant_total = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal('0'))],
         help_text=_('Montant total en euros')
     )
     statut = models.CharField(
@@ -337,6 +337,5 @@ class Reservation(models.Model):
             models.Index(fields=['date_debut', 'date_fin'], name='reservation_date_idx'),
             models.Index(fields=['statut'], name='reservation_statut_idx'),
             models.Index(fields=['created_at'], name='reservation_created_at_idx'),
-            models.Index(fields=['user'], name='reservation_user_idx'),
             models.Index(fields=['vehicule'], name='reservation_vehicule_idx')
         ]

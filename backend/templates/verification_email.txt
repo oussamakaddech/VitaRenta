@@ -1,0 +1,9 @@
+Bonjour {{ user.nom|default:"Utilisateur" }},
+
+Veuillez cliquer sur le lien suivant pour vérifier votre adresse email :
+{{ verification_url }}
+
+Ce lien est valable pendant 24 heures.
+
+Cordialement,
+L'équipe VitaRenta

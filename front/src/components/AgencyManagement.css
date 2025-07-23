@@ -6,7 +6,7 @@
     --warning-yellow: #f59e0b;
     --error-red: #ef4444;
     --white: #ffffff;
-    --text-secondary: #e5e7eb; /* Added for better contrast */
+    --text-secondary: #e5e7eb;
     --glass-bg: rgba(255, 255, 255, 0.1);
     --glass-border: rgba(255, 255, 255, 0.2);
     --primary-gradient: linear-gradient(135deg, var(--primary-blue), var(--primary-dark));
@@ -117,7 +117,7 @@
 }
 
 .stat-content {
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
 }
 
 .stat-number {
@@ -166,7 +166,7 @@
 }
 
 .user-agency-card {
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
 }
 
 .user-agency-title {
@@ -196,7 +196,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -233,6 +233,7 @@
     animation: sparkle 2s infinite;
 }
 
+/* Animations */
 @keyframes float {
     0% {
         transform: translateY(100vh);
@@ -275,12 +276,20 @@
 }
 
 @keyframes pulse {
-    0%,
-    100% {
+    0%, 100% {
         transform: scale(1);
     }
     50% {
         transform: scale(1.1);
+    }
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
     }
 }
 
@@ -300,15 +309,6 @@
     height: 40px;
     animation: spin 1s linear infinite;
     margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
 }
 
 .error-container i {
@@ -439,7 +439,7 @@
     align-items: center;
     padding: 0.75rem 1rem;
     margin: 0.5rem 0;
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
     text-decoration: none;
     border-radius: 8px;
     transition: var(--transition);
@@ -592,6 +592,11 @@
     outline-offset: 2px;
 }
 
+.add-agency-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .controls-grid {
     display: flex;
     flex-direction: column;
@@ -621,7 +626,7 @@
 }
 
 .search-input::placeholder {
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
 }
 
 .search-icon {
@@ -629,7 +634,7 @@
     right: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
 }
 
 /* Agencies Section */
@@ -710,7 +715,7 @@
     padding: 1.5rem;
     backdrop-filter: blur(5px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
     transition: var(--transition);
     opacity: 0;
     transform: translateY(20px);
@@ -790,7 +795,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -864,6 +869,15 @@
 
 .delete-btn:hover {
     background: #dc2626;
+    transform: scale(1.1);
+}
+
+.assign-btn {
+    background: var(--success-green);
+}
+
+.assign-btn:hover {
+    background: #059669;
     transform: scale(1.1);
 }
 
@@ -950,7 +964,7 @@
     background: rgba(255, 255, 255, 0.05);
     border-radius: 8px;
     padding: 1rem;
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
     text-decoration: none;
     transition: var(--transition);
     display: flex;
@@ -966,6 +980,11 @@
 .quick-action-card:focus {
     outline: 2px solid var(--white);
     outline-offset: 2px;
+}
+
+.quick-action-card:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .quick-action-icon {
@@ -1038,7 +1057,7 @@
 }
 
 .pagination-info {
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
     font-weight: 600;
 }
 
@@ -1067,6 +1086,7 @@
     max-height: 90vh;
     overflow-y: auto;
     color: var(--white);
+    padding: 1rem;
 }
 
 .modal-header {
@@ -1143,7 +1163,24 @@
 }
 
 .form-input::placeholder {
-    color: var(--text-secondary); /* Improved contrast */
+    color: var(--text-secondary);
+}
+
+/* Styles pour le select dans les formulaires */
+.form-group select.form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23e5e7eb' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+    padding-right: 2.5rem;
+}
+
+.form-group select.form-input:focus {
+    outline: 2px solid var(--primary-blue);
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .form-actions {
@@ -1153,6 +1190,47 @@
     margin-top: 1.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid var(--glass-border);
+}
+
+/* Agency Details */
+.agency-details {
+    padding: 1.5rem;
+}
+
+.agency-details h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--white);
+}
+
+.agency-details p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.agency-details a {
+    color: var(--primary-blue);
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.agency-details a:hover {
+    color: var(--primary-dark);
+}
+
+.agency-stats {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--glass-border);
+}
+
+.agency-stats h4 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 0.5rem;
 }
 
 /* Responsive Design */
@@ -1250,6 +1328,6 @@
 
     .floating-particles,
     .sparkle {
-        display: none; /* Disable particles for reduced motion */
+        display: none;
     }
 }

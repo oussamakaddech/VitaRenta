@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vérification de votre email</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>Bonjour {{ user.nom|default:"Utilisateur" }},</h2>
+    <p>Veuillez cliquer sur le bouton ci-dessous pour vérifier votre adresse email :</p>
+    <p>
+        <a href="{{ verification_url }}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Vérifier mon email
+        </a>
+    </p>
+    <p>Ce lien est valable pendant 24 heures.</p>
+    <p>Cordialement,<br>L'équipe VitaRenta</p>
+</body>
+</html>
