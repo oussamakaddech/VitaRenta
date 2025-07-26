@@ -1,100 +1,128 @@
 from rest_framework import permissions
 
+from users.models import Agence, Reservation, Vehicule
+
 class IsAdminUser(permissions.BasePermission):
     """
-    Allows access only to users with the 'admin' role.
+    Allows full access to users with the 'admin' role.
     """
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role == 'admin'
 
+    def has_object_permission(self, request, view, obj):
+        return True
+
 class IsAgencyUser(permissions.BasePermission):
     """
-    Allows access only to users with the 'agence' role.
+    Allows agency users to:
+    - Manage their own agency (CRUD).
+    - Manage vehicles associated with their agency (CRUD).
+    - Manage reservations for their agency's vehicles.
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role == 'agence'
+        if not (request.user and request.user.is_authenticated and request.user.role == 'agence'):
+            return False
+        # Allow read-only access for GET requests
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        # For write operations, ensure user has an associated agency
+        return request.user.agence is not None
+
+    def has_object_permission(self, request, view, obj):
+        if not (request.user and request.user.is_authenticated and request.user.role == 'agence'):
+            return False
+        # Allow read-only access for GET requests
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        # Agency-specific checks
+        if isinstance(obj, Agence):
+            return obj.id == request.user.agence.id
+        elif isinstance(obj, Vehicule):
+            return obj.agence and obj.agence.id == request.user.agence.id
+        elif isinstance(obj, Reservation):
+            return obj.vehicule and obj.vehicule.agence and obj.vehicule.agence.id == request.user.agence.id
+        return False
 
 class IsClientUser(permissions.BasePermission):
     """
-    Allows access only to users with the 'client' role.
+    Allows clients to:
+    - View vehicles (read-only).
+    - Create and view their own reservations.
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role == 'client'
+        if not (request.user and request.user.is_authenticated and request.user.role == 'client'):
+            return False
+        # Allow read-only access for vehicle viewing
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        # Allow creating reservations
+        if view.__class__.__name__ == 'ReservationViewSet' and view.action == 'create':
+            return True
+        return False
 
-class IsReadOnly(permissions.BasePermission):
-    """
-    Allows read-only access (GET, HEAD, OPTIONS).
-    """
-    def has_permission(self, request, view):
-        return request.method in permissions.SAFE_METHODS
-
-class IsOwner(permissions.BasePermission):
-    """
-    Allows access only to the owner of the object.
-    Checks if the request user's ID matches the object's user_id or id.
-    """
     def has_object_permission(self, request, view, obj):
-        if hasattr(obj, 'user_id'):
-            return obj.user_id == str(request.user.id)
-        if hasattr(obj, 'id'):
-            return obj.id == request.user.id
+        if not (request.user and request.user.is_authenticated and request.user.role == 'client'):
+            return False
+        # Allow read-only access to vehicles
+        if isinstance(obj, Vehicule) and request.method in permissions.SAFE_METHODS:
+            return True
+        # Allow clients to view their own reservations
+        if isinstance(obj, Reservation):
+            return obj.user and obj.user.id == request.user.id
+        return False
+
+class IsAdminOrAgency(permissions.BasePermission):
+    """
+    Allows access to admins or agency users, with agency users restricted to their own agency or related objects.
+    """
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.role == 'admin':
+            return True
+        if request.user.role == 'agence' and request.user.agence:
+            return True
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.role == 'admin':
+            return True
+        if request.user.role == 'agence' and request.user.agence:
+            if isinstance(obj, Agence):
+                return obj.id == request.user.agence.id
+            elif isinstance(obj, Vehicule):
+                return obj.agence and obj.agence.id == request.user.agence.id
+            elif isinstance(obj, Reservation):
+                return obj.vehicule and obj.vehicule.agence and obj.vehicule.agence.id == request.user.agence.id
         return False
 
 class IsClientOrAgencyOrAdmin(permissions.BasePermission):
     """
     Allows:
     - Clients to create and view their own reservations.
-    - Agents and Admins to perform all actions.
+    - Agency users to manage reservations for their agency's vehicles.
+    - Admins to perform all actions.
     """
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        if not (request.user and request.user.is_authenticated):
             return False
-        if request.user.role in ['admin', 'agence']:
-            return True
-        if request.user.role == 'client':
-            return view.action in ['create', 'list', 'retrieve', 'my_reservations']
-        return False
-
-    def has_object_permission(self, request, view, obj):
-        if request.user.role in ['admin', 'agence']:
-            return True
-        if request.user.role == 'client':
-            return obj.user_id == str(request.user.id)
-        return False
-
-class IsVehicleAccessible(permissions.BasePermission):
-    """
-    Allows:
-    - Clients to view vehicles (read-only).
-    - Agents to manage vehicles in their agency.
-    - Admins to manage all vehicles.
-    """
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        if not request.user or not request.user.is_authenticated:
-            return False
-        return request.user.role in ['admin', 'agence']
-
-    def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS:
-            return True
         if request.user.role == 'admin':
             return True
-        if request.user.role == 'agence':
-            return obj.agence_id == str(request.user.agence_id)
+        if request.user.role == 'agence' and request.user.agence:
+            return True
+        if request.user.role == 'client' and view.__class__.__name__ == 'ReservationViewSet' and view.action in ['create', 'list', 'retrieve']:
+            return True
         return False
-
-class IsAdminOrAgency(permissions.BasePermission):
-    """
-    Allows access to admins or agents, with agents restricted to their own agency.
-    """
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ['admin', 'agence']
 
     def has_object_permission(self, request, view, obj):
         if request.user.role == 'admin':
             return True
-        if request.user.role == 'agence':
-            return obj.id == request.user.agence_id
+        if request.user.role == 'agence' and request.user.agence:
+            if isinstance(obj, Reservation):
+                return obj.vehicule and obj.vehicule.agence and obj.vehicule.agence.id == request.user.agence.id
+            return False
+        if request.user.role == 'client':
+            if isinstance(obj, Reservation):
+                return obj.user and obj.user.id == request.user.id
+            return False
         return False

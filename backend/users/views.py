@@ -22,7 +22,7 @@ from .serializers import (
     LoginSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
     UserUpdateSerializer, VehiculeSerializer, AgenceSerializer, ReservationSerializer
 )
-from .permissions import IsAdminUser, IsAgencyUser, IsClientUser, IsOwner, IsClientOrAgencyOrAdmin, IsVehicleAccessible, IsAdminOrAgency
+from .permissions import IsAdminUser, IsAgencyUser, IsClientUser, IsAdminOrAgency, IsClientOrAgencyOrAdmin
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,6 @@ class LoginView(APIView):
 
         try:
             user = User.objects.get(email=email)
-            # Check if user is locked out
             if (hasattr(user, 'login_attempts') and 
                 hasattr(user, 'last_login_attempt') and
                 user.login_attempts >= 5 and
@@ -85,7 +84,6 @@ class LoginView(APIView):
 
             authenticated_user = authenticate(request, username=email, password=password)
             if authenticated_user:
-                # Reset login attempts on success
                 if hasattr(user, 'login_attempts'):
                     user.login_attempts = 0
                     user.last_login_attempt = None
@@ -99,7 +97,6 @@ class LoginView(APIView):
                     'message': 'Connexion réussie'
                 }, status=status.HTTP_200_OK)
             else:
-                # Increment login attempts on failure
                 if hasattr(user, 'login_attempts'):
                     user.login_attempts = (user.login_attempts or 0) + 1
                     user.last_login_attempt = timezone.now()
@@ -286,7 +283,7 @@ class UserStatsView(APIView):
 class VehiculeViewSet(ModelViewSet):
     queryset = Vehicule.objects.all()
     serializer_class = VehiculeSerializer
-    permission_classes = [IsVehicleAccessible]
+    permission_classes = [IsAdminUser | IsAgencyUser | IsClientUser]
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
@@ -301,8 +298,6 @@ class VehiculeViewSet(ModelViewSet):
             queryset = queryset.filter(carburant=params.get('carburant'))
         if params.get('statut'):
             queryset = queryset.filter(statut=params.get('statut'))
-        if params.get('type'):
-            queryset = queryset.filter(type=params.get('type'))
         if params.get('agence_id'):
             queryset = queryset.filter(agence_id=params.get('agence_id'))
         if params.get('search'):
@@ -310,7 +305,6 @@ class VehiculeViewSet(ModelViewSet):
             queryset = queryset.filter(
                 Q(marque__icontains=search_term) |
                 Q(modele__icontains=search_term) |
-                Q(type__icontains=search_term) |
                 Q(immatriculation__icontains=search_term)
             )
         if params.get('prix_min'):
@@ -367,7 +361,6 @@ class VehiculeViewSet(ModelViewSet):
                 'maintenance': queryset.filter(statut='maintenance').count(),
                 'hors_service': queryset.filter(statut='hors_service').count(),
                 'par_carburant': dict(queryset.values('carburant').annotate(count=Count('id')).values_list('carburant', 'count')),
-                'par_type': dict(queryset.values('type').annotate(count=Count('id')).values_list('type', 'count')),
                 'prix_moyen': float(queryset.aggregate(avg_price=Avg('prix_par_jour'))['avg_price'] or 0)
             }
             logger.info(f"Statistiques véhicules récupérées pour {request.user.email if request.user.is_authenticated else 'utilisateur anonyme'}")
@@ -514,7 +507,6 @@ class ReservationViewSet(ModelViewSet):
             else:
                 serializer.save()
             reservation = serializer.instance
-            # Update vehicle status
             vehicle = reservation.vehicule
             vehicle.statut = 'loue'
             vehicle.save()
@@ -533,7 +525,6 @@ class ReservationViewSet(ModelViewSet):
 
     def perform_destroy(self, instance):
         try:
-            # Update vehicle status back to available
             vehicle = instance.vehicule
             vehicle.statut = 'disponible'
             vehicle.save()
@@ -555,7 +546,6 @@ class ReservationViewSet(ModelViewSet):
                     'error': f"Statut invalide. Choisissez parmi: {', '.join(valid_statuses)}"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if user has permission to update this reservation
             if (self.request.user.role == 'agence' and 
                 reservation.vehicule.agence != self.request.user.agence):
                 return Response({
@@ -563,7 +553,6 @@ class ReservationViewSet(ModelViewSet):
                 }, status=status.HTTP_403_FORBIDDEN)
 
             reservation.statut = new_status
-            # Update vehicle status based on reservation status
             if new_status == 'annulee' or new_status == 'terminee':
                 reservation.vehicule.statut = 'disponible'
             elif new_status == 'confirmee':
@@ -575,14 +564,20 @@ class ReservationViewSet(ModelViewSet):
             return Response({
                 'message': 'Statut de la réservation mis à jour',
                 'reservation': ReservationSerializer(reservation).data
-            }, status=status.HTTP_200_OK)
+            })
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour du statut de la réservation pour {pk}: {str(e)}")
+            return Response({
+                'error': 'Erreur lors de la mise à jour du statut'
+            })
+
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du statut de la réservation {pk}: {str(e)}")
             return Response({
                 'error': 'Erreur lors de la mise à jour du statut'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminOrAgency])
     def stats(self, request):
         try:
             queryset = self.get_queryset()
@@ -595,13 +590,16 @@ class ReservationViewSet(ModelViewSet):
                 'revenus_total': float(queryset.aggregate(total=Sum('montant_total'))['total'] or 0),
                 'moyenne_duree': float(queryset.aggregate(
                     avg_duration=Avg('date_fin') - Avg('date_debut')
-                )['avg_duration'].days if queryset.exists() else 0)
+                )['avg_duration'].days if queryset.exists() else 0
+                )
             }
             logger.info(f"Statistiques des réservations récupérées pour {request.user.email}")
             return Response({
                 'stats': stats,
-                'message': 'Statistiques récupérées avec succès'
-            }, status=status.HTTP_200_OK)
+                'message': 'Statistiques récupérées statistiquement avec succès'
+            }, status=status.HTTP_200_OK
+            )
+
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des statistiques des réservations: {str(e)}")
             return Response({
@@ -620,7 +618,7 @@ class UserViewSet(ModelViewSet):
 
         if params.get('role'):
             queryset = queryset.filter(role=params.get('role'))
-        if params.get('search'):
+        elif params.get('search'):
             search_term = params.get('search')
             queryset = queryset.filter(
                 Q(email__icontains=search_term) |
@@ -636,12 +634,13 @@ class UserViewSet(ModelViewSet):
         return queryset.order_by('-date_joined')
 
     def perform_create(self, serializer):
-        try:
-            user = serializer.save()
-            logger.info(f"Utilisateur créé: {user.email} par {self.request.user.email}")
-        except Exception as e:
-            logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
-            raise
+      try:
+        user = serializer.save()
+        logger.info(f"Utilisateur créé: {user.email} par {self.request.user.email}")
+      except Exception as e:
+        logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
+        raise
+
 
     def perform_update(self, serializer):
         try:
@@ -700,7 +699,7 @@ class UserViewSet(ModelViewSet):
             logger.info(f"Statistiques des utilisateurs récupérées pour {request.user.email}")
             return Response({
                 'stats': stats,
-                'message': 'Statistiques récupérées avec succès'
+                'message': 'Statistiques récupérées statistiquement avec succès'
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des statistiques des utilisateurs: {str(e)}")

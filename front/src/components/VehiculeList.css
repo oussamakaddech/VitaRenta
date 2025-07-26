@@ -60,6 +60,19 @@ body {
     overflow-x: hidden;
 }
 
+/* Classe pour les éléments accessibles uniquement aux lecteurs d'écran */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* Conteneur Principal */
 .vehicule-container {
     position: relative;
@@ -98,30 +111,24 @@ body {
 
 .vehicule-floating-car {
     position: absolute;
-    font-size: 2rem;
-    opacity: 0.1;
-    animation: float 30s linear infinite;
-    filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.5));
+    font-size: 1.5rem; /* Réduit pour moins de charge */
+    opacity: 0.15;
+    animation: float 20s linear infinite;
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.3));
 }
 
 @keyframes float {
     0% {
-        transform: translateX(-100px) translateY(0px) rotate(0deg);
-        opacity: 0.1;
-    }
-    25% {
-        opacity: 0.3;
+        transform: translateX(-100px) translateY(0);
+        opacity: 0.15;
     }
     50% {
-        transform: translateX(calc(50vw)) translateY(-100px) rotate(180deg);
-        opacity: 0.2;
-    }
-    75% {
-        opacity: 0.1;
+        transform: translateX(calc(50vw)) translateY(-50px);
+        opacity: 0.25;
     }
     100% {
-        transform: translateX(calc(100vw + 200px)) translateY(0px) rotate(360deg);
-        opacity: 0.05;
+        transform: translateX(calc(100vw + 100px)) translateY(0);
+        opacity: 0.1;
     }
 }
 
@@ -135,55 +142,51 @@ body {
     position: absolute;
     border-radius: 50%;
     opacity: 0.1;
-    animation: pulse 6s ease-in-out infinite;
+    animation: pulse 8s ease-in-out infinite;
     filter: blur(2px);
 }
 
 .vehicule-shape-1 {
-    width: 400px;
-    height: 400px;
+    width: 300px;
+    height: 300px;
     background: var(--primary-gradient);
-    top: 10%;
+    top: 15%;
     left: 10%;
     animation-delay: 0s;
 }
 
 .vehicule-shape-2 {
-    width: 300px;
-    height: 300px;
+    width: 200px;
+    height: 200px;
     background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    top: 60%;
-    right: 20%;
+    top: 55%;
+    right: 15%;
     animation-delay: 2s;
 }
 
 .vehicule-shape-3 {
-    width: 500px;
-    height: 500px;
+    width: 350px;
+    height: 350px;
     background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    bottom: 10%;
-    left: 50%;
+    bottom: 15%;
+    left: 45%;
     animation-delay: 4s;
 }
 
 @keyframes pulse {
     0%, 100% {
-        transform: scale(1) rotate(0deg);
+        transform: scale(1);
         opacity: 0.1;
     }
-    33% {
-        transform: scale(1.2) rotate(120deg);
-        opacity: 0.2;
-    }
-    66% {
-        transform: scale(0.8) rotate(240deg);
+    50% {
+        transform: scale(1.1);
         opacity: 0.15;
     }
 }
 
 /* Layout Pleine Largeur */
 .vehicule-layout-fullwidth {
-    max-width: 1200px;
+    max-width: 1280px;
     width: 100%;
     margin: 0 auto;
     padding: var(--spacing-xl);
@@ -205,7 +208,7 @@ body {
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius-2xl);
     padding: var(--spacing-xl);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
 }
 
 .vehicule-header-content {
@@ -313,14 +316,14 @@ body {
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius-2xl);
     padding: var(--spacing-2xl);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
 }
 
 .vehicule-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
 }
 
 .vehicule-card-header {
@@ -373,7 +376,7 @@ body {
 }
 
 .vehicule-search-input:focus {
-    outline: 2px solid var(--primary-blue);
+    outline: 2px solid var(--white); /* Amélioration du contraste */
     background: rgba(255, 255, 255, 0.2);
 }
 
@@ -386,7 +389,7 @@ body {
     left: var(--spacing-md);
     top: 50%;
     transform: translateY(-50%);
-    color: var(--text-secondary);
+    color: var(--white); /* Meilleur contraste */
     font-size: var(--font-md);
 }
 
@@ -454,6 +457,7 @@ body {
 
 .vehicule-label-icon {
     font-size: var(--font-sm);
+    color: var(--white); /* Meilleur contraste */
 }
 
 .vehicule-input, .vehicule-sort-select {
@@ -468,7 +472,7 @@ body {
 }
 
 .vehicule-input:focus, .vehicule-sort-select:focus {
-    outline: 2px solid var(--primary-blue);
+    outline: 2px solid var(--white);
     background: rgba(255, 255, 255, 0.2);
 }
 
@@ -476,11 +480,22 @@ body {
     color: var(--text-secondary);
 }
 
+.vehicule-input-error {
+    border: 2px solid var(--error-red) !important;
+}
+
+.vehicule-error-message {
+    color: var(--error-red);
+    font-size: var(--font-sm);
+    margin-top: var(--spacing-xs);
+    display: block;
+}
+
 .vehicule-sort-select {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23e5e7eb' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23ffffff' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E"); /* Contraste amélioré */
     background-repeat: no-repeat;
     background-position: right 0.75rem center;
     background-size: 1rem;
@@ -564,7 +579,7 @@ body {
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius-2xl);
     overflow: hidden;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     transition: var(--transition);
     position: relative;
     min-height: 400px;
@@ -574,7 +589,7 @@ body {
 
 .vehicule-vehicle-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
 }
 
 /* Image du Véhicule */
@@ -637,6 +652,7 @@ body {
 
 .vehicule-favorite-btn.active {
     background: var(--success-green);
+    color: var(--white);
 }
 
 .vehicule-vehicle-badges {
@@ -804,7 +820,7 @@ body {
     border: none;
     font-size: var(--font-xl);
     cursor: pointer;
-    color: inherit;
+    color: var(--white); /* Meilleur contraste */
     padding: var(--spacing-xs);
     border-radius: 50%;
     transition: var(--transition);
@@ -829,7 +845,7 @@ body {
     backdrop-filter: blur(10px);
     border-radius: var(--border-radius-2xl);
     margin: var(--spacing-xl);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     border: 1px solid var(--glass-border);
     width: 100%;
     max-width: 600px;
@@ -842,7 +858,7 @@ body {
 }
 
 .vehicule-spinner-car {
-    font-size: 3rem;
+    font-size: 2.5rem; /* Réduit pour moins de charge */
     animation: spin 1s linear infinite;
 }
 
@@ -947,9 +963,9 @@ body {
     border-radius: var(--border-radius-2xl);
     width: 90%;
     max-width: 600px;
-    max-height: 80vh;
+    max-height: 90vh; /* Ajusté pour très petits écrans */
     overflow-y: auto;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-lg);
     margin: auto;
 }
 
@@ -1178,7 +1194,7 @@ body {
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
     border-radius: var(--border-radius-2xl);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     border: 1px solid var(--glass-border);
     width: 100%;
     max-width: 600px;
@@ -1231,7 +1247,7 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
 }
@@ -1278,7 +1294,7 @@ body {
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
     border-radius: var(--border-radius-2xl);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
     border: 1px solid var(--glass-border);
     width: 100%;
     max-width: 600px;
@@ -1408,18 +1424,23 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .vehicule-pagination {
-        flex-wrap: wrap;
-        gap: var(--spacing-sm);
+    .vehicule-vehicles-grid {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); /* Support pour écrans très étroits */
     }
 
     .vehicule-modal-content {
         width: 95%;
         max-width: 400px;
+        max-height: 85vh;
     }
 
     .vehicule-vehicle-image-large {
         height: 200px;
+    }
+
+    .vehicule-pagination {
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
     }
 }
 
@@ -1441,7 +1462,7 @@ body {
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --glass-bg: rgba(0, 0, 0, 0.2);
-        --glass-border: rgba(255, 255, 255, 0.1);
+        --glass-bg: rgba(0, 0, 0, 0.3);
+        --glass-border: rgba(255, 255, 255, 0.15);
     }
 }

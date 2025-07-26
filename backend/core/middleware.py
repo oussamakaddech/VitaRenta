@@ -48,12 +48,12 @@ class TooManyAttemptsMiddleware:
                             try:
                                 user = User.objects.get(email=not email)
                                 # Check user-specific lockout
-                                if (hasattr(user, 'login_attempts') and 
-                                    hasattr(user, 'last_login_attempt') and
-                                    user.login_attempts >= self.max_attempts and
-                                    user.last_login_attempt and
-                                    timezone.now() - user.last_login_attempt < self.lockout_duration):
-                                    
+                                if (hasattr(user, 'login_attempts') and
+                                        hasattr(user, 'last_login_attempt') and
+                                        user.login_attempts >= self.max_attempts and
+                                        user.last_login_attempt and
+                                        timezone.now() - user.last_login_attempt < self.lockout_duration):
+
                                     self.block_ip(client_ip)
                                     logger.warning(f"Compte bloqué pour {email} (IP: {client_ip})")
                                     return JsonResponse({
@@ -61,27 +61,27 @@ class TooManyAttemptsMiddleware:
                                         'blocked_until': (user.last_login_attempt + self.lockout_duration).isoformat(),
                                         'attempts_remaining': 0
                                     }, status=429)
-                                
+
                                 # Track failed attempt if authentication fails (done in LoginView)
                             except User.DoesNotExist:
                                 self.track_failed_attempt(client_ip)
                                 logger.warning(f"Tentative de connexion avec email inexistant: {email} (IP: {client_ip})")
-                    
+
                     except json.JSONDecodeError:
                         logger.error(f"JSON invalide dans la requête de login depuis {client_ip}")
                         return JsonResponse({
                             'error': 'Requête JSON invalide'
                         }, status=400)
-            
+
             except Exception as e:
                 logger.error(f"Erreur dans TooManyAttemptsMiddleware: {str(e)}")
-        
+
         response = self.get_response(request)
-        
+
         # Reset attempts on successful login
-        if (request.path == '/api/users/login/' and 
-            request.method == 'POST' and 
-            response.status_code == 200):
+        if (request.path == '/api/users/login/' and
+                request.method == 'POST' and
+                response.status_code == 200):
             try:
                 user = User.objects.get(email=json.loads(request.body.decode('utf-8')).get('email', '').lower().strip())
                 if hasattr(user, 'login_attempts'):
@@ -92,7 +92,7 @@ class TooManyAttemptsMiddleware:
                     logger.info(f"Réinitialisation des tentatives de connexion pour {user.email} (IP: {client_ip})")
             except (User.DoesNotExist, json.JSONDecodeError):
                 pass
-        
+
         return response
 
     def get_client_ip(self, request):
@@ -130,17 +130,17 @@ class CORSMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        
+
         origin = request.META.get('HTTP_ORIGIN', '')
         if origin in self.allowed_origins or not self.allowed_origins:
             response['Access-Control-Allow-Origin'] = origin or '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
         response['Access-Control-Allow-Credentials'] = 'true'
-        
+
         if request.method == 'OPTIONS':
             response.status_code = 200
-            
+
         return response
 
 class APILoggingMiddleware:
@@ -150,18 +150,18 @@ class APILoggingMiddleware:
     def __call__(self, request):
         if request.path.startswith('/api/'):
             start_time = timezone.now()
-            
+
             user_info = request.user.email if request.user.is_authenticated else 'anonyme'
             client_ip = self.get_client_ip(request)
             logger.info(f"API Request: {request.method} {request.path} from {user_info} (IP: {client_ip})")
-            
+
             response = self.get_response(request)
-            
+
             duration = timezone.now() - start_time
             logger.info(f"API Response: {response.status_code} in {duration.total_seconds():.2f}s for {user_info} (IP: {client_ip})")
-            
+
             return response
-        
+
         return self.get_response(request)
 
     def get_client_ip(self, request):
@@ -178,7 +178,7 @@ class SecurityHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        
+
         response['X-Content-Type-Options'] = 'nosniff'
         response['X-Frame-Options'] = 'DENY'
         response['X-XSS-Protection'] = '1; mode=block'
@@ -186,5 +186,5 @@ class SecurityHeadersMiddleware:
         response['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
         # Optional: Add Content-Security-Policy (configure as needed)
         response['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
-        
+
         return response

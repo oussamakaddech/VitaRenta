@@ -1,11 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Navigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import Sidebar from './Sidebar';
 import './AgencyManagement.css';
+import { useLocation } from 'react-router-dom';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const AgencyManager = ({ token, user, onLogout }) => {
+    if (!token || !user || user.role !== 'admin') {
+        return <Navigate to="/unauthorized" replace />;
+    }
+
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [agencies, setAgencies] = useState([]);
@@ -18,14 +24,13 @@ const AgencyManager = ({ token, user, onLogout }) => {
     const [itemsPerPage] = useState(8);
     const [selectedAgency, setSelectedAgency] = useState(null);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [showModal, setShowModal] = useState(false);
-    const [showDetailsModal, setShowDetailsModal] = useState(false);
-    const [showAssignModal, setShowAssignModal] = useState(false);
+    const [modalState, setModalState] = useState({ type: null, data: null });
     const [stats, setStats] = useState({
         totalAgencies: 0,
         activeAgencies: 0,
         recentAgencies: 0
     });
+    const [totalPagesAgencies, setTotalPagesAgencies] = useState(1);
 
     const [formData, setFormData] = useState({
         nom: '',
@@ -39,23 +44,24 @@ const AgencyManager = ({ token, user, onLogout }) => {
         description: ''
     });
 
-    const isActive = (path) => location.pathname === path;
+    const isActive = useCallback((path) => location.pathname === path, [location.pathname]);
 
-    const handleLogout = () => {
+    const handleLogout = useCallback(() => {
         onLogout();
         setIsSidebarOpen(false);
-    };
+    }, [onLogout]);
 
-    const validateAgencyData = (data) => {
+    const validateAgencyData = useCallback((data) => {
         if (!data.nom || data.nom.trim().length < 2) return "Le nom de l'agence doit contenir au moins 2 caractères";
         if (!data.adresse || data.adresse.trim().length < 5) return "L'adresse doit contenir au moins 5 caractères";
         if (!data.ville || data.ville.trim().length < 2) return "La ville doit contenir au moins 2 caractères";
-        if (!data.code_postal || !/^\d{4,}$/.test(data.code_postal)) return "Le code postal doit être valide";
+        if (!data.code_postal || !/^\d{4,}$/.test(data.code_postal)) return "Le code postal doit être valide (au moins 4 chiffres)";
         if (!data.pays || data.pays.trim().length < 2) return "Le pays est requis";
-        if (!data.telephone || !/^\+?[\d\s\-()]{10,}$/.test(data.telephone)) return "Le numéro de téléphone n'est pas valide";
+        if (!data.telephone || !/^\+?[\d\s\-()]{10,}$/.test(data.telephone)) return "Le numéro de téléphone n'est pas valide (au moins 10 chiffres)";
         if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return "L'email n'est pas valide";
+        if (data.site_web && !/^https?:\/\/[^\s$.?#].[^\s]*$/.test(data.site_web)) return "L'URL du site web n'est pas valide";
         return '';
-    };
+    }, []);
 
     const fetchAgencies = useCallback(async () => {
         setLoading(true);
@@ -63,12 +69,15 @@ const AgencyManager = ({ token, user, onLogout }) => {
         try {
             const params = new URLSearchParams();
             if (searchTerm.trim()) params.append('search', searchTerm.trim());
+            params.append('page', currentPageAgencies);
+            params.append('page_size', itemsPerPage);
             const response = await axios.get(`${API_BASE_URL}/api/agences/?${params}`, {
-                headers: { Authorization: `Bearer ${token}` }, // Changed to JWT
+                headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
             const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
             setAgencies(data);
+            setTotalPagesAgencies(response.data.total_pages || Math.ceil(data.length / itemsPerPage));
             if (data.length > 0) {
                 setTimeout(() => setAnimateCards(true), 100);
             } else {
@@ -77,17 +86,20 @@ const AgencyManager = ({ token, user, onLogout }) => {
             updateStats(data);
         } catch (err) {
             console.error('Erreur lors du chargement des agences:', err);
-            const errorMsg = err.response?.status === 403
-                ? 'Accès refusé. Vérifiez vos permissions ou contactez l\'administrateur.'
-                : err.response?.data?.message || 'Impossible de charger les agences. Vérifiez votre connexion ou le token.';
+            const errorMsg =
+                err.response?.status === 403
+                    ? 'Accès refusé. Vous n\'avez pas les permissions nécessaires pour accéder à cette ressource.'
+                    : err.response?.status === 404
+                    ? 'Aucune agence trouvée.'
+                    : err.response?.data?.message || 'Impossible de charger les agences. Vérifiez votre connexion ou le token.';
             setError(errorMsg);
             setAgencies([]);
         } finally {
             setLoading(false);
         }
-    }, [token, searchTerm]);
+    }, [token, searchTerm, currentPageAgencies, itemsPerPage]);
 
-    const updateStats = (agenciesData) => {
+    const updateStats = useCallback((agenciesData) => {
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
         setStats({
@@ -98,9 +110,9 @@ const AgencyManager = ({ token, user, onLogout }) => {
                 return createdDate >= thirtyDaysAgo;
             }).length
         });
-    };
+    }, []);
 
-    const createAgency = async () => {
+    const createAgency = useCallback(async () => {
         const validationError = validateAgencyData(formData);
         if (validationError) {
             setError(validationError);
@@ -115,7 +127,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
             });
             setSuccess('Agence créée avec succès !');
             resetForm();
-            setShowModal(false);
+            setModalState({ type: null, data: null });
             fetchAgencies();
             if (user && !user.agence && ['admin', 'agence'].includes(user.role)) {
                 await assignAgencyToUser(response.data.id);
@@ -126,9 +138,9 @@ const AgencyManager = ({ token, user, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData, token, user, fetchAgencies]);
 
-    const updateAgency = async () => {
+    const updateAgency = useCallback(async () => {
         const validationError = validateAgencyData(formData);
         if (validationError) {
             setError(validationError);
@@ -143,7 +155,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
             });
             setSuccess('Agence mise à jour avec succès !');
             resetForm();
-            setShowModal(false);
+            setModalState({ type: null, data: null });
             fetchAgencies();
         } catch (err) {
             console.error('Erreur lors de la mise à jour:', err);
@@ -151,9 +163,9 @@ const AgencyManager = ({ token, user, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [formData, selectedAgency, token, fetchAgencies]);
 
-    const deleteAgency = async (agencyId) => {
+    const deleteAgency = useCallback(async (agencyId) => {
         if (!window.confirm('Voulez-vous vraiment supprimer cette agence ? Cette action est irréversible.')) {
             return;
         }
@@ -172,20 +184,18 @@ const AgencyManager = ({ token, user, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token, fetchAgencies]);
 
-    const assignAgencyToUser = async (agencyId) => {
+    const assignAgencyToUser = useCallback(async (agencyId) => {
         if (loading) return;
         if (!token) {
             setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
-            setShowAssignModal(false);
+            setModalState({ type: null, data: null });
             return;
         }
         setLoading(true);
         setError(null);
         try {
-            await Жел
-
             await axios.patch(`${API_BASE_URL}/api/users/update_agence/`, { agence_id: agencyId }, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
@@ -197,11 +207,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
             setError(err.response?.data?.message || "Erreur lors de l'assignation de l'agence.");
         } finally {
             setLoading(false);
-            setShowAssignModal(false);
+            setModalState({ type: null, data: null });
         }
-    };
+    }, [token, fetchAgencies]);
 
-    const resetForm = () => {
+    const resetForm = useCallback(() => {
         setFormData({
             nom: '',
             adresse: '',
@@ -215,14 +225,14 @@ const AgencyManager = ({ token, user, onLogout }) => {
         });
         setSelectedAgency(null);
         setIsEditMode(false);
-    };
+    }, []);
 
-    const handleFormChange = (e) => {
+    const handleFormChange = useCallback((e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-    };
+    }, []);
 
-    const openEditForm = (agency) => {
+    const openEditForm = useCallback((agency) => {
         setSelectedAgency(agency);
         setIsEditMode(true);
         setFormData({
@@ -236,49 +246,46 @@ const AgencyManager = ({ token, user, onLogout }) => {
             site_web: agency.site_web || '',
             description: agency.description || ''
         });
-        setShowModal(true);
-    };
+        setModalState({ type: 'edit', data: agency });
+    }, []);
 
-    const openDetailsModal = (agency) => {
-        setSelectedAgency(agency);
-        setShowDetailsModal(true);
-    };
+    const openDetailsModal = useCallback((agency) => {
+        setModalState({ type: 'details', data: agency });
+    }, []);
 
-    const openCreateForm = () => {
+    const openCreateForm = useCallback(() => {
         resetForm();
-        setShowModal(true);
-    };
+        setModalState({ type: 'create', data: null });
+    }, [resetForm]);
 
-    const openAssignModal = () => {
+    const openAssignModal = useCallback(() => {
         if (agencies.length === 0) {
             setError('Aucune agence disponible. Créez une agence d\'abord.');
             return;
         }
-        setShowAssignModal(true);
-    };
+        setModalState({ type: 'assign', data: null });
+    }, [agencies.length]);
 
-    const closeModal = () => {
-        setShowModal(false);
-        setShowDetailsModal(false);
-        setShowAssignModal(false);
+    const closeModal = useCallback(() => {
+        setModalState({ type: null, data: null });
         resetForm();
-    };
+    }, [resetForm]);
 
-    const handleSearchChange = (e) => {
+    const handleSearchChange = useCallback((e) => {
         setSearchTerm(e.target.value);
         setCurrentPageAgencies(1);
-    };
+    }, []);
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
         if (isEditMode) {
             await updateAgency();
         } else {
             await createAgency();
         }
-    };
+    }, [isEditMode, createAgency, updateAgency]);
 
-    const handleAssignSubmit = async (e) => {
+    const handleAssignSubmit = useCallback(async (e) => {
         e.preventDefault();
         const agencyId = e.target.agency_id.value;
         if (!agencyId) {
@@ -286,13 +293,13 @@ const AgencyManager = ({ token, user, onLogout }) => {
             return;
         }
         await assignAgencyToUser(agencyId);
-    };
+    }, [assignAgencyToUser]);
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = useCallback((e) => {
         if (e.key === 'Escape') {
             closeModal();
         }
-    };
+    }, [closeModal]);
 
     useEffect(() => {
         fetchAgencies();
@@ -313,31 +320,34 @@ const AgencyManager = ({ token, user, onLogout }) => {
     }, [success]);
 
     useEffect(() => {
-        if (showModal || showDetailsModal || showAssignModal) {
+        if (modalState.type) {
             document.addEventListener('keydown', handleKeyDown);
             return () => document.removeEventListener('keydown', handleKeyDown);
         }
-    }, [showModal, showDetailsModal, showAssignModal]);
+    }, [modalState.type, handleKeyDown]);
 
-    const filteredAgencies = agencies.filter(agency => {
-        if (!agency) return false;
-        const nom = (agency.nom || '').toLowerCase();
-        const ville = (agency.ville || '').toLowerCase();
-        const codePostal = (agency.code_postal || '').toLowerCase();
-        const pays = (agency.pays || '').toLowerCase();
-        const search = searchTerm.toLowerCase();
-        return nom.includes(search) || ville.includes(search) || codePostal.includes(search) || pays.includes(search);
-    });
+    const filteredAgencies = useMemo(() => {
+        return agencies.filter(agency => {
+            if (!agency) return false;
+            const nom = (agency.nom || '').toLowerCase();
+            const ville = (agency.ville || '').toLowerCase();
+            const codePostal = (agency.code_postal || '').toLowerCase();
+            const pays = (agency.pays || '').toLowerCase();
+            const search = searchTerm.toLowerCase();
+            return nom.includes(search) || ville.includes(search) || codePostal.includes(search) || pays.includes(search);
+        });
+    }, [agencies, searchTerm]);
 
-    const indexOfLastAgency = currentPageAgencies * itemsPerPage;
-    const indexOfFirstAgency = indexOfLastAgency - itemsPerPage;
-    const currentAgencies = filteredAgencies.slice(indexOfFirstAgency, indexOfLastAgency);
-    const totalPagesAgencies = Math.ceil(filteredAgencies.length / itemsPerPage);
+    const currentAgencies = useMemo(() => {
+        const indexOfLastAgency = currentPageAgencies * itemsPerPage;
+        const indexOfFirstAgency = indexOfLastAgency - itemsPerPage;
+        return filteredAgencies.slice(indexOfFirstAgency, indexOfLastAgency);
+    }, [filteredAgencies, currentPageAgencies, itemsPerPage]);
 
-    const generateParticles = () => {
-        const particles = [];
+    const particles = useMemo(() => {
+        const particlesArray = [];
         for (let i = 0; i < 20; i++) {
-            particles.push(
+            particlesArray.push(
                 <div
                     key={i}
                     className="particle"
@@ -351,89 +361,21 @@ const AgencyManager = ({ token, user, onLogout }) => {
                 />
             );
         }
-        return particles;
-    };
+        return particlesArray;
+    }, []);
+
     return (
         <div className="agency-manager-container">
-            <div className="floating-particles">{generateParticles()}</div>
+            <div className="floating-particles">{particles}</div>
 
-            <button
-                className={`sidebar-toggle ${isSidebarOpen ? 'active' : ''}`}
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                aria-label="Toggle sidebar"
-            >
-                <i className="fas fa-bars"></i>
-            </button>
-
-            <nav className={`sidebar ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-                <div className="sidebar-header">
-                    <Link to="/" className="sidebar-brand">
-                        <span className="brand-icon">🚗</span>
-                        VitaRenta
-                    </Link>
-                </div>
-                <div className="sidebar-menu">
-                    <Link
-                        to="/"
-                        className={`sidebar-link ${isActive('/') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-home"></i>
-                        Accueil
-                    </Link>
-                    <Link
-                        to="/dashboard"
-                        className={`sidebar-link ${isActive('/dashboard') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-tachometer-alt"></i>
-                        Tableau de Bord
-                    </Link>
-                    <Link
-                        to="/vehicules"
-                        className={`sidebar-link ${isActive('/vehicules') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-car"></i>
-                        Véhicules
-                    </Link>
-                    <Link
-                        to="/agent/vehicules"
-                        className={`sidebar-link ${isActive('/agent/vehicules') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-tools"></i>
-                        Gestion Véhicules
-                    </Link>
-                    <Link
-                        to="/admin/agences"
-                        className={`sidebar-link ${isActive('/admin/agences') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-cog"></i>
-                        Gérer Agences
-                    </Link>
-                    {token && (
-                        <>
-                            <Link
-                                to="/profile"
-                                className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}
-                                onClick={() => setIsSidebarOpen(false)}
-                            >
-                                <i className="fas fa-user"></i>
-                                Mon Profil
-                            </Link>
-                            <button
-                                onClick={handleLogout}
-                                className="sidebar-link sidebar-link-logout"
-                            >
-                                <i className="fas fa-sign-out-alt"></i>
-                                Déconnexion
-                            </button>
-                        </>
-                    )}
-                </div>
-            </nav>
+            <Sidebar
+                token={token}
+                user={user}
+                setToken={() => {}}
+                onLogout={handleLogout}
+                isOpen={isSidebarOpen}
+                setIsOpen={setIsSidebarOpen}
+            />
 
             <div className="dashboard-content">
                 <div className="stats-dashboard">
@@ -445,20 +387,28 @@ const AgencyManager = ({ token, user, onLogout }) => {
                     </div>
 
                     {error && (
-                        <div className="error-container">
+                        <div className="error-container" role="alert" aria-live="assertive">
                             <i className="fas fa-exclamation-triangle"></i>
                             <p className="error-text">{error}</p>
-                            <button onClick={() => setError(null)} className="close-alert" aria-label="Fermer l'alerte">
+                            <button
+                                onClick={() => setError(null)}
+                                className="close-alert"
+                                aria-label="Fermer l'alerte d'erreur"
+                            >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
                     )}
 
                     {success && (
-                        <div className="success-alert">
+                        <div className="success-alert" role="alert" aria-live="polite">
                             <i className="fas fa-check-circle"></i>
                             <span>{success}</span>
-                            <button onClick={() => setSuccess(null)} className="close-alert" aria-label="Fermer l'alerte">
+                            <button
+                                onClick={() => setSuccess(null)}
+                                className="close-alert"
+                                aria-label="Fermer l'alerte de succès"
+                            >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
@@ -531,6 +481,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         onClick={openAssignModal}
                                         className="assign-agency-btn"
                                         disabled={agencies.length === 0}
+                                        aria-label="Assigner une agence à mon compte"
                                     >
                                         Assigner une agence
                                     </button>
@@ -544,7 +495,12 @@ const AgencyManager = ({ token, user, onLogout }) => {
                             <h3 className="controls-title">
                                 <i className="fas fa-search"></i> Recherche
                             </h3>
-                            <button onClick={openCreateForm} className="add-agency-btn" disabled={loading}>
+                            <button
+                                onClick={openCreateForm}
+                                className="add-agency-btn"
+                                disabled={loading}
+                                aria-label="Créer une nouvelle agence"
+                            >
                                 <i className="fas fa-plus"></i> Nouvelle Agence
                             </button>
                         </div>
@@ -556,8 +512,9 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     placeholder="Rechercher par nom, ville, code postal..."
                                     value={searchTerm}
                                     onChange={handleSearchChange}
+                                    aria-label="Rechercher des agences"
                                 />
-                                <i className="fas fa-search search-icon"></i>
+                                <i className="fas fa-search search-icon" aria-hidden="true"></i>
                             </div>
                         </div>
                     </div>
@@ -567,7 +524,12 @@ const AgencyManager = ({ token, user, onLogout }) => {
                             <i className="fas fa-bolt"></i> Actions Rapides
                         </h3>
                         <div className="quick-actions-grid">
-                            <button onClick={fetchAgencies} className="quick-action-card" disabled={loading}>
+                            <button
+                                onClick={fetchAgencies}
+                                className="quick-action-card"
+                                disabled={loading}
+                                aria-label="Actualiser les données des agences"
+                            >
                                 <div className="quick-action-icon">
                                     <i className="fas fa-sync"></i>
                                 </div>
@@ -576,7 +538,12 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     <div className="quick-action-description">Recharger les données</div>
                                 </div>
                             </button>
-                            <button onClick={openCreateForm} className="quick-action-card" disabled={loading}>
+                            <button
+                                onClick={openCreateForm}
+                                className="quick-action-card"
+                                disabled={loading}
+                                aria-label="Ajouter une nouvelle agence"
+                            >
                                 <div className="quick-action-icon">
                                     <i className="fas fa-plus"></i>
                                 </div>
@@ -589,6 +556,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                 onClick={openAssignModal}
                                 className="quick-action-card"
                                 disabled={loading || agencies.length === 0}
+                                aria-label="Assigner une agence à mon compte"
                             >
                                 <div className="quick-action-icon">
                                     <i className="fas fa-user-plus"></i>
@@ -614,7 +582,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                             </div>
                         ) : filteredAgencies.length === 0 ? (
                             <div className="empty-state">
-                                <i className="fas fa-inbox empty-icon"></i>
+                                <i className="fas fa-inbox empty-icon" aria-hidden="true"></i>
                                 <h4>Aucune agence trouvée</h4>
                                 <p>
                                     {searchTerm
@@ -622,7 +590,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         : "Aucune agence n’a été chargée. Créez une nouvelle agence pour commencer."}
                                 </p>
                                 {!searchTerm && (
-                                    <button onClick={openCreateForm} className="add-first-agency-btn">
+                                    <button
+                                        onClick={openCreateForm}
+                                        className="add-first-agency-btn"
+                                        aria-label="Créer la première agence"
+                                    >
                                         <i className="fas fa-plus"></i> Créer la première agence
                                     </button>
                                 )}
@@ -670,6 +642,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                     onClick={() => openDetailsModal(agency)}
                                                     className="agency-card-link"
                                                     title="Voir détails"
+                                                    aria-label={`Voir les détails de l'agence ${agency.nom || 'inconnue'}`}
                                                 >
                                                     <i className="fas fa-eye"></i> Détails
                                                 </button>
@@ -678,6 +651,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                         onClick={() => openEditForm(agency)}
                                                         className="action-btn edit-btn"
                                                         title="Modifier"
+                                                        aria-label={`Modifier l'agence ${agency.nom || 'inconnue'}`}
                                                     >
                                                         <i className="fas fa-edit"></i>
                                                     </button>
@@ -685,6 +659,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                         onClick={() => deleteAgency(agency.id)}
                                                         className="action-btn delete-btn"
                                                         title="Supprimer"
+                                                        aria-label={`Supprimer l'agence ${agency.nom || 'inconnue'}`}
                                                     >
                                                         <i className="fas fa-trash"></i>
                                                     </button>
@@ -692,6 +667,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                         onClick={() => assignAgencyToUser(agency.id)}
                                                         className="action-btn assign-btn"
                                                         title="Assigner à mon compte"
+                                                        aria-label={`Assigner l'agence ${agency.nom || 'inconnue'} à mon compte`}
                                                     >
                                                         <i className="fas fa-user-plus"></i>
                                                     </button>
@@ -707,6 +683,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                 onClick={() => setCurrentPageAgencies(prev => Math.max(prev - 1, 1))}
                                                 disabled={currentPageAgencies === 1}
                                                 className="pagination-btn"
+                                                aria-label="Page précédente"
                                             >
                                                 <i className="fas fa-chevron-left"></i> Précédent
                                             </button>
@@ -717,6 +694,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                 onClick={() => setCurrentPageAgencies(prev => Math.min(prev + 1, totalPagesAgencies))}
                                                 disabled={currentPageAgencies === totalPagesAgencies}
                                                 className="pagination-btn"
+                                                aria-label="Page suivante"
                                             >
                                                 Suivant <i className="fas fa-chevron-right"></i>
                                             </button>
@@ -729,22 +707,26 @@ const AgencyManager = ({ token, user, onLogout }) => {
                 </div>
             </div>
 
-            {showModal && (
+            {modalState.type === 'create' || modalState.type === 'edit' ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>
-                                <i className={`fas fa-${isEditMode ? 'edit' : 'plus'}`}></i>
-                                {isEditMode ? "Modifier l'agence" : 'Nouvelle agence'}
+                            <h2 id="modal-title">
+                                <i className={`fas fa-${modalState.type === 'edit' ? 'edit' : 'plus'}`}></i>
+                                {modalState.type === 'edit' ? "Modifier l'agence" : 'Nouvelle agence'}
                             </h2>
-                            <button onClick={closeModal} className="modal-close" aria-label="Fermer">
+                            <button
+                                onClick={closeModal}
+                                className="modal-close"
+                                aria-label="Fermer le modal"
+                            >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
-                        <form onSubmit={handleSubmit} className="agency-form">
+                        <form onSubmit={handleSubmit} className="agency-form" aria-labelledby="modal-title">
                             <div className="form-grid">
                                 <div className="form-group">
-                                    <label htmlFor="nom">Nom de l'agence *</label>
+                                    <label htmlFor="nom">Nom de l'agence <span aria-hidden="true">*</span></label>
                                     <input
                                         type="text"
                                         id="nom"
@@ -754,10 +736,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         className="form-input"
                                         placeholder="Ex: Agence Centrale"
                                         required
+                                        aria-required="true"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="ville">Ville *</label>
+                                    <label htmlFor="ville">Ville <span aria-hidden="true">*</span></label>
                                     <input
                                         type="text"
                                         id="ville"
@@ -767,10 +750,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         className="form-input"
                                         placeholder="Ex: Ariana"
                                         required
+                                        aria-required="true"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="adresse">Adresse *</label>
+                                    <label htmlFor="adresse">Adresse <span aria-hidden="true">*</span></label>
                                     <input
                                         type="text"
                                         id="adresse"
@@ -780,10 +764,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         className="form-input"
                                         placeholder="Ex: 123 Rue de la Paix"
                                         required
+                                        aria-required="true"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="code_postal">Code postal *</label>
+                                    <label htmlFor="code_postal">Code postal <span aria-hidden="true">*</span></label>
                                     <input
                                         type="text"
                                         id="code_postal"
@@ -795,10 +780,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         pattern="[0-9]{4}"
                                         maxLength="4"
                                         required
+                                        aria-required="true"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="pays">Pays *</label>
+                                    <label htmlFor="pays">Pays <span aria-hidden="true">*</span></label>
                                     <input
                                         type="text"
                                         id="pays"
@@ -808,10 +794,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         className="form-input"
                                         placeholder="Ex: Tunisia"
                                         required
+                                        aria-required="true"
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="telephone">Téléphone *</label>
+                                    <label htmlFor="telephone">Téléphone <span aria-hidden="true">*</span></label>
                                     <input
                                         type="tel"
                                         id="telephone"
@@ -821,6 +808,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                         className="form-input"
                                         placeholder="Ex: +216 12345678"
                                         required
+                                        aria-required="true"
                                     />
                                 </div>
                                 <div className="form-group">
@@ -860,11 +848,27 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     rows="4"
                                 />
                             </div>
+                            {error && (
+                                <div className="error-container" role="alert" aria-live="assertive">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <p className="error-text">{error}</p>
+                                </div>
+                            )}
                             <div className="form-actions">
-                                <button type="button" onClick={closeModal} className="cancel-btn">
+                                <button
+                                    type="button"
+                                    onClick={closeModal}
+                                    className="cancel-btn"
+                                    aria-label="Annuler la création ou modification"
+                                >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
-                                <button type="submit" className="submit-btn" disabled={loading}>
+                                <button
+                                    type="submit"
+                                    className="submit-btn"
+                                    disabled={loading}
+                                    aria-label={isEditMode ? "Modifier l'agence" : "Créer une nouvelle agence"}
+                                >
                                     <i className={`fas fa-${loading ? 'spinner fa-spin' : isEditMode ? 'save' : 'plus'}`}></i>
                                     {loading ? 'Traitement...' : isEditMode ? 'Modifier' : 'Créer'}
                                 </button>
@@ -872,70 +876,87 @@ const AgencyManager = ({ token, user, onLogout }) => {
                         </form>
                     </div>
                 </div>
-            )}
-
-            {showDetailsModal && selectedAgency && (
+            ) : modalState.type === 'details' && modalState.data ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>
+                            <h2 id="modal-title">
                                 <i className="fas fa-building"></i> Détails de l'Agence
                             </h2>
-                            <button onClick={closeModal} className="modal-close" aria-label="Fermer">
+                            <button
+                                onClick={closeModal}
+                                className="modal-close"
+                                aria-label="Fermer le modal"
+                            >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
                         <div className="agency-details">
-                            <h3>{selectedAgency.nom || 'Nom inconnu'}</h3>
-                            <p><strong>ID:</strong> {selectedAgency.id}</p>
-                            <p><strong>Adresse:</strong> {selectedAgency.adresse || 'N/A'}, {selectedAgency.ville || 'N/A'}, {selectedAgency.code_postal || 'N/A'}, {selectedAgency.pays || 'N/A'}</p>
-                            <p><strong>Téléphone:</strong> {selectedAgency.telephone || 'N/A'}</p>
-                            <p><strong>Email:</strong> {selectedAgency.email || 'N/A'}</p>
-                            <p><strong>Site Web:</strong> {selectedAgency.site_web ? <a href={selectedAgency.site_web} target="_blank" rel="noopener noreferrer">{selectedAgency.site_web}</a> : 'N/A'}</p>
-                            <p><strong>Description:</strong> {selectedAgency.description || 'Aucune description'}</p>
-                            <p><strong>Statut:</strong> {selectedAgency.active !== false ? 'Active' : 'Inactive'}</p>
-                            <p><strong>Date de création:</strong> {new Date(selectedAgency.date_creation || new Date()).toLocaleDateString()}</p>
-                            {selectedAgency.stats && (
+                            <h3>{modalState.data.nom || 'Nom inconnu'}</h3>
+                            <p><strong>ID:</strong> {modalState.data.id}</p>
+                            <p><strong>Adresse:</strong> {modalState.data.adresse || 'N/A'}, {modalState.data.ville || 'N/A'}, {modalState.data.code_postal || 'N/A'}, {modalState.data.pays || 'N/A'}</p>
+                            <p><strong>Téléphone:</strong> {modalState.data.telephone || 'N/A'}</p>
+                            <p><strong>Email:</strong> {modalState.data.email || 'N/A'}</p>
+                            <p><strong>Site Web:</strong> {modalState.data.site_web ? <a href={modalState.data.site_web} target="_blank" rel="noopener noreferrer">{modalState.data.site_web}</a> : 'N/A'}</p>
+                            <p><strong>Description:</strong> {modalState.data.description || 'Aucune description'}</p>
+                            <p><strong>Statut:</strong> {modalState.data.active !== false ? 'Active' : 'Inactive'}</p>
+                            <p><strong>Date de création:</strong> {modalState.data.date_creation ? new Date(modalState.data.date_creation).toLocaleDateString() : 'N/A'}</p>
+                            {modalState.data.stats ? (
                                 <div className="agency-stats">
                                     <h4>Statistiques</h4>
-                                    <p><strong>Véhicules totaux:</strong> {selectedAgency.stats.total_vehicules || 0}</p>
-                                    <p><strong>Véhicules disponibles:</strong> {selectedAgency.stats.vehicules_disponibles || 0}</p>
-                                    <p><strong>Réservations actives:</strong> {selectedAgency.stats.reservations_actives || 0}</p>
-                                    <p><strong>Revenus totaux:</strong> {(selectedAgency.stats.revenus_total || 0).toFixed(2)} €</p>
+                                    <p><strong>Véhicules totaux:</strong> {modalState.data.stats.total_vehicules || 0}</p>
+                                    <p><strong>Véhicules disponibles:</strong> {modalState.data.stats.vehicules_disponibles || 0}</p>
+                                    <p><strong>Réservations actives:</strong> {modalState.data.stats.reservations_actives || 0}</p>
+                                    <p><strong>Revenus totaux:</strong> {(modalState.data.stats.revenus_total || 0).toFixed(2)} €</p>
                                 </div>
+                            ) : (
+                                <p>Aucune statistique disponible.</p>
                             )}
                         </div>
                         <div className="form-actions">
-                            <button type="button" onClick={() => assignAgencyToUser(selectedAgency.id)} className="submit-btn">
+                            <button
+                                type="button"
+                                onClick={() => assignAgencyToUser(modalState.data.id)}
+                                className="submit-btn"
+                                aria-label={`Assigner l'agence ${modalState.data.nom || 'inconnue'} à mon compte`}
+                            >
                                 <i className="fas fa-user-plus"></i> Assigner à mon compte
                             </button>
-                            <button type="button" onClick={closeModal} className="cancel-btn">
+                            <button
+                                type="button"
+                                onClick={closeModal}
+                                className="cancel-btn"
+                                aria-label="Fermer le modal"
+                            >
                                 <i className="fas fa-times"></i> Fermer
                             </button>
                         </div>
                     </div>
                 </div>
-            )}
-
-            {showAssignModal && (
+            ) : modalState.type === 'assign' ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>
+                            <h2 id="modal-title">
                                 <i className="fas fa-user-plus"></i> Assigner une Agence
                             </h2>
-                            <button onClick={closeModal} className="modal-close" aria-label="Fermer">
+                            <button
+                                onClick={closeModal}
+                                className="modal-close"
+                                aria-label="Fermer le modal"
+                            >
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
-                        <form onSubmit={handleAssignSubmit} className="agency-form">
+                        <form onSubmit={handleAssignSubmit} className="agency-form" aria-labelledby="modal-title">
                             <div className="form-group">
-                                <label htmlFor="agency_id">Sélectionner une agence *</label>
+                                <label htmlFor="agency_id">Sélectionner une agence <span aria-hidden="true">*</span></label>
                                 <select
                                     id="agency_id"
                                     name="agency_id"
                                     className="form-input"
                                     required
+                                    aria-required="true"
                                 >
                                     <option value="">-- Choisir une agence --</option>
                                     {filteredAgencies.map(agency => (
@@ -943,11 +964,27 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     ))}
                                 </select>
                             </div>
+                            {error && (
+                                <div className="error-container" role="alert" aria-live="assertive">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <p className="error-text">{error}</p>
+                                </div>
+                            )}
                             <div className="form-actions">
-                                <button type="button" onClick={closeModal} className="cancel-btn">
+                                <button
+                                    type="button"
+                                    onClick={closeModal}
+                                    className="cancel-btn"
+                                    aria-label="Annuler l'assignation"
+                                >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
-                                <button type="submit" className="submit-btn" disabled={loading}>
+                                <button
+                                    type="submit"
+                                    className="submit-btn"
+                                    disabled={loading}
+                                    aria-label="Assigner l'agence sélectionnée"
+                                >
                                     <i className={`fas fa-${loading ? 'spinner fa-spin' : 'user-plus'}`}></i>
                                     {loading ? 'Traitement...' : 'Assigner'}
                                 </button>
@@ -955,7 +992,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                         </form>
                     </div>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 };

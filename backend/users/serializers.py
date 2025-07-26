@@ -242,12 +242,11 @@ class VehiculeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicule
         fields = [
-            'id', 'marque', 'modele', 'type', 'carburant', 'transmission',
+            'id', 'marque', 'modele', 'carburant', 'transmission',
             'nombre_places', 'annee', 'kilometrage', 'couleur', 'immatriculation',
             'emissionsCO2', 'consommationEnergie', 'prix_par_jour', 'localisation',
-            'description', 'climatisation', 'equipements', 'statut',
-            'date_derniere_maintenance', 'prochaine_maintenance', 'agence_id',
-            'agence', 'created_at', 'updated_at', 'image'
+            'description', 'statut', 'date_derniere_maintenance', 'prochaine_maintenance',
+            'agence_id', 'agence', 'created_at', 'updated_at', 'image'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'agence']
 
@@ -259,11 +258,6 @@ class VehiculeSerializer(serializers.ModelSerializer):
     def validate_modele(self, value):
         if not value or len(value.strip()) < 1:
             return "Modèle inconnu"
-        return value.strip()
-
-    def validate_type(self, value):
-        if not value or len(value.strip()) < 1:
-            return "Type inconnu"
         return value.strip()
 
     def validate_carburant(self, value):

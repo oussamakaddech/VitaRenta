@@ -82,15 +82,15 @@ class AgenceAdmin(admin.ModelAdmin):
 
 @admin.register(Vehicule)
 class VehiculeAdmin(admin.ModelAdmin):
-    list_display = ('marque', 'modele', 'type', 'get_status_display', 'prix_par_jour', 'get_agence_name', 'created_at')
-    list_filter = ('statut', 'type', 'carburant', 'transmission', 'created_at')
+    list_display = ('marque', 'modele', 'get_status_display', 'prix_par_jour', 'get_agence_name', 'created_at')
+    list_filter = ('statut', 'carburant', 'transmission', 'created_at')
     search_fields = ('marque', 'modele', 'immatriculation', 'localisation')
     ordering = ('-created_at',)
     readonly_fields = ('id', 'created_at', 'updated_at', 'get_eco_score')
 
     fieldsets = (
         ('Informations de base', {
-            'fields': ('marque', 'modele', 'type', 'immatriculation', 'annee', 'couleur')
+            'fields': ('marque', 'modele', 'immatriculation', 'annee', 'couleur')
         }),
         ('Caractéristiques techniques', {
             'fields': ('carburant', 'transmission', 'nombre_places', 'kilometrage')
@@ -107,7 +107,7 @@ class VehiculeAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Détails', {
-            'fields': ('description', 'climatisation', 'equipements', 'image'),
+            'fields': ('description', 'image'),
             'classes': ('collapse',)
         }),
         ('Métadonnées', {

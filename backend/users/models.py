@@ -180,7 +180,6 @@ class Vehicule(models.Model):
     id = models.CharField(primary_key=True, max_length=UUID_LENGTH, default=generate_uuid, editable=False, unique=True)
     marque = models.CharField(max_length=50)
     modele = models.CharField(max_length=50)
-    type = models.CharField(max_length=50)
     carburant = models.CharField(
         max_length=20,
         choices=[
@@ -224,8 +223,6 @@ class Vehicule(models.Model):
     )
     localisation = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
-    climatisation = models.BooleanField(default=False)
-    equipements = models.JSONField(default=list, blank=True)
     statut = models.CharField(
         max_length=20,
         choices=[
@@ -264,8 +261,6 @@ class Vehicule(models.Model):
             self.marque = 'Marque inconnue'
         if not self.modele:
             self.modele = 'Modèle inconnu'
-        if not self.type:
-            self.type = 'Type inconnu'
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -277,7 +272,6 @@ class Vehicule(models.Model):
             models.Index(fields=['marque', 'modele'], name='vehicule_marque_modele_idx'),
             models.Index(fields=['statut'], name='vehicule_statut_idx'),
             models.Index(fields=['carburant'], name='vehicule_carburant_idx'),
-            models.Index(fields=['type'], name='vehicule_type_idx'),
             models.Index(fields=['created_at'], name='vehicule_created_at_idx'),
             models.Index(fields=['agence'], name='vehicule_agence_idx'),
             models.Index(fields=['prix_par_jour'], name='vehicule_prix_idx'),

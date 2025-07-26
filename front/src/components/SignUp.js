@@ -1,1015 +1,775 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import './AgencyManagement.css';
+import './SignUp.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
-const AgencyManager = ({ token, user, onLogout }) => {
-    const location = useLocation();
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [agencies, setAgencies] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(null);
-    const [animateCards, setAnimateCards] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [currentPageAgencies, setCurrentPageAgencies] = useState(1);
-    const [itemsPerPage] = useState(8);
-    const [selectedAgency, setSelectedAgency] = useState(null);
-    const [isEditMode, setIsEditMode] = useState(false);
-    const [showModal, setShowModal] = useState(false);
-    const [showDetailsModal, setShowDetailsModal] = useState(false);
-    const [showAssignModal, setShowAssignModal] = useState(false);
-    const [stats, setStats] = useState({
-        totalAgencies: 0,
-        activeAgencies: 0,
-        recentAgencies: 0
-    });
-
+const SignUp = ({ setToken }) => {
     const [formData, setFormData] = useState({
-        nom: '',
-        adresse: '',
-        ville: '',
-        code_postal: '',
-        pays: '',
-        telephone: '',
         email: '',
-        site_web: '',
-        description: ''
+        nom: '',
+        mot_de_passe: '',
+        confirmer_mot_de_passe: '',
+        preference_carburant: '',
+        budget_journalier: '',
+        telephone: '',
+        role: 'client',
     });
+    const [message, setMessage] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [errors, setErrors] = useState({});
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [currentStep, setCurrentStep] = useState(1);
+    const [touchedFields, setTouchedFields] = useState({});
+    const navigate = useNavigate();
 
-    const isActive = (path) => location.pathname === path;
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            document.querySelector('.signup-container-desktop')?.classList.add('visible');
+        }, 100);
+        return () => clearTimeout(timer);
+    }, []);
 
-    // Gestion de la déconnexion
-    const handleLogout = () => {
-        onLogout();
-        setIsSidebarOpen(false);
+    const validateField = useCallback((name, value) => {
+        const newErrors = { ...errors };
+
+        switch (name) {
+            case 'email':
+                if (!value) {
+                    newErrors.email = "L'email est requis";
+                } else if (!/\S+@\S+\.\S+/.test(value)) {
+                    newErrors.email = "Format d'email invalide";
+                } else {
+                    delete newErrors.email;
+                }
+                break;
+
+            case 'nom':
+                if (!value) {
+                    newErrors.nom = 'Le nom est requis';
+                } else if (value.length < 2) {
+                    newErrors.nom = 'Le nom doit contenir au moins 2 caractères';
+                } else {
+                    delete newErrors.nom;
+                }
+                break;
+
+            case 'mot_de_passe':
+                if (!value) {
+                    newErrors.mot_de_passe = 'Le mot de passe est requis';
+                } else if (value.length < 8) {
+                    newErrors.mot_de_passe = 'Le mot de passe doit contenir au moins 8 caractères';
+                } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) {
+                    newErrors.mot_de_passe = 'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre';
+                } else {
+                    delete newErrors.mot_de_passe;
+                }
+                break;
+
+            case 'confirmer_mot_de_passe':
+                if (value !== formData.mot_de_passe) {
+                    newErrors.confirmer_mot_de_passe = 'Les mots de passe ne correspondent pas';
+                } else {
+                    delete newErrors.confirmer_mot_de_passe;
+                }
+                break;
+
+            case 'telephone':
+                if (value) {
+                    const cleanValue = value.replace(/[\s\-\.]/g, '');
+                    if (cleanValue.startsWith('+216')) {
+                        const phoneNumber = cleanValue.substring(4);
+                        if (!/^\d{8}$/.test(phoneNumber)) {
+                            newErrors.telephone = 'Le numéro doit être au format +216 suivi de 8 chiffres';
+                        } else {
+                            delete newErrors.telephone;
+                        }
+                    } else if (cleanValue.startsWith('0')) {
+                        const phoneNumber = cleanValue.substring(1);
+                        if (!/^\d{8}$/.test(phoneNumber)) {
+                            newErrors.telephone = 'Le numéro doit être au format 0 suivi de 8 chiffres';
+                        } else {
+                            delete newErrors.telephone;
+                        }
+                    } else {
+                        newErrors.telephone = 'Le numéro doit commencer par +216 ou 0';
+                    }
+                } else {
+                    delete newErrors.telephone;
+                }
+                break;
+
+            case 'preference_carburant':
+                if (!value) {
+                    newErrors.preference_carburant = 'La préférence de carburant est requise';
+                } else if (!['électrique', 'hybride', 'essence', 'diesel'].includes(value)) {
+                    newErrors.preference_carburant = 'Préférence de carburant invalide';
+                } else {
+                    delete newErrors.preference_carburant;
+                }
+                break;
+
+            case 'budget_journalier':
+                if (!value) {
+                    newErrors.budget_journalier = 'Le budget journalier est requis';
+                } else {
+                    const budget = parseFloat(value);
+                    if (isNaN(budget)) {
+                        newErrors.budget_journalier = 'Le budget doit être un nombre valide';
+                    } else if (budget < 20) {
+                        newErrors.budget_journalier = 'Le budget minimum est de 20€';
+                    } else if (budget > 10000) {
+                        newErrors.budget_journalier = 'Le budget maximum est de 10 000€';
+                    } else {
+                        delete newErrors.budget_journalier;
+                    }
+                }
+                break;
+
+            case 'role':
+                if (!['client', 'agence'].includes(value)) {
+                    newErrors.role = "Le rôle doit être 'client' ou 'agence'";
+                } else {
+                    delete newErrors.role;
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    }, [errors, formData.mot_de_passe]);
+
+    const handleBlur = (e) => {
+        const { name } = e.target;
+        setTouchedFields(prev => ({ ...prev, [name]: true }));
+        validateField(name, formData[name]);
     };
 
-    // Validation des données de l'agence
-    const validateAgencyData = (data) => {
-        if (!data.nom || data.nom.trim().length < 2) return "Le nom de l'agence doit contenir au moins 2 caractères";
-        if (!data.adresse || data.adresse.trim().length < 5) return "L'adresse doit contenir au moins 5 caractères";
-        if (!data.ville || data.ville.trim().length < 2) return "La ville doit contenir au moins 2 caractères";
-        if (!data.code_postal || !/^\d{4,}$/.test(data.code_postal)) return "Le code postal doit être valide";
-        if (!data.pays || data.pays.trim().length < 2) return "Le pays est requis";
-        if (!data.telephone || !/^\+?[\d\s\-()]{10,}$/.test(data.telephone)) return "Le numéro de téléphone n'est pas valide";
-        if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return "L'email n'est pas valide";
-        if (data.site_web && !/^https?:\/\/[^\s$.?#].[^\s]*$/.test(data.site_web)) return "L'URL du site web n'est pas valide";
-        return '';
-    };
-
-    // Récupération des agences
-    const fetchAgencies = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = new URLSearchParams();
-            if (searchTerm.trim()) params.append('search', searchTerm.trim());
-            const response = await axios.get(`${API_BASE_URL}/api/agences/?${params}`, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
-            const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
-            setAgencies(data);
-            if (data.length > 0) {
-                setTimeout(() => setAnimateCards(true), 100);
-            } else {
-                setError('Aucune agence disponible. Veuillez créer une nouvelle agence ou vérifier votre connexion.');
-            }
-            updateStats(data);
-        } catch (err) {
-            console.error('Erreur lors du chargement des agences:', err);
-            const errorMsg = err.response?.status === 403
-                ? 'Accès refusé. Vérifiez vos permissions ou contactez l\'administrateur.'
-                : err.response?.data?.message || 'Impossible de charger les agences. Vérifiez votre connexion ou le token.';
-            setError(errorMsg);
-            setAgencies([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [token, searchTerm]);
-
-    // Mise à jour des statistiques
-    const updateStats = (agenciesData) => {
-        const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-        setStats({
-            totalAgencies: agenciesData.length,
-            activeAgencies: agenciesData.filter(agency => agency.active !== false).length,
-            recentAgencies: agenciesData.filter(agency => {
-                const createdDate = new Date(agency.date_creation || now);
-                return createdDate >= thirtyDaysAgo;
-            }).length
-        });
-    };
-
-    // Création d'une nouvelle agence
-    const createAgency = async () => {
-        const validationError = validateAgencyData(formData);
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await axios.post(`${API_BASE_URL}/api/agences/`, formData, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
-            setSuccess('Agence créée avec succès !');
-            resetForm();
-            setShowModal(false);
-            fetchAgencies();
-            if (user && !user.agence && ['admin', 'agence'].includes(user.role)) {
-                await assignAgencyToUser(response.data.id);
-            }
-        } catch (err) {
-            console.error('Erreur lors de la création:', err);
-            setError(err.response?.data?.message || "Erreur lors de la création de l'agence. Vérifiez vos permissions.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Mise à jour d'une agence
-    const updateAgency = async () => {
-        const validationError = validateAgencyData(formData);
-        if (validationError) {
-            setError(validationError);
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            await axios.put(`${API_BASE_URL}/api/agences/${selectedAgency.id}/`, formData, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
-            setSuccess('Agence mise à jour avec succès !');
-            resetForm();
-            setShowModal(false);
-            fetchAgencies();
-        } catch (err) {
-            console.error('Erreur lors de la mise à jour:', err);
-            setError(err.response?.data?.message || "Erreur lors de la mise à jour de l'agence. Vérifiez vos permissions.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Suppression d'une agence
-    const deleteAgency = async (agencyId) => {
-        if (!window.confirm('Voulez-vous vraiment supprimer cette agence ? Cette action est irréversible.')) {
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            await axios.delete(`${API_BASE_URL}/api/agences/${agencyId}/`, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
-            setSuccess('Agence supprimée avec succès !');
-            setCurrentPageAgencies(1); // Réinitialiser la page si nécessaire
-            fetchAgencies();
-        } catch (err) {
-            console.error('Erreur lors de la suppression:', err);
-            setError(err.response?.data?.message || "Erreur lors de la suppression de l'agence. Vérifiez s'il y a des véhicules ou utilisateurs associés.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Assignation d'une agence à l'utilisateur
-    const assignAgencyToUser = async (agencyId) => {
-        if (loading) return;
-        if (!token) {
-            setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
-            setShowAssignModal(false);
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            await axios.patch(`${API_BASE_URL}/api/users/update_agence/`, { agence_id: agencyId }, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
-            setSuccess('Agence assignée avec succès ! Veuillez vous reconnecter pour voir les modifications.');
-            setShowAssignModal(false);
-            // Forcer la mise à jour des données utilisateur
-            if (onLogout) {
-                setTimeout(() => onLogout(), 2000); // Déconnexion automatique après 2 secondes
-            }
-        } catch (err) {
-            console.error('Erreur lors de l\'assignation:', err);
-            setError(err.response?.data?.message || "Erreur lors de l'assignation de l'agence.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Réinitialisation du formulaire
-    const resetForm = () => {
-        setFormData({
-            nom: '',
-            adresse: '',
-            ville: '',
-            code_postal: '',
-            pays: '',
-            telephone: '',
-            email: '',
-            site_web: '',
-            description: ''
-        });
-        setSelectedAgency(null);
-        setIsEditMode(false);
-    };
-
-    // Gestion des changements dans le formulaire
-    const handleFormChange = (e) => {
+    const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
+        setFormData({ ...formData, [name]: value });
 
-    // Ouverture du formulaire d'édition
-    const openEditForm = (agency) => {
-        setSelectedAgency(agency);
-        setIsEditMode(true);
-        setFormData({
-            nom: agency.nom || '',
-            adresse: agency.adresse || '',
-            ville: agency.ville || '',
-            code_postal: agency.code_postal || '',
-            pays: agency.pays || '',
-            telephone: agency.telephone || '',
-            email: agency.email || '',
-            site_web: agency.site_web || '',
-            description: agency.description || ''
-        });
-        setShowModal(true);
-    };
-
-    // Ouverture du modal de détails
-    const openDetailsModal = (agency) => {
-        setSelectedAgency(agency);
-        setShowDetailsModal(true);
-    };
-
-    // Ouverture du formulaire de création
-    const openCreateForm = () => {
-        resetForm();
-        setShowModal(true);
-    };
-
-    // Ouverture du modal d'assignation
-    const openAssignModal = () => {
-        if (agencies.length === 0) {
-            setError('Aucune agence disponible. Créez une agence d\'abord.');
-            return;
+        if (touchedFields[name]) {
+            validateField(name, value);
         }
-        setShowAssignModal(true);
     };
 
-    // Fermeture des modals
-    const closeModal = () => {
-        setShowModal(false);
-        setShowDetailsModal(false);
-        setShowAssignModal(false);
-        resetForm();
-        setError(null);
+    const validateForm = () => {
+        const requiredFields = ['email', 'nom', 'mot_de_passe', 'confirmer_mot_de_passe', 'role', 'preference_carburant', 'budget_journalier'];
+        let isValid = true;
+
+        requiredFields.forEach(field => {
+            if (!validateField(field, formData[field])) {
+                isValid = false;
+            }
+        });
+
+        if (formData.telephone) {
+            if (!validateField('telephone', formData.telephone)) {
+                isValid = false;
+            }
+        }
+
+        const allTouched = {};
+        requiredFields.forEach(field => {
+            allTouched[field] = true;
+        });
+        if (formData.telephone) {
+            allTouched.telephone = true;
+        }
+        setTouchedFields(allTouched);
+
+        return isValid;
     };
 
-    // Gestion de la recherche
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-        setCurrentPageAgencies(1);
-    };
-
-    // Soumission du formulaire
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (isEditMode) {
-            await updateAgency();
-        } else {
-            await createAgency();
-        }
-    };
 
-    // Soumission du formulaire d'assignation
-    const handleAssignSubmit = async (e) => {
-        e.preventDefault();
-        const agencyId = e.target.agency_id.value;
-        if (!agencyId) {
-            setError('Veuillez sélectionner une agence.');
+        if (!validateForm()) {
+            setMessage('Veuillez corriger les erreurs dans le formulaire');
             return;
         }
-        await assignAgencyToUser(agencyId);
-    };
 
-    // Gestion de la touche Échap
-    const handleKeyDown = (e) => {
-        if (e.key === 'Escape') {
-            closeModal();
+        setLoading(true);
+        setMessage('');
+
+        try {
+            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+            console.log('API URL:', apiUrl); // Debug the URL
+
+            const submitData = {
+                email: formData.email.toLowerCase().trim(),
+                nom: formData.nom.trim(),
+                mot_de_passe: formData.mot_de_passe,
+                confirmer_mot_de_passe: formData.confirmer_mot_de_passe,
+                preference_carburant: formData.preference_carburant,
+                budget_journalier: parseFloat(formData.budget_journalier),
+                telephone: formData.telephone.trim(),
+                role: formData.role
+            };
+
+            const response = await axios.post(`${apiUrl}/api/inscription/`, submitData, {
+                timeout: 15000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            setMessage(response.data.message || 'Inscription réussie !');
+            setIsSuccess(true);
+            playSuccessSound();
+
+            setTimeout(() => {
+                navigate('/login', {
+                    state: {
+                        message: 'Inscription réussie ! Vous pouvez maintenant vous connecter.',
+                        email: formData.email
+                    }
+                });
+            }, 2500);
+
+        } catch (error) {
+            console.error('Signup error:', error);
+
+            if (error.response?.status === 400) {
+                const serverErrors = error.response.data.errors || {};
+                setErrors(prev => ({ ...prev, ...serverErrors }));
+                if (serverErrors.email) {
+                    setMessage('Cette adresse email est déjà utilisée');
+                } else {
+                    const errorMessages = Object.entries(serverErrors).map(([field, messages]) => {
+                        return `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
+                    }).join('; ');
+                    setMessage(errorMessages || 'Veuillez corriger les erreurs signalées');
+                }
+            } else if (error.response?.status === 404) {
+                setMessage('Erreur : Endpoint API non trouvé. Vérifiez la configuration du serveur.');
+            } else if (error.response?.status === 409) {
+                setMessage('Un compte avec cet email existe déjà');
+                setErrors(prev => ({ ...prev, email: 'Cette adresse email est déjà utilisée' }));
+            } else if (error.code === 'ECONNABORTED') {
+                setMessage('Timeout - Le serveur met trop de temps à répondre');
+            } else if (error.response?.status >= 500) {
+                setMessage('Erreur serveur - Veuillez réessayer plus tard');
+            } else {
+                setMessage(error.response?.data?.error || "Erreur lors de l'inscription");
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
-    // Effets pour charger les données et gérer les erreurs/succès
-    useEffect(() => {
-        fetchAgencies();
-    }, [fetchAgencies]);
-
-    useEffect(() => {
-        if (error) {
-            const timer = setTimeout(() => setError(null), 8000);
-            return () => clearTimeout(timer);
+    const canProceedToNextStep = () => {
+        switch (currentStep) {
+            case 1:
+                return formData.email && formData.nom && formData.mot_de_passe &&
+                    formData.confirmer_mot_de_passe && formData.role &&
+                    !errors.email && !errors.nom && !errors.mot_de_passe && !errors.confirmer_mot_de_passe && !errors.role;
+            case 2:
+                return formData.preference_carburant && !errors.preference_carburant &&
+                    (!formData.telephone || (formData.telephone && !errors.telephone));
+            case 3:
+                return formData.budget_journalier && !errors.budget_journalier;
+            default:
+                return false;
         }
-    }, [error]);
+    };
 
-    useEffect(() => {
-        if (success) {
-            const timer = setTimeout(() => setSuccess(null), 5000);
-            return () => clearTimeout(timer);
+    const nextStep = () => {
+        if (currentStep < 3 && canProceedToNextStep()) {
+            setCurrentStep(currentStep + 1);
         }
-    }, [success]);
+    };
 
-    useEffect(() => {
-        if (showModal || showDetailsModal || showAssignModal) {
-            document.addEventListener('keydown', handleKeyDown);
-            return () => document.removeEventListener('keydown', handleKeyDown);
+    const prevStep = () => {
+        if (currentStep > 1) setCurrentStep(currentStep - 1);
+    };
+
+    const handleRoleSelect = (role) => {
+        setFormData({ ...formData, role });
+        setTouchedFields(prev => ({ ...prev, role: true }));
+        if (errors.role) {
+            setErrors({ ...errors, role: '' });
         }
-    }, [showModal, showDetailsModal, showAssignModal]);
+    };
 
-    // Filtrage des agences
-    const filteredAgencies = agencies.filter(agency => {
-        if (!agency) return false;
-        const nom = (agency.nom || '').toLowerCase();
-        const ville = (agency.ville || '').toLowerCase();
-        const codePostal = (agency.code_postal || '').toLowerCase();
-        const pays = (agency.pays || '').toLowerCase();
-        const search = searchTerm.toLowerCase();
-        return nom.includes(search) || ville.includes(search) || codePostal.includes(search) || pays.includes(search);
-    });
-
-    // Pagination
-    const indexOfLastAgency = currentPageAgencies * itemsPerPage;
-    const indexOfFirstAgency = indexOfLastAgency - itemsPerPage;
-    const currentAgencies = filteredAgencies.slice(indexOfFirstAgency, indexOfLastAgency);
-    const totalPagesAgencies = Math.ceil(filteredAgencies.length / itemsPerPage);
-
-    // Génération des particules flottantes
-    const generateParticles = () => {
-        const particles = [];
-        for (let i = 0; i < 20; i++) {
-            particles.push(
-                <div
-                    key={i}
-                    className="particle"
-                    style={{
-                        left: `${Math.random() * 100}%`,
-                        animationDelay: `${Math.random() * 10}s`,
-                        animationDuration: `${10 + Math.random() * 5}s`,
-                        width: `${2 + Math.random() * 4}px`,
-                        height: `${2 + Math.random() * 4}px`,
-                    }}
-                />
-            );
+    const handleFuelSelect = (fuel) => {
+        setFormData({ ...formData, preference_carburant: fuel });
+        setTouchedFields(prev => ({ ...prev, preference_carburant: true }));
+        if (errors.preference_carburant) {
+            setErrors({ ...errors, preference_carburant: '' });
         }
-        return particles;
+    };
+
+    const playSuccessSound = () => {
+        console.log("🎉 VROOOM! Inscription turbo réussie! Bienvenue dans l'équipe VitaRenta! 🏁");
+    };
+
+    const togglePasswordVisibility = () => {
+        setShowPassword(!showPassword);
+    };
+
+    const toggleConfirmPasswordVisibility = () => {
+        setShowConfirmPassword(!showConfirmPassword);
+    };
+
+    const generateCarParticles = () => {
+        return [...Array(10)].map((_, i) => ({
+            car: ['🚗', '🚙', '🚕', '🏎️', '🚐', '🚓', '🚌', '🚑', '🏁', '⚡'][i],
+            style: {
+                top: `${10 + i * 9}%`,
+                animationDelay: `${i * 1.2}s`,
+                fontSize: `${1.5 + Math.random() * 0.8}rem`,
+                animationDuration: `${12 + Math.random() * 8}s`
+            }
+        }));
+    };
+
+    const getFuelIcon = (fuel) => {
+        const icons = {
+            électrique: '⚡',
+            hybride: '🌱',
+            essence: '⛽',
+            diesel: '🚗'
+        };
+        return icons[fuel] || '🚗';
+    };
+
+    const getFuelColor = (fuel) => {
+        const colors = {
+            électrique: '#3b82f6',
+            hybride: '#10b981',
+            essence: '#ef4444',
+            diesel: '#6b7280'
+        };
+        return colors[fuel] || '#3b82f6';
     };
 
     return (
-        <div className="agency-manager-container">
-            <div className="floating-particles">{generateParticles()}</div>
-
-            <button
-                className={`sidebar-toggle ${isSidebarOpen ? 'active' : ''}`}
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                aria-label="Ouvrir/Fermer la barre latérale"
-            >
-                <i className="fas fa-bars"></i>
-            </button>
-
-            <nav className={`sidebar ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-                <div className="sidebar-header">
-                    <Link to="/" className="sidebar-brand">
-                        <span className="brand-icon">🚗</span>
-                        VitaRenta
-                    </Link>
+        <div className="signup-container-desktop">
+            <div className="signup-background-desktop">
+                <div className="floating-cars-desktop">
+                    {generateCarParticles().map((particle, i) => (
+                        <div key={i} className="floating-car-desktop" style={particle.style}>
+                            {particle.car}
+                        </div>
+                    ))}
                 </div>
-                <div className="sidebar-menu">
-                    <Link
-                        to="/"
-                        className={`sidebar-link ${isActive('/') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-home"></i>
-                        Accueil
-                    </Link>
-                    <Link
-                        to="/dashboard"
-                        className={`sidebar-link ${isActive('/dashboard') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-tachometer-alt"></i>
-                        Tableau de Bord
-                    </Link>
-                    <Link
-                        to="/vehicules"
-                        className={`sidebar-link ${isActive('/vehicules') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-car"></i>
-                        Véhicules
-                    </Link>
-                    <Link
-                        to="/agent/vehicules"
-                        className={`sidebar-link ${isActive('/agent/vehicules') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-tools"></i>
-                        Gestion Véhicules
-                    </Link>
-                    <Link
-                        to="/admin/agences"
-                        className={`sidebar-link ${isActive('/admin/agences') ? 'sidebar-link-active' : ''}`}
-                        onClick={() => setIsSidebarOpen(false)}
-                    >
-                        <i className="fas fa-cog"></i>
-                        Gérer Agences
-                    </Link>
-                    {token && (
-                        <>
-                            <Link
-                                to="/profile"
-                                className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}
-                                onClick={() => setIsSidebarOpen(false)}
-                            >
-                                <i className="fas fa-user"></i>
-                                Mon Profil
-                            </Link>
-                            <button
-                                onClick={handleLogout}
-                                className="sidebar-link sidebar-link-logout"
-                                aria-label="Déconnexion"
-                            >
-                                <i className="fas fa-sign-out-alt"></i>
-                                Déconnexion
-                            </button>
-                        </>
-                    )}
-                </div>
-            </nav>
-
-            <div className="dashboard-content">
-                <div className="stats-dashboard">
-                    <div className="dashboard-header">
-                        <h1 className="dashboard-title">
-                            <i className="fas fa-building"></i> Gestion des Agences
-                        </h1>
-                        <p className="dashboard-subtitle">Gérez les agences de votre réseau</p>
-                    </div>
-
-                    {error && (
-                        <div className="error-container">
-                            <i className="fas fa-exclamation-triangle"></i>
-                            <p className="error-text">{error}</p>
-                            <button onClick={() => setError(null)} className="close-alert" aria-label="Fermer l'alerte">
-                                <i className="fas fa-times"></i>
-                            </button>
-                        </div>
-                    )}
-
-                    {success && (
-                        <div className="success-alert">
-                            <i className="fas fa-check-circle"></i>
-                            <span>{success}</span>
-                            <button onClick={() => setSuccess(null)} className="close-alert" aria-label="Fermer l'alerte">
-                                <i className="fas fa-times"></i>
-                            </button>
-                        </div>
-                    )}
-
-                    <div className="stats-grid">
-                        <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
-                            <div className="stat-icon icon-total">
-                                <i className="fas fa-building"></i>
-                            </div>
-                            <div className="stat-content">
-                                <div className="stat-number">{stats.totalAgencies}</div>
-                                <div className="stat-label">Total Agences</div>
-                                <div className="stat-description">Nombre total d'agences</div>
-                            </div>
-                        </div>
-                        <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
-                            <div className="stat-icon" style={{ background: 'var(--success-green)' }}>
-                                <i className="fas fa-check-circle"></i>
-                            </div>
-                            <div className="stat-content">
-                                <div className="stat-number">{stats.activeAgencies}</div>
-                                <div className="stat-label">Agences Actives</div>
-                                <div className="stat-description">Agences en activité</div>
-                            </div>
-                        </div>
-                        <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
-                            <div className="stat-icon" style={{ background: 'var(--warning-yellow)' }}>
-                                <i className="fas fa-plus-circle"></i>
-                            </div>
-                            <div className="stat-content">
-                                <div className="stat-number">{stats.recentAgencies}</div>
-                                <div className="stat-label">Nouvelles (30j)</div>
-                                <div className="stat-description">Agences créées récemment</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {user && user.agence ? (
-                        <div className="user-agency-section">
-                            <div className="user-agency-card">
-                                <h3 className="user-agency-title">
-                                    <i className="fas fa-user-tie"></i> Mon Agence
-                                </h3>
-                                <div className="user-agency-info">
-                                    <div className="user-agency-name">
-                                        <i className="fas fa-building"></i> <strong>{user.agence.nom || 'N/A'}</strong>
-                                    </div>
-                                    <div className="user-agency-location">
-                                        <i className="fas fa-map-marker-alt"></i> {user.agence.ville || 'N/A'}, {user.agence.pays || 'N/A'}
-                                    </div>
-                                    <div className="user-agency-contact">
-                                        <i className="fas fa-envelope"></i> {user.agence.email || 'N/A'}
-                                    </div>
-                                    <div className="user-agency-phone">
-                                        <i className="fas fa-phone"></i> {user.agence.telephone || 'N/A'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="user-agency-section">
-                            <div className="user-agency-card">
-                                <h3 className="user-agency-title">
-                                    <i className="fas fa-user-tie"></i> Mon Agence
-                                </h3>
-                                <p>
-                                    Aucune agence associée.{' '}
-                                    <button
-                                        onClick={openAssignModal}
-                                        className="add-agency-btn"
-                                        disabled={agencies.length === 0}
-                                        aria-label="Assigner une agence"
-                                    >
-                                        <i className="fas fa-user-plus"></i> Assigner une agence
-                                    </button>
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="controls-section">
-                        <div className="controls-header">
-                            <h3 className="controls-title">
-                                <i className="fas fa-search"></i> Recherche
-                            </h3>
-                            <button onClick={openCreateForm} className="add-agency-btn" disabled={loading} aria-label="Créer une nouvelle agence">
-                                <i className="fas fa-plus"></i> Nouvelle Agence
-                            </button>
-                        </div>
-                        <div className="controls-grid">
-                            <div className="search-bar">
-                                <input
-                                    type="text"
-                                    className="search-input"
-                                    placeholder="Rechercher par nom, ville, code postal..."
-                                    value={searchTerm}
-                                    onChange={handleSearchChange}
-                                    aria-label="Rechercher des agences"
-                                />
-                                <i className="fas fa-search search-icon"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="quick-actions">
-                        <h3 className="quick-actions-title">
-                            <i className="fas fa-bolt"></i> Actions Rapides
-                        </h3>
-                        <div className="quick-actions-grid">
-                            <button onClick={fetchAgencies} className="quick-action-card" disabled={loading} aria-label="Actualiser les données">
-                                <div className="quick-action-icon">
-                                    <i className="fas fa-sync"></i>
-                                </div>
-                                <div>
-                                    <div className="quick-action-title">Actualiser</div>
-                                    <div className="quick-action-description">Recharger les données</div>
-                                </div>
-                            </button>
-                            <button onClick={openCreateForm} className="quick-action-card" disabled={loading} aria-label="Ajouter une nouvelle agence">
-                                <div className="quick-action-icon">
-                                    <i className="fas fa-plus"></i>
-                                </div>
-                                <div>
-                                    <div className="quick-action-title">Ajouter</div>
-                                    <div className="quick-action-description">Nouvelle agence</div>
-                                </div>
-                            </button>
-                            <button
-                                onClick={openAssignModal}
-                                className="quick-action-card"
-                                disabled={loading || agencies.length === 0}
-                                aria-label="Assigner une agence à mon compte"
-                            >
-                                <div className="quick-action-icon">
-                                    <i className="fas fa-user-plus"></i>
-                                </div>
-                                <div>
-                                    <div className="quick-action-title">Assigner Agence</div>
-                                    <div className="quick-action-description">Associer une agence à mon compte</div>
-                                </div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="agencies-section">
-                        <div className="agencies-header">
-                            <h3 className="agencies-title">
-                                <i className="fas fa-list"></i> Liste des Agences
-                            </h3>
-                        </div>
-                        {loading ? (
-                            <div className="loading-container">
-                                <div className="loading-spinner"></div>
-                                <p>Chargement...</p>
-                            </div>
-                        ) : filteredAgencies.length === 0 ? (
-                            <div className="empty-state">
-                                <i className="fas fa-inbox empty-icon"></i>
-                                <h4>Aucune agence trouvée</h4>
-                                <p>
-                                    {searchTerm
-                                        ? "Aucune agence ne correspond à vos critères de recherche."
-                                        : "Aucune agence n’a été chargée. Créez une nouvelle agence pour commencer."}
-                                </p>
-                                {!searchTerm && (
-                                    <button onClick={openCreateForm} className="add-first-agency-btn" aria-label="Créer la première agence">
-                                        <i className="fas fa-plus"></i> Créer la première agence
-                                    </button>
-                                )}
-                            </div>
-                        ) : (
-                            <>
-                                <div className="agencies-grid">
-                                    {currentAgencies.map((agency, index) => (
-                                        <div
-                                            key={agency.id}
-                                            className={`agency-card ${animateCards ? 'animate-in' : ''}`}
-                                            style={{ animationDelay: `${index * 0.1}s` }}
-                                        >
-                                            <div className="agency-card-header">
-                                                <div className="agency-card-icon">
-                                                    <i className="fas fa-building"></i>
-                                                </div>
-                                                <div className="agency-card-title">
-                                                    <h4>{agency.nom || 'Nom inconnu'}</h4>
-                                                    <div className="agency-card-id">ID: {agency.id}</div>
-                                                </div>
-                                            </div>
-                                            <div className="agency-card-content">
-                                                <div className="agency-card-info">
-                                                    <div className="agency-info-item">
-                                                        <i className="fas fa-map-marker-alt"></i>
-                                                        <span>{agency.ville || 'N/A'}</span>
-                                                    </div>
-                                                    <div className="agency-info-item">
-                                                        <i className="fas fa-envelope"></i>
-                                                        <span>{agency.code_postal || 'N/A'}</span>
-                                                    </div>
-                                                    <div className="agency-info-item">
-                                                        <i className="fas fa-flag"></i>
-                                                        <span>{agency.pays || 'N/A'}</span>
-                                                    </div>
-                                                    <div className="agency-info-item">
-                                                        <i className="fas fa-phone"></i>
-                                                        <span>{agency.telephone || 'N/A'}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="agency-card-footer">
-                                                <button
-                                                    onClick={() => openDetailsModal(agency)}
-                                                    className="agency-card-link"
-                                                    title="Voir détails"
-                                                    aria-label="Voir les détails de l'agence"
-                                                >
-                                                    <i className="fas fa-eye"></i> Détails
-                                                </button>
-                                                <div className="agency-card-actions">
-                                                    <button
-                                                        onClick={() => openEditForm(agency)}
-                                                        className="action-btn edit-btn"
-                                                        title="Modifier l'agence"
-                                                        aria-label="Modifier l'agence"
-                                                    >
-                                                        <i className="fas fa-edit"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => deleteAgency(agency.id)}
-                                                        className="action-btn delete-btn"
-                                                        title="Supprimer l'agence"
-                                                        aria-label="Supprimer l'agence"
-                                                    >
-                                                        <i className="fas fa-trash"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => assignAgencyToUser(agency.id)}
-                                                        className="action-btn assign-btn"
-                                                        title="Assigner à mon compte"
-                                                        aria-label="Assigner l'agence à mon compte"
-                                                        style={{ background: 'var(--success-green)' }}
-                                                    >
-                                                        <i className="fas fa-user-plus"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                {totalPagesAgencies > 1 && (
-                                    <div className="pagination-section">
-                                        <div className="pagination">
-                                            <button
-                                                onClick={() => setCurrentPageAgencies(prev => Math.max(prev - 1, 1))}
-                                                disabled={currentPageAgencies === 1}
-                                                className="pagination-btn"
-                                                aria-label="Page précédente"
-                                            >
-                                                <i className="fas fa-chevron-left"></i> Précédent
-                                            </button>
-                                            <span className="pagination-info">
-                                                Page {currentPageAgencies} sur {totalPagesAgencies}
-                                            </span>
-                                            <button
-                                                onClick={() => setCurrentPageAgencies(prev => Math.min(prev + 1, totalPagesAgencies))}
-                                                disabled={currentPageAgencies === totalPagesAgencies}
-                                                className="pagination-btn"
-                                                aria-label="Page suivante"
-                                            >
-                                                Suivant <i className="fas fa-chevron-right"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
+                <div className="background-shapes-desktop">
+                    <div className="background-shape-desktop shape-1"></div>
+                    <div className="background-shape-desktop shape-2"></div>
+                    <div className="background-shape-desktop shape-3"></div>
+                    <div className="background-shape-desktop shape-4"></div>
+                    <div className="background-shape-desktop shape-5"></div>
+                    <div className="background-shape-desktop shape-6"></div>
                 </div>
             </div>
 
-            {showModal && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>
-                                <i className={`fas fa-${isEditMode ? 'edit' : 'plus'}`}></i>
-                                {isEditMode ? "Modifier l'agence" : 'Nouvelle agence'}
-                            </h2>
-                            <button onClick={closeModal} className="modal-close" aria-label="Fermer le modal">
-                                <i className="fas fa-times"></i>
-                            </button>
+            <div className="desktop-layout">
+                <div className="signup-sidebar">
+                    <div className="signup-sidebar-content">
+                        <div className="signup-sidebar-header">
+                            <div className="signup-sidebar-logo">
+                                <span className="signup-logo-icon">🏎️</span>
+                                <h1 className="signup-logo-text">VitaRenta</h1>
+                                <p className="signup-logo-tagline">Louez votre aventure</p>
+                            </div>
                         </div>
-                        <form onSubmit={handleSubmit} className="agency-form">
-                            <div className="form-grid">
-                                <div className="form-group">
-                                    <label htmlFor="nom">Nom de l'agence *</label>
-                                    <input
-                                        type="text"
-                                        id="nom"
-                                        name="nom"
-                                        value={formData.nom}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: Agence Centrale"
-                                        required
-                                        aria-required="true"
-                                    />
+                        <div className="signup-sidebar-features">
+                            <h2 className="signup-features-title">Pourquoi choisir VitaRenta ?</h2>
+                            <div className="signup-feature-list">
+                                <div className="signup-feature-item">
+                                    <span className="signup-feature-icon">🚗</span>
+                                    <div className="signup-feature-content">
+                                        <h4>Vaste choix</h4>
+                                        <p>Plus de 500 véhicules disponibles</p>
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label htmlFor="ville">Ville *</label>
-                                    <input
-                                        type="text"
-                                        id="ville"
-                                        name="ville"
-                                        value={formData.ville}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: Ariana"
-                                        required
-                                        aria-required="true"
-                                    />
+                                <div className="signup-feature-item">
+                                    <span className="signup-feature-icon">⚡</span>
+                                    <div className="signup-feature-content">
+                                        <h4>Réservation rapide</h4>
+                                        <p>Processus simple et intuitif</p>
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label htmlFor="adresse">Adresse *</label>
-                                    <input
-                                        type="text"
-                                        id="adresse"
-                                        name="adresse"
-                                        value={formData.adresse}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: 123 Rue de la Paix"
-                                        required
-                                        aria-required="true"
-                                    />
+                                <div className="signup-feature-item">
+                                    <span className="signup-feature-icon">🛡️</span>
+                                    <div className="signup-feature-content">
+                                        <h4>Assurance incluse</h4>
+                                        <p>Protection complète pour votre voyage</p>
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label htmlFor="code_postal">Code postal *</label>
-                                    <input
-                                        type="text"
-                                        id="code_postal"
-                                        name="code_postal"
-                                        value={formData.code_postal}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: 2080"
-                                        pattern="[0-9]{4}"
-                                        maxLength="4"
-                                        required
-                                        aria-required="true"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="pays">Pays *</label>
-                                    <input
-                                        type="text"
-                                        id="pays"
-                                        name="pays"
-                                        value={formData.pays}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: Tunisia"
-                                        required
-                                        aria-required="true"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="telephone">Téléphone *</label>
-                                    <input
-                                        type="tel"
-                                        id="telephone"
-                                        name="telephone"
-                                        value={formData.telephone}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: +216 12345678"
-                                        required
-                                        aria-required="true"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="email">Email</label>
-                                    <input
-                                        type="email"
-                                        id="email"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: contact@agence.com"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="site_web">Site web</label>
-                                    <input
-                                        type="url"
-                                        id="site_web"
-                                        name="site_web"
-                                        value={formData.site_web}
-                                        onChange={handleFormChange}
-                                        className="form-input"
-                                        placeholder="Ex: https://www.agence.com"
-                                    />
+                                <div className="signup-feature-item">
+                                    <span className="signup-feature-icon">🌟</span>
+                                    <div className="signup-feature-content">
+                                        <h4>Support 24/7</h4>
+                                        <p>Assistance à tout moment</p>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="form-group">
-                                <label htmlFor="description">Description</label>
-                                <textarea
-                                    id="description"
-                                    name="description"
-                                    value={formData.description}
-                                    onChange={handleFormChange}
-                                    className="form-input"
-                                    placeholder="Description de l'agence..."
-                                    rows="4"
-                                />
+                        </div>
+                        <div className="signup-sidebar-stats">
+                            <div className="signup-stat-item">
+                                <span className="signup-stat-number">500+</span>
+                                <span className="signup-stat-label">Véhicules</span>
                             </div>
-                            <div className="form-actions">
-                                <button type="button" onClick={closeModal} className="cancel-btn" aria-label="Annuler">
-                                    <i className="fas fa-times"></i> Annuler
-                                </button>
-                                <button type="submit" className="submit-btn" disabled={loading} aria-label={isEditMode ? "Modifier l'agence" : "Créer l'agence"}>
-                                    <i className={`fas fa-${loading ? 'spinner fa-spin' : isEditMode ? 'save' : 'plus'}`}></i>
-                                    {loading ? 'Traitement...' : isEditMode ? 'Modifier' : 'Créer'}
-                                </button>
+                            <div className="signup-stat-item">
+                                <span className="signup-stat-number">100K+</span>
+                                <span className="signup-stat-label">Clients satisfaits</span>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
-            )}
 
-            {showDetailsModal && selectedAgency && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>
-                                <i className="fas fa-building"></i> Détails de l'Agence
+                <div className="signup-main-area">
+                    <div className={`signup-card-desktop ${isSuccess ? 'signup-success-animation' : ''}`}>
+                        <div className="signup-header-desktop">
+                            <div className="signup-icon-desktop">
+                                <div className="signup-icon-glow-desktop"></div>
+                                <span className="signup-car-emoji-desktop">🏁</span>
+                                <div className="signup-speed-lines-desktop">
+                                    <div className="signup-speed-line-desktop"></div>
+                                    <div className="signup-speed-line-desktop"></div>
+                                    <div className="signup-speed-line-desktop"></div>
+                                </div>
+                            </div>
+                            <h2 className="signup-title-desktop">
+                                {isSuccess ? "🎉 Bienvenue dans l'équipe!" : '🚗 Rejoindre VitaRenta'}
                             </h2>
-                            <button onClick={closeModal} className="modal-close" aria-label="Fermer le modal">
-                                <i className="fas fa-times"></i>
-                            </button>
+                            <p className="signup-subtitle-desktop">
+                                {isSuccess
+                                    ? 'Votre compte a été créé avec succès!'
+                                    : "Créez votre compte et commencez l'aventure"}
+                            </p>
                         </div>
-                        <div className="agency-details">
-                            <h3>{selectedAgency.nom || 'Nom inconnu'}</h3>
-                            <p><strong>ID:</strong> {selectedAgency.id}</p>
-                            <p><strong>Adresse:</strong> {selectedAgency.adresse || 'N/A'}, {selectedAgency.ville || 'N/A'}, {selectedAgency.code_postal || 'N/A'}, {selectedAgency.pays || 'N/A'}</p>
-                            <p><strong>Téléphone:</strong> {selectedAgency.telephone || 'N/A'}</p>
-                            <p><strong>Email:</strong> {selectedAgency.email || 'N/A'}</p>
-                            <p><strong>Site Web:</strong> {selectedAgency.site_web ? <a href={selectedAgency.site_web} target="_blank" rel="noopener noreferrer">{selectedAgency.site_web}</a> : 'N/A'}</p>
-                            <p><strong>Description:</strong> {selectedAgency.description || 'Aucune description'}</p>
-                            <p><strong>Statut:</strong> {selectedAgency.active !== false ? 'Active' : 'Inactive'}</p>
-                            <p><strong>Date de création:</strong> {new Date(selectedAgency.date_creation || new Date()).toLocaleDateString()}</p>
-                            {selectedAgency.stats && (
-                                <div className="agency-stats">
-                                    <h4>Statistiques</h4>
-                                    <p><strong>Véhicules totaux:</strong> {selectedAgency.stats.total_vehicules || 0}</p>
-                                    <p><strong>Véhicules disponibles:</strong> {selectedAgency.stats.vehicules_disponibles || 0}</p>
-                                    <p><strong>Réservations actives:</strong> {selectedAgency.stats.reservations_actives || 0}</p>
-                                    <p><strong>Revenus totaux:</strong> {(selectedAgency.stats.revenus_total || 0).toFixed(2)} €</p>
+
+                        <div className="signup-progress-indicator">
+                            <div className="signup-progress-bar">
+                                <div
+                                    className="signup-progress-fill"
+                                    style={{ width: `${(currentStep / 3) * 100}%` }}
+                                ></div>
+                            </div>
+                            <div className="signup-progress-steps">
+                                <div className={`signup-step ${currentStep >= 1 ? 'active' : ''}`}>1</div>
+                                <div className={`signup-step ${currentStep >= 2 ? 'active' : ''}`}>2</div>
+                                <div className={`signup-step ${currentStep >= 3 ? 'active' : ''}`}>3</div>
+                            </div>
+                        </div>
+
+                        {message && (
+                            <div className={`signup-alert-desktop ${isSuccess ? 'signup-alert-success-desktop' : 'signup-alert-error-desktop'}`}>
+                                <div className="signup-alert-icon-desktop">{isSuccess ? '✅' : '⚠️'}</div>
+                                <div>{message}</div>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit} className="signup-form-desktop">
+                            {currentStep === 1 && (
+                                <div className="signup-form-step">
+                                    <h3 className="signup-step-title">📝 Informations Personnelles</h3>
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">📧 Email</label>
+                                        <div className="signup-input-container-desktop">
+                                            <input
+                                                type="email"
+                                                name="email"
+                                                value={formData.email}
+                                                placeholder="votre@email-racing.com"
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={`signup-form-input-desktop ${errors.email && touchedFields.email ? 'input-error-desktop' : ''}`}
+                                                required
+                                                disabled={loading || isSuccess}
+                                            />
+                                            <div className="signup-input-glow-desktop"></div>
+                                            <span className="signup-input-icon-desktop">📧</span>
+                                        </div>
+                                        {errors.email && touchedFields.email && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.email}</span>
+                                        )}
+                                    </div>
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">👤 Nom Complet</label>
+                                        <div className="signup-input-container-desktop">
+                                            <input
+                                                type="text"
+                                                name="nom"
+                                                value={formData.nom}
+                                                placeholder="Votre nom de pilote"
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={`signup-form-input-desktop ${errors.nom && touchedFields.nom ? 'input-error-desktop' : ''}`}
+                                                required
+                                                disabled={loading || isSuccess}
+                                            />
+                                            <div className="signup-input-glow-desktop"></div>
+                                            <span className="signup-input-icon-desktop">👤</span>
+                                        </div>
+                                        {errors.nom && touchedFields.nom && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.nom}</span>
+                                        )}
+                                    </div>
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">🔐 Mot de Passe Sécurisé</label>
+                                        <div className="signup-input-container-desktop">
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                name="mot_de_passe"
+                                                value={formData.mot_de_passe}
+                                                placeholder="Votre code secret"
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={`signup-form-input-desktop ${errors.mot_de_passe && touchedFields.mot_de_passe ? 'input-error-desktop' : ''}`}
+                                                required
+                                                disabled={loading || isSuccess}
+                                            />
+                                            <div className="signup-input-glow-desktop"></div>
+                                            <span className="signup-input-icon-desktop">🔐</span>
+                                            <button
+                                                type="button"
+                                                className="signup-password-toggle-desktop"
+                                                onClick={togglePasswordVisibility}
+                                                disabled={loading || isSuccess}
+                                            >
+                                                {showPassword ? '👁️' : '🙈'}
+                                            </button>
+                                        </div>
+                                        {errors.mot_de_passe && touchedFields.mot_de_passe && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.mot_de_passe}</span>
+                                        )}
+                                        {formData.mot_de_passe && (
+                                            <div className="signup-password-strength-indicator">
+                                                <div className={`signup-password-strength-bar strength-${
+                                                    formData.mot_de_passe.length < 8 ? 'weak' :
+                                                        formData.mot_de_passe.length < 10 ? 'medium' :
+                                                            formData.mot_de_passe.length < 12 ? 'strong' : 'very-strong'
+                                                }`}></div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">🔐 Confirmer le Mot de Passe</label>
+                                        <div className="signup-input-container-desktop">
+                                            <input
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                name="confirmer_mot_de_passe"
+                                                value={formData.confirmer_mot_de_passe}
+                                                placeholder="Confirmez votre mot de passe"
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={`signup-form-input-desktop ${errors.confirmer_mot_de_passe && touchedFields.confirmer_mot_de_passe ? 'input-error-desktop' : ''}`}
+                                                required
+                                                disabled={loading || isSuccess}
+                                            />
+                                            <div className="signup-input-glow-desktop"></div>
+                                            <span className="signup-input-icon-desktop">🔐</span>
+                                            <button
+                                                type="button"
+                                                className="signup-password-toggle-desktop"
+                                                onClick={toggleConfirmPasswordVisibility}
+                                                disabled={loading || isSuccess}
+                                            >
+                                                {showConfirmPassword ? '👁️' : '🙈'}
+                                            </button>
+                                        </div>
+                                        {errors.confirmer_mot_de_passe && touchedFields.confirmer_mot_de_passe && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.confirmer_mot_de_passe}</span>
+                                        )}
+                                    </div>
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">🎭 Je m'inscris en tant que :</label>
+                                        <div className="signup-role-selection">
+                                            <button
+                                                type="button"
+                                                className={`signup-role-btn ${formData.role === 'client' ? 'selected' : ''}`}
+                                                onClick={() => handleRoleSelect('client')}
+                                                disabled={loading || isSuccess}
+                                            >
+                                                👤 Client
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`signup-role-btn ${formData.role === 'agence' ? 'selected' : ''}`}
+                                                onClick={() => handleRoleSelect('agence')}
+                                                disabled={loading || isSuccess}
+                                            >
+                                                🏢 Agence de location
+                                            </button>
+                                        </div>
+                                        {errors.role && touchedFields.role && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.role}</span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
-                        </div>
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                onClick={() => assignAgencyToUser(selectedAgency.id)}
-                                className="submit-btn"
-                                disabled={loading}
-                                aria-label="Assigner l'agence à mon compte"
-                            >
-                                <i className="fas fa-user-plus"></i> Assigner à mon compte
-                            </button>
-                            <button type="button" onClick={closeModal} className="cancel-btn" aria-label="Fermer">
-                                <i className="fas fa-times"></i> Fermer
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
-            {showAssignModal && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>
-                                <i className="fas fa-user-plus"></i> Assigner une Agence
-                            </h2>
-                            <button onClick={closeModal} className="modal-close" aria-label="Fermer le modal">
-                                <i className="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <form onSubmit={handleAssignSubmit} className="agency-form">
-                            <div className="form-group">
-                                <label htmlFor="agency_id">Sélectionner une agence *</label>
-                                <select
-                                    id="agency_id"
-                                    name="agency_id"
-                                    className="form-input"
-                                    required
-                                    aria-required="true"
-                                >
-                                    <option value="">-- Choisir une agence --</option>
-                                    {filteredAgencies.map(agency => (
-                                        <option key={agency.id} value={agency.id}>{agency.nom || 'N/A'} ({agency.ville || 'N/A'})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="form-actions">
-                                <button type="button" onClick={closeModal} className="cancel-btn" aria-label="Annuler">
-                                    <i className="fas fa-times"></i> Annuler
-                                </button>
-                                <button type="submit" className="submit-btn" disabled={loading} aria-label="Assigner l'agence">
-                                    <i className={`fas fa-${loading ? 'spinner fa-spin' : 'user-plus'}`}></i>
-                                    {loading ? 'Traitement...' : 'Assigner'}
-                                </button>
+                            {currentStep === 2 && (
+                                <div className="signup-form-step">
+                                    <h3 className="signup-step-title">⚡ Préférence de Carburant</h3>
+
+                                    <div className="signup-fuel-selection">
+                                        {['électrique', 'hybride', 'essence', 'diesel'].map((fuel) => (
+                                            <div
+                                                key={fuel}
+                                                className={`signup-fuel-option ${
+                                                    formData.preference_carburant === fuel ? 'selected' : ''
+                                                }`}
+                                                onClick={() => handleFuelSelect(fuel)}
+                                                style={{ '--fuel-color': getFuelColor(fuel) }}
+                                            >
+                                                <div className="signup-fuel-icon">{getFuelIcon(fuel)}</div>
+                                                <div className="signup-fuel-name">
+                                                    {fuel.charAt(0).toUpperCase() + fuel.slice(1)}
+                                                </div>
+                                                <div className="signup-fuel-glow"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {errors.preference_carburant && touchedFields.preference_carburant && (
+                                        <span className="signup-error-message-desktop">⚠️ {errors.preference_carburant}</span>
+                                    )}
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">📱 Numéro de téléphone (optionnel)</label>
+                                        <div className="signup-input-container-desktop">
+                                            <input
+                                                type="tel"
+                                                name="telephone"
+                                                value={formData.telephone}
+                                                placeholder="Ex : +216 12345678 ou 012345678"
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={`signup-form-input-desktop ${errors.telephone && touchedFields.telephone ? 'input-error-desktop' : ''}`}
+                                                disabled={loading || isSuccess}
+                                            />
+                                            <div className="signup-input-glow-desktop"></div>
+                                            <span className="signup-input-icon-desktop">📱</span>
+                                        </div>
+                                        {errors.telephone && touchedFields.telephone && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.telephone}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {currentStep === 3 && (
+                                <div className="signup-form-step">
+                                    <h3 className="signup-step-title">💰 Budget Journalier</h3>
+
+                                    <div className="signup-form-group-desktop">
+                                        <label className="signup-form-label-desktop">💳 Budget par Jour (€)</label>
+                                        <div className="signup-input-container-desktop">
+                                            <input
+                                                type="number"
+                                                name="budget_journalier"
+                                                value={formData.budget_journalier}
+                                                placeholder="Ex: 50"
+                                                min="20"
+                                                max="10000"
+                                                onChange={handleChange}
+                                                onBlur={handleBlur}
+                                                className={`signup-form-input-desktop ${errors.budget_journalier && touchedFields.budget_journalier ? 'input-error-desktop' : ''}`}
+                                                required
+                                                disabled={loading || isSuccess}
+                                            />
+                                            <div className="signup-input-glow-desktop"></div>
+                                            <span className="signup-input-icon-desktop">💰</span>
+                                            <span className="signup-input-suffix">€/jour</span>
+                                        </div>
+                                        {errors.budget_journalier && touchedFields.budget_journalier && (
+                                            <span className="signup-error-message-desktop">⚠️ {errors.budget_journalier}</span>
+                                        )}
+
+                                        <div className="signup-budget-suggestions">
+                                            <p className="signup-suggestions-title">💡 Suggestions populaires:</p>
+                                            <div className="signup-suggestion-buttons">
+                                                {[30, 50, 80, 120].map((amount) => (
+                                                    <button
+                                                        key={amount}
+                                                        type="button"
+                                                        className="signup-suggestion-btn"
+                                                        onClick={() =>
+                                                            setFormData({ ...formData, budget_journalier: amount })
+                                                        }
+                                                        disabled={loading || isSuccess}
+                                                    >
+                                                        {amount}€
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="signup-form-navigation">
+                                {currentStep > 1 && (
+                                    <button
+                                        type="button"
+                                        className="signup-nav-button prev"
+                                        onClick={prevStep}
+                                        disabled={loading || isSuccess}
+                                    >
+                                        <span>←</span> Précédent
+                                    </button>
+                                )}
+
+                                {currentStep < 3 ? (
+                                    <button
+                                        type="button"
+                                        className={`signup-nav-button next ${!canProceedToNextStep() ? 'disabled' : ''}`}
+                                        onClick={nextStep}
+                                        disabled={loading || isSuccess || !canProceedToNextStep()}
+                                    >
+                                        Suivant <span>→</span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="submit"
+                                        className={`signup-button-desktop ${isSuccess ? 'signup-success-button-desktop' : ''} ${!canProceedToNextStep() ? 'disabled' : ''}`}
+                                        disabled={loading || isSuccess || !canProceedToNextStep()}
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="signup-spinner-desktop">🌀</div>🚗 Création du compte...
+                                            </>
+                                        ) : isSuccess ? (
+                                            <>
+                                                <span className="signup-success-icon-desktop">🎉</span>🏁 Compte créé!
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="signup-button-icon-desktop">🏎️</span>🚀 REJOINDRE L'ÉQUIPE!
+                                            </>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </form>
+
+                        <div className="signup-footer-desktop">
+                            <p>
+                                🏁 Déjà pilote chez nous ?{' '}
+                                <Link to="/login" className="signup-login-link-desktop">
+                                    ✨ Se connecter au garage
+                                </Link>
+                            </p>
+                        </div>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };
 
-export default AgencyManager;
+export default SignUp;

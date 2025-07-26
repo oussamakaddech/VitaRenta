@@ -215,10 +215,10 @@ const StatsDashboard = ({ token, user, onLogout }) => {
                 // Remplacez par vos vraies APIs
                 const [vehiculesResponse, reservationsResponse] = await Promise.all([
                     axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
-                        headers: { Authorization: `Token ${token}` }
+                        headers: { Authorization: `Bearer ${token}` }
                     }),
                     axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
-                        headers: { Authorization: `Token ${token}` }
+                        headers: { Authorization: `Bearer ${token}` }
                     }).catch(() => ({ data: { total: 0, revenue: 0 } }))
                 ]);
 
