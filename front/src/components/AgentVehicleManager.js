@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
+import Sidebar from './Sidebar';
 import './AgentVehicleManager.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -14,14 +15,10 @@ const StatutVehicule = {
 };
 
 const VehicleManager = ({ token, user, onLogout }) => {
-    if (!token || !user || !['agent', 'admin'].includes(user.role)) {
-        return <Navigate to="/unauthorized" replace />;
-    }
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
-    const [animateCards, setAnimateCards] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(8);
@@ -31,6 +28,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [vehicleToDelete, setVehicleToDelete] = useState(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const [formData, setFormData] = useState({
         marque: '',
@@ -64,52 +62,30 @@ const VehicleManager = ({ token, user, onLogout }) => {
         return vehicle.statut === StatutVehicule.DISPONIBLE;
     };
 
-    const planifierMaintenance = async (vehicle) => {
+    const fetchVehicles = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            await axios.patch(
-                `${VEHICLE_ENDPOINT}${vehicle.id}/`,
-                { statut: StatutVehicule.MAINTENANCE },
-                { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
-            );
-            setSuccess('Maintenance planifiée avec succès !');
-            fetchVehicles();
+            const response = await axios.get(VEHICLE_ENDPOINT, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 10000
+            });
+            const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
+            setVehicles(data);
         } catch (err) {
-            console.error('Maintenance error:', err.response || err);
-            setError(err.response?.data?.message || 'Erreur lors de la planification de maintenance.');
+            console.error('Fetch vehicles error:', err.response || err);
+            const errorMsg =
+                err.response?.status === 403
+                    ? 'Accès refusé. Vous n\'avez pas les permissions nécessaires.'
+                    : err.response?.status === 404
+                    ? 'Aucun véhicule trouvé.'
+                    : err.response?.data?.message || 'Impossible de charger les véhicules.';
+            setError(errorMsg);
+            setVehicles([]);
         } finally {
             setLoading(false);
         }
-    };
-
-    const fetchVehicles = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-        const response = await axios.get(VEHICLE_ENDPOINT, {
-            headers: { Authorization: `Bearer ${token}` },
-            timeout: 10000
-        });
-        const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
-        setVehicles(data);
-        if (data.length > 0) {
-            setTimeout(() => setAnimateCards(true), 100);
-        }
-    } catch (err) {
-        console.error('Fetch vehicles error:', err.response || err);
-        const errorMsg =
-            err.response?.status === 403
-                ? 'Accès refusé. Vous n\'avez pas les permissions nécessaires.'
-                : err.response?.status === 404
-                ? 'Aucun véhicule trouvé.'
-                : err.response?.data?.message || 'Impossible de charger les véhicules.';
-        setError(errorMsg);
-        setVehicles([]);
-    } finally {
-        setLoading(false);
-    }
-}, [token]);
+    }, [token]);
 
     const validateVehicleData = (data) => {
         if (!data.marque || data.marque.trim().length < 1) return "La marque est requise";
@@ -230,6 +206,25 @@ const VehicleManager = ({ token, user, onLogout }) => {
         }
     };
 
+    const planifierMaintenance = async (vehicle) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await axios.patch(
+                `${VEHICLE_ENDPOINT}${vehicle.id}/`,
+                { statut: StatutVehicule.MAINTENANCE },
+                { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
+            );
+            setSuccess('Maintenance planifiée avec succès !');
+            fetchVehicles();
+        } catch (err) {
+            console.error('Maintenance error:', err.response || err);
+            setError(err.response?.data?.message || 'Erreur lors de la planification de maintenance.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const confirmDeleteVehicle = (vehicle) => {
         setVehicleToDelete(vehicle);
         setShowDeleteConfirmModal(true);
@@ -305,7 +300,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
     };
 
     const handleSearchChange = (e) => {
-        const sanitizedValue = e.target.value.replace(/[<>]/g, ''); // Basic sanitization
+        const sanitizedValue = e.target.value.replace(/[<>]/g, '');
         setSearchTerm(sanitizedValue);
         setCurrentPage(1);
     };
@@ -363,12 +358,21 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const currentVehicles = filteredVehicles.slice(indexOfFirstVehicle, indexOfLastVehicle);
     const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage);
 
+    const stats = useMemo(() => {
+        return {
+            total: vehicles.length,
+            available: vehicles.filter(v => v.statut === StatutVehicule.DISPONIBLE).length,
+            rented: vehicles.filter(v => v.statut === StatutVehicule.LOUE).length,
+            maintenance: vehicles.filter(v => v.statut === StatutVehicule.MAINTENANCE).length
+        };
+    }, [vehicles]);
+
     const generateParticles = () => {
         const particles = [];
         for (let i = 0; i < 20; i++) {
             particles.push(
                 <div
-                    key={i}
+                    key={`particle-${i}`}
                     className="particle"
                     style={{
                         left: `${Math.random() * 100}%`,
@@ -376,6 +380,18 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         animationDuration: `${10 + Math.random() * 5}s`,
                         width: `${2 + Math.random() * 4}px`,
                         height: `${2 + Math.random() * 4}px`,
+                    }}
+                />
+            );
+            particles.push(
+                <div
+                    key={`sparkle-${i}`}
+                    className="sparkle"
+                    style={{
+                        left: `${Math.random() * 100}%`,
+                        animationDelay: `${Math.random() * 5}s`,
+                        width: `${4 + Math.random() * 4}px`,
+                        height: `${4 + Math.random() * 4}px`,
                     }}
                 />
             );
@@ -391,9 +407,32 @@ const VehicleManager = ({ token, user, onLogout }) => {
         resetForm();
     };
 
+    if (!token || !user || !['agent', 'admin'].includes(user.role)) {
+        return (
+            <div className="vehicle-manager-container">
+                <div className="floating-particles">{generateParticles()}</div>
+                <div className="stats-dashboard">
+                    <div className="error-container" role="alert" aria-live="assertive">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        <p className="error-text">Accès réservé aux agents et administrateurs.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="vehicle-manager-container">
             <div className="floating-particles">{generateParticles()}</div>
+
+            <Sidebar
+                token={token}
+                user={user}
+                setToken={() => {}}
+                onLogout={onLogout}
+                isOpen={isSidebarOpen}
+                setIsOpen={setIsSidebarOpen}
+            />
 
             <div className="stats-dashboard">
                 <div className="dashboard-header">
@@ -403,10 +442,41 @@ const VehicleManager = ({ token, user, onLogout }) => {
                     <p className="dashboard-subtitle">Gérez les véhicules de la flotte</p>
                 </div>
 
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <div className="stat-icon icon-vehicles"><i className="fas fa-car"></i></div>
+                        <div className="stat-content">
+                            <div className="stat-number">{stats.total}</div>
+                            <div className="stat-label">Véhicules Totaux</div>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon icon-available"><i className="fas fa-check-circle"></i></div>
+                        <div className="stat-content">
+                            <div className="stat-number">{stats.available}</div>
+                            <div className="stat-label">Disponibles</div>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon icon-rented"><i className="fas fa-key"></i></div>
+                        <div className="stat-content">
+                            <div className="stat-number">{stats.rented}</div>
+                            <div className="stat-label">Loués</div>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon icon-maintenance"><i className="fas fa-wrench"></i></div>
+                        <div className="stat-content">
+                            <div className="stat-number">{stats.maintenance}</div>
+                            <div className="stat-label">En Maintenance</div>
+                        </div>
+                    </div>
+                </div>
+
                 {error && (
-                    <div className="error-container">
-                        <i className="fas fa-exclamation-circle"></i>
-                        <p>{error}</p>
+                    <div className="error-container" role="alert" aria-live="assertive">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        <p className="error-text">{error}</p>
                         <button onClick={() => setError(null)} className="close-alert" aria-label="Fermer l'alerte">
                             <i className="fas fa-times"></i>
                         </button>
@@ -414,7 +484,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                 )}
 
                 {success && (
-                    <div className="success-alert">
+                    <div className="success-alert" role="status" aria-live="polite">
                         <i className="fas fa-check-circle"></i>
                         <span>{success}</span>
                         <button onClick={() => setSuccess(null)} className="close-alert" aria-label="Fermer l'alerte">
@@ -425,7 +495,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
 
                 <div className="controls-section">
                     <div className="controls-header">
-                        <h3 className="title">
+                        <h3 className="controls-title">
                             <i className="fas fa-search"></i> Recherche
                         </h3>
                         <button onClick={openCreateForm} className="add-vehicle-btn" disabled={loading} aria-label="Ajouter un nouveau véhicule">
@@ -439,6 +509,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                             placeholder="Rechercher par marque, modèle, prix..."
                             value={searchTerm}
                             onChange={handleSearchChange}
+                            aria-label="Rechercher des véhicules"
                         />
                         <i className="fas fa-search search-icon"></i>
                     </div>
@@ -446,7 +517,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
 
                 {loading ? (
                     <div className="loading-container">
-                        <div className="spinner"></div>
+                        <div className="loading-spinner"></div>
                         <p>Chargement...</p>
                     </div>
                 ) : filteredVehicles.length === 0 ? (
@@ -460,7 +531,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                             }
                         </p>
                         {!searchTerm && (
-                            <button onClick={openCreateForm} className="btn-primary add-first-vehicle-btn" aria-label="Ajouter le premier véhicule">
+                            <button onClick={openCreateForm} className="add-first-vehicle-btn" aria-label="Ajouter le premier véhicule">
                                 <i className="fas fa-plus"></i> Ajouter le premier véhicule
                             </button>
                         )}
@@ -485,45 +556,49 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             <tr key={vehicle.id} className="vehicle-row">
                                                 <td>{vehicle.marque}</td>
                                                 <td>{vehicle.modele}</td>
-                                                <td>{vehicle.prix_par_jour} €</td>
+                                                <td className="vehicle-price">{vehicle.prix_par_jour} €</td>
                                                 <td>
-                                                    <span className={`status-tag status-${vehicle.statut}`}>
+                                                    <span className={`status-badge status-${vehicle.statut}`}>
                                                         {vehicle.statut}
                                                     </span>
                                                 </td>
-                                                <td>{calculerScoreEcologique(vehicle).toFixed(1)}/100</td>
+                                                <td className="eco-score">{calculerScoreEcologique(vehicle).toFixed(1)}/100</td>
                                                 <td className="vehicle-actions">
                                                     <button
                                                         onClick={() => openDetailsModal(vehicle)}
-                                                        className="action-btn view-btn"
-                                                        title="Détails"
-                                                        aria-label="Voir les détails du véhicule"
+                                                        className="vehicle-action-btn action-view"
+                                                        title="Voir les détails"
+                                                        aria-label={`Voir les détails du véhicule ${vehicle.marque} ${vehicle.modele}`}
                                                     >
-                                                        <i className="fas fa-eye"></i>
+                                                        <i className="fas fa-eye"></i> Voir
                                                     </button>
                                                     <button
                                                         onClick={() => openEditForm(vehicle)}
-                                                        className="action-btn edit-btn"
-                                                        title="Modifier"
-                                                        aria-label="Modifier le véhicule"
+                                                        className="vehicle-action-btn action-edit"
+                                                        title="Modifier le véhicule"
+                                                        aria-label={`Modifier le véhicule ${vehicle.marque} ${vehicle.modele}`}
                                                     >
-                                                        <i className="fas fa-edit"></i>
+                                                        <i className="fas fa-edit"></i> Modifier
                                                     </button>
                                                     <button
                                                         onClick={() => planifierMaintenance(vehicle)}
-                                                        className="action-btn maintenance-btn"
+                                                        className="vehicle-action-btn action-maintenance"
                                                         title="Planifier la maintenance"
-                                                        aria-label="Planifier la maintenance du véhicule"
+                                                        aria-label={`Planifier la maintenance du véhicule ${vehicle.marque} ${vehicle.modele}`}
+                                                        disabled={loading}
                                                     >
-                                                        <i className="fas fa-wrench"></i>
+                                                        <i className={`fas fa-${loading ? 'spinner fa-spin' : 'wrench'}`}></i>
+                                                        Maintenance
                                                     </button>
                                                     <button
                                                         onClick={() => confirmDeleteVehicle(vehicle)}
-                                                        className="action-btn delete-btn"
-                                                        title="Supprimer"
-                                                        aria-label="Supprimer le véhicule"
+                                                        className="vehicle-action-btn action-delete"
+                                                        title="Supprimer le véhicule"
+                                                        aria-label={`Supprimer le véhicule ${vehicle.marque} ${vehicle.modele}`}
+                                                        disabled={loading}
                                                     >
-                                                        <i className="fas fa-trash"></i>
+                                                        <i className={`fas fa-${loading ? 'spinner fa-spin' : 'trash'}`}></i>
+                                                        Supprimer
                                                     </button>
                                                 </td>
                                             </tr>
@@ -539,7 +614,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                         disabled={currentPage === 1}
                                         className="pagination-btn"
-                                        aria-label="Page précédente"
+                                        aria-label="Aller à la page précédente"
                                     >
                                         <i className="fas fa-chevron-left"></i> Précédent
                                     </button>
@@ -550,7 +625,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                         disabled={currentPage === totalPages}
                                         className="pagination-btn"
-                                        aria-label="Page suivante"
+                                        aria-label="Aller à la page suivante"
                                     >
                                         Suivant <i className="fas fa-chevron-right"></i>
                                     </button>
@@ -585,6 +660,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             className="form-input"
                                             placeholder="Ex: Toyota"
                                             required
+                                            aria-required="true"
                                         />
                                     </div>
                                     <div className="form-group">
@@ -598,6 +674,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             className="form-input"
                                             placeholder="Ex: Corolla"
                                             required
+                                            aria-required="true"
                                         />
                                     </div>
                                     <div className="form-group">
@@ -609,6 +686,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             onChange={handleFormChange}
                                             className="form-input"
                                             required
+                                            aria-required="true"
                                         >
                                             <option value="électrique">Électrique</option>
                                             <option value="hybride">Hybride</option>
@@ -625,6 +703,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             onChange={handleFormChange}
                                             className="form-input"
                                             required
+                                            aria-required="true"
                                         >
                                             <option value="manuelle">Manuelle</option>
                                             <option value="automatique">Automatique</option>
@@ -727,6 +806,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             className="form-input"
                                             placeholder="Ex: 50.00"
                                             required
+                                            aria-required="true"
                                         />
                                     </div>
                                     <div className="form-group">
@@ -761,6 +841,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             onChange={handleFormChange}
                                             className="form-input"
                                             required
+                                            aria-required="true"
                                         >
                                             {Object.entries(StatutVehicule).map(([key, value]) => (
                                                 <option key={key} value={value}>{value}</option>
@@ -802,16 +883,21 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                     </div>
                                 </div>
                                 {error && (
-                                    <div className="error-container">
+                                    <div className="error-container" role="alert" aria-live="assertive">
                                         <i className="fas fa-exclamation-triangle"></i>
-                                        <p>{error}</p>
+                                        <p className="error-text">{error}</p>
                                     </div>
                                 )}
                                 <div className="form-actions">
                                     <button type="button" onClick={closeModal} className="btn-secondary" aria-label="Annuler la création ou modification">
                                         <i className="fas fa-times"></i> Annuler
                                     </button>
-                                    <button type="submit" className="btn-primary" disabled={loading} aria-label={isEditMode ? "Modifier le véhicule" : "Créer le véhicule"}>
+                                    <button
+                                        type="submit"
+                                        className="btn-primary"
+                                        disabled={loading}
+                                        aria-label={isEditMode ? "Modifier le véhicule" : "Créer le véhicule"}
+                                    >
                                         <i className={`fas fa-${loading ? 'spinner fa-spin' : isEditMode ? 'save' : 'plus'}`}></i>
                                         {loading ? 'Traitement...' : isEditMode ? 'Modifier' : 'Créer'}
                                     </button>
@@ -847,7 +933,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                 <p><strong>Prix par jour:</strong> {selectedVehicle.prix_par_jour ? `${selectedVehicle.prix_par_jour} €` : 'Non spécifié'}</p>
                                 <p><strong>Localisation:</strong> {selectedVehicle.localisation || 'Non spécifié'}</p>
                                 <p><strong>Description:</strong> {selectedVehicle.description || 'Aucune description'}</p>
-                                <p><strong>Statut:</strong> <span className={`status-tag status-${selectedVehicle.statut}`}>{selectedVehicle.statut}</span></p>
+                                <p><strong>Statut:</strong> <span className={`status-badge status-${selectedVehicle.statut}`}>{selectedVehicle.statut}</span></p>
                                 <p><strong>Dernière maintenance:</strong> {selectedVehicle.date_derniere_maintenance || 'Non spécifié'}</p>
                                 <p><strong>Prochaine maintenance:</strong> {selectedVehicle.prochaine_maintenance || 'Non spécifié'}</p>
                                 {selectedVehicle.image && (
@@ -855,14 +941,18 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                         <img src={selectedVehicle.image} alt={`${selectedVehicle.marque} ${selectedVehicle.modele}`} />
                                     </div>
                                 )}
-                                <p><strong>Score écologique:</strong> {calculerScoreEcologique(selectedVehicle).toFixed(1)}/100</p>
+                                <p><strong>Score écologique:</strong> <span className="eco-score">{calculerScoreEcologique(selectedVehicle).toFixed(1)}/100</span></p>
                                 <p><strong>Disponibilité:</strong> {verifierDisponibilite(selectedVehicle) ? 'Disponible' : 'Non disponible'}</p>
                             </div>
-                            <div className="modal-footer">
+                            <div className="form-actions">
                                 <button onClick={closeModal} className="btn-secondary" aria-label="Fermer la modale">
                                     <i className="fas fa-times"></i> Fermer
                                 </button>
-                                <button onClick={() => { setShowDetailsModal(false); openEditForm(selectedVehicle); }} className="btn-primary" aria-label="Modifier le véhicule">
+                                <button
+                                    onClick={() => { setShowDetailsModal(false); openEditForm(selectedVehicle); }}
+                                    className="btn-primary"
+                                    aria-label={`Modifier le véhicule ${selectedVehicle.marque} ${selectedVehicle.modele}`}
+                                >
                                     <i className="fas fa-edit"></i> Modifier
                                 </button>
                             </div>
@@ -888,7 +978,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                 </p>
                                 <p>Cette action est irréversible.</p>
                             </div>
-                            <div className="modal-footer">
+                            <div className="form-actions">
                                 <button onClick={closeModal} className="btn-secondary" aria-label="Annuler la suppression">
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
@@ -896,7 +986,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                     onClick={() => deleteVehicle(vehicleToDelete.id)}
                                     className="btn-danger"
                                     disabled={loading}
-                                    aria-label="Supprimer le véhicule"
+                                    aria-label={`Supprimer le véhicule ${vehicleToDelete.marque} ${vehicleToDelete.modele}`}
                                 >
                                     <i className={`fas fa-${loading ? 'spinner fa-spin' : 'trash'}`}></i>
                                     {loading ? 'Suppression...' : 'Supprimer'}

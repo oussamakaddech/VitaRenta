@@ -1,8 +1,10 @@
-// frontend/src/components/RecommendationResults.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Sidebar from './Sidebar';
 import './RecommendationResults.css';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const RecommendationResults = ({ token, user, onLogout }) => {
   const navigate = useNavigate();
@@ -12,6 +14,8 @@ const RecommendationResults = ({ token, user, onLogout }) => {
   const [marque, setMarque] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [animateCards, setAnimateCards] = useState(false);
 
   const vehicleTypes = useMemo(() => [
     { value: '', label: 'Tous' },
@@ -31,6 +35,26 @@ const RecommendationResults = ({ token, user, onLogout }) => {
 
   const itemOptions = useMemo(() => [3, 5, 10, 15, 20], []);
 
+  const particles = useMemo(() => {
+    const particlesArray = [];
+    for (let i = 0; i < 20; i++) {
+      particlesArray.push(
+        <div
+          key={i}
+          className="particle"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 10}s`,
+            animationDuration: `${10 + Math.random() * 5}s`,
+            width: `${2 + Math.random() * 4}px`,
+            height: `${2 + Math.random() * 4}px`,
+          }}
+        />
+      );
+    }
+    return particlesArray;
+  }, []);
+
   const fetchRecommendations = useCallback(async (retry = true) => {
     if (!token || !user) {
       setError('Veuillez vous connecter pour voir les recommandations.');
@@ -42,15 +66,13 @@ const RecommendationResults = ({ token, user, onLogout }) => {
     setError('');
     
     try {
-      console.log('Fetching recommendations...', { nItems, vehicleType, marque, userId: user?.id });
-      
       const params = {
         n_items: nItems,
         ...(vehicleType && { type_vehicule: vehicleType }),
         ...(marque && { marque }),
       };
 
-      const response = await axios.get('http://localhost:8000/api/recommendations/', {
+      const response = await axios.get(`${API_BASE_URL}/api/recommendations/`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -61,12 +83,10 @@ const RecommendationResults = ({ token, user, onLogout }) => {
 
       if (response.data && Array.isArray(response.data.recommendations)) {
         setRecommendations(response.data.recommendations);
-        console.log(`Received ${response.data.recommendations.length} recommendations`);
+        setTimeout(() => setAnimateCards(true), 100);
       } else {
-        console.warn('Unexpected response format:', response.data);
         setRecommendations([]);
       }
-
     } catch (err) {
       console.error('Fetch error:', err);
       if (err.code === 'ECONNABORTED') {
@@ -77,14 +97,12 @@ const RecommendationResults = ({ token, user, onLogout }) => {
           if (!refresh) {
             throw new Error('No refresh token available');
           }
-          const refreshResponse = await axios.post('http://localhost:8000/api/token/refresh/', { refresh });
+          const refreshResponse = await axios.post(`${API_BASE_URL}/api/token/refresh/`, { refresh });
           const newAccessToken = refreshResponse.data.access;
           localStorage.setItem('access_token', newAccessToken);
           window.dispatchEvent(new Event('storage'));
-          console.log('Token refreshed, retrying...');
           return fetchRecommendations(false);
         } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
           setError('Session expirée. Veuillez vous reconnecter.');
           onLogout();
           navigate('/login');
@@ -103,19 +121,22 @@ const RecommendationResults = ({ token, user, onLogout }) => {
   }, [token, user, nItems, vehicleType, marque, navigate, onLogout]);
 
   useEffect(() => {
-    let timeoutId;
-    timeoutId = setTimeout(() => {
+    let timeoutId = setTimeout(() => {
       fetchRecommendations();
     }, 500);
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
+    return () => clearTimeout(timeoutId);
   }, [fetchRecommendations]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const handleRefresh = useCallback(() => {
     fetchRecommendations();
+    setAnimateCards(false);
   }, [fetchRecommendations]);
 
   const formatPrice = useCallback((price) => {
@@ -131,10 +152,12 @@ const RecommendationResults = ({ token, user, onLogout }) => {
 
   if (!token || !user) {
     return (
-      <div className="recommendation-wrapper">
-        <div className="recommendation-card">
-          <div className="alert alert-warning" role="alert">
-            Veuillez vous connecter pour voir les recommandations.
+      <div className="recommendation-container">
+        <div className="floating-particles">{particles}</div>
+        <div className="recommendation-dashboard">
+          <div className="error-container" role="alert" aria-live="assertive">
+            <i className="fas fa-exclamation-triangle"></i>
+            <p className="error-text">Veuillez vous connecter pour voir les recommandations.</p>
           </div>
         </div>
       </div>
@@ -142,176 +165,185 @@ const RecommendationResults = ({ token, user, onLogout }) => {
   }
 
   return (
-    <div className="recommendation-wrapper" style={{ marginLeft: '250px' }}>
-      <div className="recommendation-card">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h1 className="recommendation-title">Recommandations de véhicules</h1>
-          <button 
-            className="btn btn-outline-primary btn-sm"
-            onClick={handleRefresh}
-            disabled={loading}
-            title="Actualiser les recommandations"
-          >
-            {loading ? (
-              <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-            ) : (
-              <i className="bi bi-arrow-clockwise me-1"></i>
-            )}
-            Actualiser
-          </button>
-        </div>
+    <div className="recommendation-container">
+      <div className="floating-particles">{particles}</div>
+      
+      <Sidebar
+        token={token}
+        user={user}
+        setToken={() => {}}
+        onLogout={onLogout}
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
+      />
 
-        <div className="row mb-4">
-          <div className="col-md-4">
-            <label htmlFor="n-items-select" className="form-label">
-              Nombre de recommandations
-            </label>
-            <select
-              id="n-items-select"
-              className="form-select"
-              value={nItems}
-              onChange={(e) => setNItems(Number(e.target.value))}
-              disabled={loading}
-              aria-describedby="n-items-help"
-            >
-              {itemOptions.map((num) => (
-                <option key={num} value={num}>{num} véhicules</option>
-              ))}
-            </select>
-            <small id="n-items-help" className="form-text text-muted">
-              Choisissez le nombre de véhicules à afficher.
-            </small>
+      <div className="dashboard-content">
+        <div className="recommendation-dashboard">
+          <div className="recommendation-header">
+            <h1 className="recommendation-title">
+              <i className="fas fa-car"></i> Recommandations de Véhicules
+            </h1>
+            <p className="recommendation-subtitle">Découvrez les véhicules adaptés à vos besoins</p>
           </div>
 
-          <div className="col-md-4">
-            <label htmlFor="vehicle-type-select" className="form-label">
-              Type de véhicule
-            </label>
-            <select
-              id="vehicle-type-select"
-              className="form-select"
-              value={vehicleType}
-              onChange={(e) => setVehicleType(e.target.value)}
-              disabled={loading}
-              aria-describedby="vehicle-type-help"
-            >
-              {vehicleTypes.map((type) => (
-                <option key={type.value || 'all'} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-            <small id="vehicle-type-help" className="form-text text-muted">
-              Filtrez par type de véhicule (optionnel).
-            </small>
-          </div>
-
-          <div className="col-md-4">
-            <label htmlFor="brand-select" className="form-label">
-              Marque
-            </label>
-            <select
-              id="brand-select"
-              className="form-select"
-              value={marque}
-              onChange={(e) => setMarque(e.target.value)}
-              disabled={loading}
-              aria-describedby="brand-help"
-            >
-              {brandOptions.map((brand) => (
-                <option key={brand.value || 'all'} value={brand.value}>
-                  {brand.label}
-                </option>
-              ))}
-            </select>
-            <small id="brand-help" className="form-text text-muted">
-              Filtrez par marque (optionnel).
-            </small>
-          </div>
-        </div>
-
-        {error && (
-          <div className="alert alert-danger d-flex align-items-center" role="alert">
-            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-            <div>
-              {error}
-              <button 
-                className="btn btn-sm btn-outline-danger ms-2"
+          {error && (
+            <div className="error-container" role="alert" aria-live="assertive">
+              <i className="fas fa-exclamation-triangle"></i>
+              <p className="error-text">{error}</p>
+              <button
                 onClick={handleRefresh}
+                className="retry-button"
                 disabled={loading}
+                aria-label="Réessayer la récupération des recommandations"
               >
                 Réessayer
               </button>
             </div>
-          </div>
-        )}
+          )}
 
-        {loading && (
-          <div className="text-center py-5 empty-state">
-            <div className="spinner-border text-primary mb-3" role="status">
-              <span className="visually-hidden">Chargement...</span>
+          <div className="controls-section">
+            <div className="controls-header">
+              <h3 className="controls-title">
+                <i className="fas fa-filter"></i> Filtres
+              </h3>
+              <button
+                onClick={handleRefresh}
+                className="refresh-btn"
+                disabled={loading}
+                aria-label="Actualiser les recommandations"
+              >
+                {loading ? (
+                  <i className="fas fa-spinner fa-spin"></i>
+                ) : (
+                  <i className="fas fa-sync"></i>
+                )}
+                Actualiser
+              </button>
             </div>
-            <p className="text-muted">
-              Génération des recommandations en cours...<br />
-              <small>Cela peut prendre quelques instants.</small>
-            </p>
+            <div className="controls-grid">
+              <div className="form-group">
+                <label htmlFor="n-items-select">Nombre de recommandations</label>
+                <select
+                  id="n-items-select"
+                  className="form-input"
+                  value={nItems}
+                  onChange={(e) => setNItems(Number(e.target.value))}
+                  disabled={loading}
+                  aria-describedby="n-items-help"
+                >
+                  {itemOptions.map((num) => (
+                    <option key={num} value={num}>{num} véhicules</option>
+                  ))}
+                </select>
+                <small id="n-items-help" className="text-muted">
+                  Choisissez le nombre de véhicules à afficher.
+                </small>
+              </div>
+              <div className="form-group">
+                <label htmlFor="vehicle-type-select">Type de véhicule</label>
+                <select
+                  id="vehicle-type-select"
+                  className="form-input"
+                  value={vehicleType}
+                  onChange={(e) => setVehicleType(e.target.value)}
+                  disabled={loading}
+                  aria-describedby="vehicle-type-help"
+                >
+                  {vehicleTypes.map((type) => (
+                    <option key={type.value || 'all'} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <small id="vehicle-type-help" className="text-muted">
+                  Filtrez par type de véhicule (optionnel).
+                </small>
+              </div>
+              <div className="form-group">
+                <label htmlFor="brand-select">Marque</label>
+                <select
+                  id="brand-select"
+                  className="form-input"
+                  value={marque}
+                  onChange={(e) => setMarque(e.target.value)}
+                  disabled={loading}
+                  aria-describedby="brand-help"
+                >
+                  {brandOptions.map((brand) => (
+                    <option key={brand.value || 'all'} value={brand.value}>
+                      {brand.label}
+                    </option>
+                  ))}
+                </select>
+                <small id="brand-help" className="text-muted">
+                  Filtrez par marque (optionnel).
+                </small>
+              </div>
+            </div>
           </div>
-        )}
 
-        {!loading && (
-          <>
-            {recommendations.length > 0 ? (
-              <>
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <p className="text-muted mb-0">
+          {loading ? (
+            <div className="loading-container">
+              <div className="loading-spinner"></div>
+              <p>Génération des recommandations en cours...</p>
+              <p className="text-muted">Cela peut prendre quelques instants.</p>
+            </div>
+          ) : (
+            <>
+              {recommendations.length > 0 ? (
+                <>
+                  <p className="text-muted">
                     {recommendations.length} recommandation{recommendations.length > 1 ? 's' : ''} trouvée{recommendations.length > 1 ? 's' : ''}
                     {vehicleType && ` (type: ${vehicleTypes.find(t => t.value === vehicleType)?.label})`}
                     {marque && ` (marque: ${brandOptions.find(b => b.value === marque)?.label})`}
                   </p>
-                </div>
-                
-                <div className="vehicle-grid" role="list" aria-label="Liste des véhicules recommandés">
-                  {recommendations.map((vehicle) => (
-                    <div key={vehicle.id || Math.random()} className="vehicle-item" role="listitem">
-                      <i className="bi bi-car-front vehicle-icon"></i>
-                      <h5 className="vehicle-name">
-                        {vehicle.marque} {vehicle.modele}
-                      </h5>
-                      <span className={`badge ${vehicle.eco_score > 0.7 ? 'bg-success' : vehicle.eco_score > 0.4 ? 'bg-warning' : 'bg-danger'}`}>
-                        Éco {formatEcoScore(vehicle.eco_score)}%
-                      </span>
-                      <div className="vehicle-price">
-                        {formatPrice(vehicle.prix_par_jour)} TND/jour
+                  <div className="vehicle-grid" role="list" aria-label="Liste des véhicules recommandés">
+                    {recommendations.map((vehicle, index) => (
+                      <div
+                        key={vehicle.id || Math.random()}
+                        className={`vehicle-item ${animateCards ? 'animate-in' : ''}`}
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                        role="listitem"
+                      >
+                        <div className="vehicle-icon">
+                          <i className="fas fa-car"></i>
+                        </div>
+                        <h5 className="vehicle-name">{vehicle.marque} {vehicle.modele}</h5>
+                        <div className="vehicle-eco">
+                          <span className={`badge ${vehicle.eco_score > 0.7 ? 'bg-success' : vehicle.eco_score > 0.4 ? 'bg-warning' : 'bg-danger'}`}>
+                            Éco {formatEcoScore(vehicle.eco_score)}%
+                          </span>
+                        </div>
+                        <div className="vehicle-price">{formatPrice(vehicle.prix_par_jour)} TND/jour</div>
+                        <div className="vehicle-fuel">Carburant: {vehicle.carburant || 'N/A'}</div>
+                        <div className="vehicle-type">Type: {vehicle.type_vehicule || 'N/A'}</div>
+                        <div className="vehicle-location">Localisation: {vehicle.localisation || 'N/A'}</div>
+                        <button className="vehicle-link" aria-label={`Voir les détails du véhicule ${vehicle.marque} ${vehicle.modele}`}>
+                          <i className="fas fa-eye"></i> Voir détails
+                        </button>
                       </div>
-                      <div className="vehicle-fuel">{vehicle.carburant || 'N/A'}</div>
-                      <div className="vehicle-fuel">Type: {vehicle.type_vehicule || 'N/A'}</div>
-                      <div className="vehicle-fuel">Localisation: {vehicle.localisation || 'N/A'}</div>
-                      <button className="vehicle-link">
-                        <i className="bi bi-eye me-1"></i>
-                        Voir détails
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state">
+                  <i className="fas fa-car empty-icon" aria-hidden="true"></i>
+                  <h4 className="empty-title">Aucune recommandation disponible</h4>
+                  <p className="text-muted">
+                    Aucun véhicule correspondant à vos critères n'est disponible. Essayez une autre marque ou type de véhicule.
+                  </p>
+                  <button
+                    className="retry-button"
+                    onClick={handleRefresh}
+                    aria-label="Réessayer la récupération des recommandations"
+                  >
+                    <i className="fas fa-sync"></i> Réessayer
+                  </button>
                 </div>
-              </>
-            ) : (
-              <div className="text-center py-5 empty-state">
-                <i className="bi bi-car-front display-1 text-muted mb-3"></i>
-                <h4 className="text-muted">Aucune recommandation disponible</h4>
-                <p className="text-muted">
-                  Aucun véhicule correspondant à vos critères n'est disponible. Essayez une autre marque ou type de véhicule.
-                </p>
-                <button 
-                  className="back-button"
-                  onClick={handleRefresh}
-                >
-                  <i className="bi bi-arrow-clockwise me-1"></i>
-                  Réessayer
-                </button>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

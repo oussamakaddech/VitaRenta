@@ -533,9 +533,9 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                 <div className="quick-action-icon">
                                     <i className="fas fa-sync"></i>
                                 </div>
-                                <div>
+                                <div className="quick-action-content">
                                     <div className="quick-action-title">Actualiser</div>
-                                    <div className="quick-action-description">Recharger les données</div>
+                                    <div className="quick-action-description">Recharger les données des agences</div>
                                 </div>
                             </button>
                             <button
@@ -547,9 +547,9 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                 <div className="quick-action-icon">
                                     <i className="fas fa-plus"></i>
                                 </div>
-                                <div>
+                                <div className="quick-action-content">
                                     <div className="quick-action-title">Ajouter</div>
-                                    <div className="quick-action-description">Nouvelle agence</div>
+                                    <div className="quick-action-description">Créer une nouvelle agence</div>
                                 </div>
                             </button>
                             <button
@@ -561,8 +561,8 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                 <div className="quick-action-icon">
                                     <i className="fas fa-user-plus"></i>
                                 </div>
-                                <div>
-                                    <div className="quick-action-title">Assigner Agence</div>
+                                <div className="quick-action-content">
+                                    <div className="quick-action-title">Assigner</div>
                                     <div className="quick-action-description">Associer une agence à mon compte</div>
                                 </div>
                             </button>

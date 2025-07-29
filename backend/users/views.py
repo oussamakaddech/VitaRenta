@@ -810,11 +810,7 @@ class DemandForecastView(APIView):
             logger.error(f"Erreur lors de la prédiction de la demande pour {request.user.email}: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# backend/views.py
-# ... (other imports and views remain unchanged)
 
-# backend/views.py
-# ... (other imports and views remain unchanged)
 
 class RecommendationView(APIView):
     permission_classes = [IsAuthenticated]
