@@ -30,7 +30,10 @@ from .recommendation_system import RecommendationEngine
 from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 from bson.decimal128 import Decimal128
 from pymongo.errors import BulkWriteError  # Added for error handling
-
+import traceback
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 logger = logging.getLogger(__name__)
 
 class UpdateAgenceView(APIView):
@@ -807,48 +810,136 @@ class DemandForecastView(APIView):
             logger.error(f"Erreur lors de la prédiction de la demande pour {request.user.email}: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# backend/views.py
+# ... (other imports and views remain unchanged)
+
+# backend/views.py
+# ... (other imports and views remain unchanged)
+
 class RecommendationView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = [JSONWebTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         try:
-            n_items = int(request.query_params.get('n_items', 5))
-            type_vehicule = request.query_params.get('type_vehicule', None)
-            if n_items < 1 or n_items > 20:
-                logger.error(f"Nombre d'items invalide ({n_items}) pour {request.user.email}")
-                return Response({"error": "n_items doit être entre 1 et 20"}, status=status.HTTP_400_BAD_REQUEST)
+            if not request.user.is_authenticated:
+                logger.error("User is not authenticated")
+                return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
 
-            engine = RecommendationEngine()
-            recommendations = engine.recommend_vehicles(request.user.id, n_items=n_items)
+            user_email = request.user.email
+            user_id = str(request.user.id)
+            logger.info(f"Processing recommendation request for user: {user_email} (ID: {user_id})")
+
+            try:
+                n_items = int(request.query_params.get('n_items', 5))
+                if n_items < 1 or n_items > 20:
+                    return Response({"error": "n_items must be between 1 and 20"}, status=status.HTTP_400_BAD_REQUEST)
+            except (ValueError, TypeError):
+                return Response({"error": "n_items must be a valid integer"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            type_vehicule = request.query_params.get('type_vehicule', None)
+            marque = request.query_params.get('marque', None)
+            logger.info(f"Request parameters: n_items={n_items}, type_vehicule={type_vehicule}, marque={marque}")
+
+            csv_path = getattr(settings, 'DATASETS', {}).get('recommendation')
+            if not csv_path:
+                csv_path = os.path.join(settings.BASE_DIR, 'data', 'recommendation_dataset_cars_2025.csv')
+            
+            if not os.path.exists(csv_path):
+                logger.warning(f"Recommendation dataset not found at: {csv_path}, proceeding with defaults")
+
+            try:
+                logger.info("Initializing recommendation engine...")
+                engine = RecommendationEngine()
+                logger.info("Recommendation engine initialized successfully")
+            except Exception as engine_error:
+                logger.error(f"Failed to initialize recommendation engine: {str(engine_error)}")
+                return Response({"error": "Recommendation service temporarily unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            try:
+                def get_recommendations_safe():
+                    try:
+                        return engine.recommend_vehicles(
+                            user_id=user_id,
+                            n_items=n_items,
+                            csv_path=csv_path,
+                            type_vehicule=type_vehicule,
+                            marque_filter=marque
+                        )
+                    except Exception as e:
+                        logger.error(f"Error in recommend_vehicles: {str(e)}")
+                        return []
+                
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(get_recommendations_safe)
+                    try:
+                        recommendations = future.result(timeout=45)
+                        logger.info(f"Received {len(recommendations)} raw recommendations")
+                    except FuturesTimeoutError:
+                        logger.error(f"Recommendation generation timeout for user {user_email}")
+                        return Response({
+                            "error": "Recommendation generation is taking too long. Please try again.",
+                            "recommendations": []
+                        }, status=status.HTTP_408_REQUEST_TIMEOUT)
+                    
+            except Exception as rec_error:
+                logger.error(f"Error getting recommendations for user {user_email}: {str(rec_error)}")
+                return Response({
+                    "recommendations": [],
+                    "error": "Could not generate personalized recommendations"
+                }, status=status.HTTP_200_OK)
 
             if not recommendations:
-                logger.warning(f"Aucune recommandation pour l'utilisateur {request.user.email}")
-                return Response({"recommendations": []}, status=status.HTTP_200_OK)
+                logger.warning(f"No recommendations found for user {user_email}")
+                return Response({
+                    "recommendations": [],
+                    "message": "No recommendations available at this time. Please check vehicle availability or try different filters."
+                }, status=status.HTTP_200_OK)
 
-            if type_vehicule:
-                recommendations = [v for v in recommendations if v.get('type_vehicule') == type_vehicule]
+            recommendations_data = []
+            for vehicle in recommendations:
+                try:
+                    if not vehicle.get('id') or vehicle.get('marque') in ['unknown', 'aaaaaaaa', '', None]:
+                        logger.warning(f"Skipping vehicle without valid id or marque: {vehicle}")
+                        continue
+                    eco_score = engine.calculate_eco_score(
+                        vehicle.get("emissionsCO2", 120), 
+                        vehicle.get("carburant", "essence")
+                    )
+                    vehicle_data = {
+                        "id": str(vehicle.get("id", "")),
+                        "marque": str(vehicle.get("marque", "Unknown")),
+                        "modele": str(vehicle.get("modele", "Unknown")),
+                        "carburant": str(vehicle.get("carburant", "essence")),
+                        "prix_par_jour": float(vehicle.get("prix_par_jour", 0)),
+                        "localisation": str(vehicle.get("localisation", "Tunis")),
+                        "type_vehicule": str(vehicle.get("type_vehicule", "berline")),
+                        "eco_score": float(eco_score) if eco_score is not None else 0.5
+                    }
+                    if vehicle_data["prix_par_jour"] > 0:
+                        recommendations_data.append(vehicle_data)
+                    else:
+                        logger.warning(f"Skipping vehicle with invalid price: {vehicle.get('id')}")
+                except Exception as format_error:
+                    logger.warning(f"Error formatting vehicle {vehicle.get('id', 'unknown')}: {str(format_error)}")
+                    continue
 
-            recommendations_data = [
-                {
-                    "id": vehicle["id"],
-                    "marque": vehicle["marque"],
-                    "modele": vehicle["modele"],
-                    "carburant": vehicle["carburant"],
-                    "prix_par_jour": float(vehicle["prix_par_jour"]),
-                    "localisation": vehicle["localisation"],
-                    "type_vehicule": vehicle.get("type_vehicule", ""),
-                    "eco_score": float(engine.calculate_eco_score(vehicle["emissionsCO2"], vehicle["carburant"]))
-                }
-                for vehicle in recommendations[:n_items]
-            ]
-
-            logger.info(f"{len(recommendations_data)} recommandations générées pour {request.user.email}")
-            return Response({"recommendations": recommendations_data}, status=status.HTTP_200_OK)
-        
-        except ValueError:
-            logger.error(f"Paramètre n_items invalide pour {request.user.email}")
-            return Response({"error": "n_items doit être un entier valide"}, status=status.HTTP_400_BAD_REQUEST)
+            logger.info(f"Successfully formatted {len(recommendations_data)} recommendations for {user_email}")
+            if not recommendations_data:
+                return Response({
+                    "recommendations": [],
+                    "message": "No valid recommendations available. Please check vehicle availability or try different filters."
+                }, status=status.HTTP_200_OK)
+                
+            return Response({
+                "recommendations": recommendations_data,
+                "count": len(recommendations_data),
+                "message": f"Found {len(recommendations_data)} recommendations"
+            }, status=status.HTTP_200_OK)
+                
         except Exception as e:
-            logger.error(f"Erreur lors de la génération des recommandations pour {request.user.email}: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Unexpected error in RecommendationView for {user_email}: {str(e)}")
+            return Response({
+                "recommendations": [],
+                "error": "An unexpected error occurred"
+            }, status=status.HTTP_200_OK)

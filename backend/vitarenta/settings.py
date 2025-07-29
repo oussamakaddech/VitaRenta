@@ -89,7 +89,7 @@ TEMPLATES = [
 ]
 DATASETS = {
     'recommendation': os.path.join(BASE_DIR, 'data', 'recommendation_dataset_cars_2025.csv'),
-    'demand_forecast': os.path.join(BASE_DIR, 'data', 'demand_forecast_dataset_2025.csv'),
+    'demand_forecast': os.path.join(BASE_DIR, 'data', 'demand_data.csv'),
 }
 # Configuration de la base de données
 USE_SQLITE = os.getenv("USE_SQLITE", "False") == "True"

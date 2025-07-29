@@ -1,176 +1,331 @@
 # backend/recommendation_system.py
 import pandas as pd
 import numpy as np
-from lightfm import LightFM
-from lightfm.data import Dataset
-from lightfm.evaluation import precision_at_k, auc_score
 from sklearn.preprocessing import StandardScaler
-import pickle
-import os
 from django.conf import settings
 from pymongo import MongoClient
 import logging
 from .utils import calculate_eco_score
 from .data_preparation import prepare_dataset
+import traceback
+import threading
+import time
 
 logger = logging.getLogger(__name__)
 
 class RecommendationEngine:
+    _model_cache = None
+    _dataset_cache = None
+    _cache_timestamp = None
+    _cache_duration = 3600
+
+    # User ID mapping (UUID to dataset ID)
+    USER_ID_MAPPING = {
+        '0b22af1e-582c-48ab-9bb7-f64ca348a81c': 'U0001'
+    }
+
     def __init__(self):
         self.dataset = None
-        self.model = None
+        self.df = None
         self.scaler = StandardScaler()
-        self.mongo_client = MongoClient(settings.DATABASES['default']['CLIENT']['host'])
-        self.db = self.mongo_client[settings.DATABASES['default']['NAME']]
-        self.load_pretrained_model()
+        self.mongo_client = None
+        self.db = None
+        self.user_features_df = None
+        self._initialize_db()
+        self._load_cached_data()
 
-    def load_pretrained_model(self):
-        model_path = os.path.join(settings.BASE_DIR, 'models', 'lightfm_model.pkl')
-        dataset_path = os.path.join(settings.BASE_DIR, 'models', 'lightfm_dataset.pkl')
+    def _load_cached_data(self):
+        current_time = time.time()
+        if (RecommendationEngine._dataset_cache is not None and 
+            RecommendationEngine._cache_timestamp is not None and
+            (current_time - RecommendationEngine._cache_timestamp) < RecommendationEngine._cache_duration):
+            logger.info("Loading recommendation data from cache")
+            self.df = RecommendationEngine._dataset_cache
+            return True
+        return False
+
+    def _cache_data(self):
+        RecommendationEngine._dataset_cache = self.df
+        RecommendationEngine._cache_timestamp = time.time()
+        logger.info("Dataset cached successfully")
+
+    def _initialize_db(self):
         try:
-            if os.path.exists(model_path) and os.path.exists(dataset_path):
-                with open(model_path, 'rb') as f:
-                    self.model = pickle.load(f)
-                with open(dataset_path, 'rb') as f:
-                    self.dataset = pickle.load(f)
-                logger.info("Pre-trained LightFM model loaded successfully")
+            self.mongo_client = MongoClient(settings.DATABASES['default']['CLIENT']['host'])
+            self.db = self.mongo_client[settings.DATABASES['default']['NAME']]
+            logger.info("Database connection initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize database connection: {str(e)}")
+            self.mongo_client = None
+            self.db = None
+
+    def prepare_user_features(self, csv_path):
+        logger.info(f"Preparing user features from CSV: {csv_path}")
+        try:
+            if self.df is not None:
+                logger.info("Using cached dataset")
             else:
-                logger.info("No pre-trained LightFM model found, training required")
+                self.df = prepare_dataset(csv_path, dataset_type="recommendation")
+                if self.df.empty:
+                    logger.error("No recommendation data found - dataset is empty")
+                    self.df = None
+                    return False
+                logger.info(f"Dataset size: {len(self.df)} rows")
+                self._cache_data()
+
+            user_features = []
+            for user_id, group in self.df.groupby('user_id'):
+                try:
+                    user_data = group.iloc[0]
+                    hist_marques = user_data.get('historique_reservations', [])
+                    preferred_brands = [res.get('marque', 'unknown') for res in hist_marques if res.get('marque') and res.get('marque') != 'unknown']
+                    features = {
+                        'user_id': str(user_id),
+                        'preference_carburant': user_data.get('preference_carburant', 'essence'),
+                        'budget_journalier': float(user_data.get('budget_journalier', 100)),
+                        'preferred_brands': preferred_brands
+                    }
+                    user_features.append(features)
+                except Exception as e:
+                    logger.warning(f"Error processing user {user_id}: {str(e)}")
+                    continue
+            self.user_features_df = pd.DataFrame(user_features) if user_features else pd.DataFrame(columns=['user_id', 'preference_carburant', 'budget_journalier', 'preferred_brands'])
+            logger.info(f"Prepared {len(self.user_features_df)} user features")
+            return True
         except Exception as e:
-            logger.error(f"Error loading pre-trained model: {str(e)}")
-            self.model = None
-            self.dataset = None
-        finally:
-            self.mongo_client.close()
+            logger.error(f"Error preparing user features: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            self.user_features_df = pd.DataFrame(columns=['user_id', 'preference_carburant', 'budget_journalier', 'preferred_brands'])
+            return False
 
-    def prepare_lightfm_data(self, csv_path):
-        df = prepare_dataset(csv_path, dataset_type="recommendation")
-        if df.empty:
-            logger.warning("No recommendation data found")
-            return None, None, None, None
-
-        self.dataset = Dataset()
-        user_features = []
-        for user_id, group in df.groupby('user_id'):
-            try:
-                user_data = group.iloc[0]
-                features = [
-                    f"preference_carburant:{user_data['preference_carburant']}",
-                    f"budget_range:{min(1000, int(user_data['budget_journalier'] // 10) * 10)}",
-                    f"is_rainy:{user_data['is_rainy']}",
-                    f"event:{user_data['événement_local']}",
-                    f"is_holiday:{user_data['is_holiday']}"
-                ]
-                for hist in user_data['historique_reservations']:
-                    features.append(f"marque:{hist.get('marque', '')}")
-                    features.append(f"modele:{hist.get('modele', '')}")
-                user_features.append((user_id, features))
-            except Exception as e:
-                logger.error(f"Error processing user features for user {user_id}: {str(e)}")
-                user_features.append((user_id, []))
-
-        vehicle_features = [
-            (
-                row['vehicle_id'],
-                [
-                    f"marque:{row['marque']}",
-                    f"modele:{row['modele']}",
-                    f"carburant:{row['carburant']}",
-                    f"prix_range:{min(1000, int(row['prix_par_jour'] // 50) * 50)}",
-                    f"eco_score:{round(row['eco_score'], 2)}",
-                    f"localisation:{row['localisation']}",
-                    f"type_vehicule:{row['type_vehicule']}"
-                ]
-            )
-            for _, row in df.iterrows()
-        ]
-
-        interactions = [(row['user_id'], row['vehicle_id']) for _, row in df.iterrows()]
-        weights = [row['eco_score'] + 1.0 for _, row in df.iterrows()]
-
-        self.dataset.fit(
-            users=df['user_id'].unique(),
-            items=df['vehicle_id'].unique(),
-            user_features=[f for _, fs in user_features for f in fs],
-            item_features=[f for _, fs in vehicle_features for f in fs]
-        )
-
-        interactions_matrix, weights_matrix = self.dataset.build_interactions(
-            [(u, v, w) for (u, v), w in zip(interactions, weights)]
-        )
-        user_features_matrix = self.dataset.build_user_features(user_features)
-        item_features_matrix = self.dataset.build_item_features(vehicle_features)
-
-        return interactions_matrix, weights_matrix, user_features_matrix, item_features_matrix
-
-    def train_lightfm_model(self, csv_path):
-        if self.model and self.dataset:
-            logger.info("Using pre-trained LightFM model")
-            return self.model
-
-        interactions, weights, user_features, item_features = self.prepare_lightfm_data(csv_path)
-        if interactions is None:
-            logger.error("Failed to train LightFM model: missing data")
-            return None
-
-        self.model = LightFM(loss='warp', no_components=30, learning_rate=0.05)
-        self.model.fit(
-            interactions,
-            sample_weight=weights,
-            user_features=user_features,
-            item_features=item_features,
-            epochs=30,
-            num_threads=4
-        )
-        precision = precision_at_k(self.model, interactions, k=5, user_features=user_features, item_features=item_features).mean()
-        auc = auc_score(self.model, interactions, user_features=user_features, item_features=item_features).mean()
-        logger.info(f"LightFM model trained successfully - Precision@5: {precision:.4f}, AUC: {auc:.4f}")
-
-        # Save model and dataset
-        model_path = os.path.join(settings.BASE_DIR, 'models', 'lightfm_model.pkl')
-        dataset_path = os.path.join(settings.BASE_DIR, 'models', 'lightfm_dataset.pkl')
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    def simple_content_based_recommendation(self, user_id, n_items=5, marque_filter=None):
         try:
-            with open(model_path, 'wb') as f:
-                pickle.dump(self.model, f)
-            with open(dataset_path, 'wb') as f:
-                pickle.dump(self.dataset, f)
-            logger.info("LightFM model and dataset saved successfully")
-        except Exception as e:
-            logger.error(f"Error saving LightFM model: {str(e)}")
-        return self.model
+            logger.info(f"Generating simple content-based recommendations for user {user_id}")
+            # Map UUID to dataset user_id
+            mapped_user_id = self.USER_ID_MAPPING.get(str(user_id), str(user_id))
+            user_row = self.user_features_df[self.user_features_df['user_id'] == mapped_user_id] if self.user_features_df is not None else pd.DataFrame()
+            if user_row.empty:
+                logger.warning(f"User {mapped_user_id} not found in features, using defaults")
+                user_prefs = {
+                    'preference_carburant': 'essence',
+                    'budget_journalier': 150.0,
+                    'preferred_brands': ['Kia', 'Fiat', 'Citroën']
+                }
+            else:
+                user_prefs = user_row.iloc[0].to_dict()
 
-    def recommend_vehicles(self, user_id, n_items=5, csv_path=None):
-        if not self.model or not self.dataset:
-            if not csv_path:
-                raise ValueError("CSV path required for training if no pre-trained model exists")
-            self.train_lightfm_model(csv_path)
-            if not self.model:
+            if not self.db:
+                logger.error("No database connection available")
                 return []
 
-        n_users, n_items = self.dataset.interactions_shape()
-        user_index = self.dataset.mapping()[0].get(user_id, -1)
-        if user_index == -1:
-            logger.warning(f"User {user_id} not found in dataset")
+            query = {
+                '$or': [
+                    {'statut': 'disponible'},
+                    {'statut': 'available'},
+                    {'status': 'available'},
+                    {'disponibilite': True}
+                ],
+                'marque': {'$nin': ['unknown', 'aaaaaaaa', '', None]}
+            }
+            if marque_filter:
+                query['marque'] = marque_filter
+            elif user_prefs['preferred_brands']:
+                query['marque'] = {'$in': user_prefs['preferred_brands']}
+
+            vehicles = list(self.db.core_vehicule.find(query).limit(n_items * 3))
+            if not vehicles:
+                logger.warning(f"No vehicles found with availability filter for marque={marque_filter or user_prefs['preferred_brands']}, trying all vehicles")
+                query.pop('$or')
+                vehicles = list(self.db.core_vehicule.find(query).limit(n_items * 2))
+            if not vehicles:
+                logger.error(f"No vehicles found in database for marque={marque_filter or user_prefs['preferred_brands']}")
+                return []
+
+            scored_vehicles = []
+            for vehicle in vehicles:
+                try:
+                    score = 0.0
+                    if vehicle.get('marque') in user_prefs.get('preferred_brands', []):
+                        score += 0.4
+                    if vehicle.get('carburant') == user_prefs.get('preference_carburant', 'essence'):
+                        score += 0.2
+                    budget = user_prefs.get('budget_journalier', 150.0)
+                    prix = float(vehicle.get('prix_par_jour', 100))
+                    price_ratio = min(budget / max(prix, 1), 1.0)
+                    score += 0.2 * price_ratio
+                    eco_score = self.calculate_eco_score(
+                        vehicle.get('emissionsCO2', 120),
+                        vehicle.get('carburant', 'essence')
+                    )
+                    score += 0.15 * eco_score
+                    max_price = max(float(v.get('prix_par_jour', 100)) for v in vehicles)
+                    price_score = 1.0 - (prix / max_price) if max_price > 0 else 1.0
+                    score += 0.05 * price_score
+
+                    formatted_vehicle = self._format_vehicle_data(vehicle)
+                    if formatted_vehicle:
+                        formatted_vehicle['score'] = score
+                        scored_vehicles.append(formatted_vehicle)
+                except Exception as e:
+                    logger.warning(f"Error scoring vehicle {vehicle.get('id')}: {str(e)}")
+                    continue
+
+            scored_vehicles.sort(key=lambda x: x['score'], reverse=True)
+            top_vehicles = scored_vehicles[:n_items]
+            logger.info(f"Content-based scoring completed, top score: {top_vehicles[0]['score']:.3f}" if top_vehicles else "No valid vehicles")
+            return top_vehicles
+        except Exception as e:
+            logger.error(f"Error in content-based recommendation: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return []
 
+    def recommend_vehicles(self, user_id, n_items=5, csv_path=None, type_vehicule=None, marque_filter=None):
         try:
-            scores = self.model.predict(
-                user_index,
-                np.arange(n_items),
-                user_features=self.dataset.user_features(),
-                item_features=self.dataset.item_features()
-            )
-            top_items = np.argsort(-scores)[:n_items]
-            vehicle_ids = [self.dataset.mapping()[2][i] for i in top_items]
-            vehicles = self.db.core_vehicule.find({'id': {'$in': vehicle_ids}, 'statut': 'disponible'})
-            vehicles_list = list(vehicles)
-            return sorted(vehicles_list, key=lambda v: -calculate_eco_score(v.get('emissionsCO2', 0), v.get('carburant', '')))[:n_items]
+            if csv_path and not self.prepare_user_features(csv_path):
+                logger.warning("Failed to prepare user features, using defaults")
+            
+            recommendations = self.simple_content_based_recommendation(user_id, n_items, marque_filter)
+            if not recommendations:
+                logger.warning("Content-based recommendations failed, using database fallback")
+                return self._database_fallback_recommendations(user_id, n_items, type_vehicule, marque_filter)
+            
+            if type_vehicule:
+                recommendations = [r for r in recommendations if r.get('type_vehicule', '').lower() == type_vehicule.lower()]
+            
+            return recommendations[:n_items]
         except Exception as e:
-            logger.error(f"Error generating recommendations for user {user_id}: {str(e)}")
+            logger.error(f"Error in recommend_vehicles for user {user_id}: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return self._database_fallback_recommendations(user_id, n_items, type_vehicule, marque_filter)
+
+    def _format_vehicle_data(self, vehicle):
+        try:
+            marque = vehicle.get('marque') or vehicle.get('brand') or 'Unknown'
+            if marque in ['unknown', 'aaaaaaaa', '', None]:
+                logger.warning(f"Skipping vehicle {vehicle.get('id')} with invalid marque: {marque}")
+                return None
+            modele = vehicle.get('modele') or vehicle.get('model') or 'Unknown'
+            carburant = vehicle.get('carburant') or vehicle.get('fuel') or 'essence'
+            prix_par_jour = vehicle.get('prix_par_jour') or vehicle.get('price_per_day') or 100
+            localisation = vehicle.get('localisation') or vehicle.get('location') or 'Tunis'
+            type_vehicule = vehicle.get('type_vehicule') or vehicle.get('vehicle_type') or 'berline'
+            emissions = vehicle.get('emissionsCO2') or vehicle.get('emissions') or 120
+            try:
+                prix_par_jour = float(prix_par_jour)
+                emissions = float(emissions)
+            except (ValueError, TypeError):
+                prix_par_jour = 100.0
+                emissions = 120.0
+            if prix_par_jour <= 0:
+                logger.warning(f"Skipping vehicle {vehicle.get('id')} with invalid price: {prix_par_jour}")
+                return None
+            return {
+                'id': str(vehicle.get('id', '')),
+                'marque': str(marque),
+                'modele': str(modele),
+                'carburant': str(carburant),
+                'prix_par_jour': prix_par_jour,
+                'localisation': str(localisation),
+                'type_vehicule': str(type_vehicule),
+                'emissionsCO2': emissions,
+                'statut': vehicle.get('statut', 'disponible')
+            }
+        except Exception as e:
+            logger.error(f"Error formatting vehicle data: {str(e)}")
+            return None
+
+    def _database_fallback_recommendations(self, user_id, n_items, type_vehicule=None, marque_filter=None):
+        logger.info(f"Using database fallback recommendations for user {user_id}")
+        if not self.db:
+            logger.error("No database connection for fallback recommendations")
             return []
-        finally:
-            self.mongo_client.close()
+        try:
+            mapped_user_id = self.USER_ID_MAPPING.get(str(user_id), str(user_id))
+            query = {
+                '$or': [
+                    {'statut': 'disponible'},
+                    {'statut': 'available'},
+                    {'status': 'available'},
+                    {'disponibilite': True}
+                ],
+                'marque': {'$nin': ['unknown', 'aaaaaaaa', '', None]}
+            }
+            if marque_filter:
+                query['marque'] = marque_filter
+            elif mapped_user_id and self.user_features_df is not None:
+                user_row = self.user_features_df[self.user_features_df['user_id'] == mapped_user_id]
+                if not user_row.empty:
+                    preferred_brands = user_row.iloc[0].get('preferred_brands', ['Kia', 'Fiat', 'Citroën'])
+                    if preferred_brands:
+                        query['marque'] = {'$in': preferred_brands}
+            if type_vehicule:
+                query['type_vehicule'] = type_vehicule
+
+            vehicles = list(self.db.core_vehicule.find(query).limit(n_items * 3))
+            if not vehicles:
+                logger.warning("No vehicles found with availability filter, trying all vehicles")
+                query.pop('$or')
+                vehicles = list(self.db.core_vehicule.find(query).limit(n_items * 2))
+            if not vehicles:
+                logger.error("No vehicles found in database at all")
+                return []
+
+            scored_vehicles = []
+            user_prefs = {'preferred_brands': ['Kia', 'Fiat', 'Citroën'], 'preference_carburant': 'essence', 'budget_journalier': 150.0}
+            if mapped_user_id and self.user_features_df is not None:
+                user_row = self.user_features_df[self.user_features_df['user_id'] == mapped_user_id]
+                if not user_row.empty:
+                    user_prefs = user_row.iloc[0].to_dict()
+
+            for vehicle in vehicles:
+                try:
+                    score = self._calculate_fallback_score(vehicle, user_prefs)
+                    formatted_vehicle = self._format_vehicle_data(vehicle)
+                    if formatted_vehicle:
+                        formatted_vehicle['score'] = score
+                        scored_vehicles.append(formatted_vehicle)
+                except Exception as e:
+                    logger.warning(f"Error scoring vehicle {vehicle.get('id')}: {str(e)}")
+                    continue
+
+            scored_vehicles.sort(key=lambda x: x['score'], reverse=True)
+            formatted_vehicles = scored_vehicles[:n_items]
+            logger.info(f"Fallback: Generated {len(formatted_vehicles)} recommendations")
+            return formatted_vehicles
+        except Exception as e:
+            logger.error(f"Error in database fallback recommendations: {str(e)}")
+            return []
+
+    def _calculate_fallback_score(self, vehicle, user_prefs):
+        try:
+            score = 0.0
+            emissions = float(vehicle.get('emissionsCO2', 120))
+            carburant = vehicle.get('carburant', 'essence')
+            eco_score = self.calculate_eco_score(emissions, carburant)
+            score += eco_score * 0.3
+            prix = float(vehicle.get('prix_par_jour', 100))
+            if prix > 0:
+                price_score = max(0, (500 - prix) / 500)
+                score += price_score * 0.2
+            if carburant in ['électrique', 'hybride']:
+                score += 0.15
+            elif carburant == 'diesel':
+                score += 0.1
+            if vehicle.get('marque') in user_prefs.get('preferred_brands', []):
+                score += 0.3
+            import random
+            score += random.uniform(0, 0.05)
+            return min(score, 1.0)
+        except Exception as e:
+            logger.warning(f"Error calculating fallback score: {str(e)}")
+            return 0.5
 
     def calculate_eco_score(self, emissionsCO2, carburant):
         return calculate_eco_score(emissionsCO2, carburant)
+
+    def __del__(self):
+        if self.mongo_client:
+            try:
+                self.mongo_client.close()
+            except:
+                pass

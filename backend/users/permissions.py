@@ -1,6 +1,6 @@
+# backend/users/permissions.py
 from rest_framework import permissions
-
-from users.models import Agence, Reservation, Vehicule
+from .models import Agence, Reservation, Vehicule
 
 class IsAdminUser(permissions.BasePermission):
     """
@@ -22,19 +22,15 @@ class IsAgencyUser(permissions.BasePermission):
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated and request.user.role == 'agence'):
             return False
-        # Allow read-only access for GET requests
         if request.method in permissions.SAFE_METHODS:
             return True
-        # For write operations, ensure user has an associated agency
         return request.user.agence is not None
 
     def has_object_permission(self, request, view, obj):
         if not (request.user and request.user.is_authenticated and request.user.role == 'agence'):
             return False
-        # Allow read-only access for GET requests
         if request.method in permissions.SAFE_METHODS:
             return True
-        # Agency-specific checks
         if isinstance(obj, Agence):
             return obj.id == request.user.agence.id
         elif isinstance(obj, Vehicule):
@@ -52,10 +48,8 @@ class IsClientUser(permissions.BasePermission):
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated and request.user.role == 'client'):
             return False
-        # Allow read-only access for vehicle viewing
         if request.method in permissions.SAFE_METHODS:
             return True
-        # Allow creating reservations
         if view.__class__.__name__ == 'ReservationViewSet' and view.action == 'create':
             return True
         return False
@@ -63,10 +57,8 @@ class IsClientUser(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if not (request.user and request.user.is_authenticated and request.user.role == 'client'):
             return False
-        # Allow read-only access to vehicles
         if isinstance(obj, Vehicule) and request.method in permissions.SAFE_METHODS:
             return True
-        # Allow clients to view their own reservations
         if isinstance(obj, Reservation):
             return obj.user and obj.user.id == request.user.id
         return False
