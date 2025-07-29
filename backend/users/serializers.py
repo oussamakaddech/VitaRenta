@@ -254,7 +254,13 @@ class VehiculeSerializer(serializers.ModelSerializer):
         if not value or len(value.strip()) < 1:
             return "Marque inconnue"
         return value.strip()
-
+    def validate_immatriculation(self, value):
+        if not value:
+            raise serializers.ValidationError("L'immatriculation ne peut pas être vide.")
+        # Check for uniqueness
+        if Vehicule.objects.filter(immatriculation=value).exists():
+            raise serializers.ValidationError("Un véhicule avec cette immatriculation existe déjà.")
+        return value
     def validate_modele(self, value):
         if not value or len(value.strip()) < 1:
             return "Modèle inconnu"

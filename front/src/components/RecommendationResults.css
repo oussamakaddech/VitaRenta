@@ -1,0 +1,171 @@
+/* =========================
+   RecommendationCenter.css
+   ========================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ---- 1. Design Tokens ---- */
+:root{
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --green: #10b981;
+  --orange: #f59e0b;
+  --red: #ef4444;
+  --slate-50: #f8fafc;
+  --slate-100:#f1f5f9;
+  --slate-600:#475569;
+  --slate-800:#1e293b;
+  --white: #ffffff;
+  --shadow: 0 4px 12px rgba(0,0,0,.12);
+  --shadow-lg:0 10px 28px rgba(0,0,0,.18);
+  --radius: 1rem;
+  --font: 'Inter', sans-serif;
+}
+
+/* ---- 2. Global Centering Wrapper ---- */
+.recommendation-wrapper{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(135deg,var(--slate-50) 0%,var(--slate-100) 100%);
+  font-family:var(--font);
+  padding:2rem;
+}
+
+/* ---- 3. Main Card (centered) ---- */
+.recommendation-card{
+  width:100%;
+  max-width:1000px;
+  background:var(--white);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-lg);
+  padding:3rem 2.5rem;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+  animation:fadeInUp .7s ease forwards;
+}
+
+@keyframes fadeInUp{
+  from{opacity:0;transform:translateY(30px);}
+  to{opacity:1;transform:translateY(0);}
+}
+
+/* ---- 4. Title ---- */
+.recommendation-title{
+  font-size:2.75rem;
+  font-weight:800;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  margin-bottom:2.5rem;
+}
+
+/* ---- 5. Chart Container (centered) ---- */
+.chart-wrapper{
+  width:100%;
+  max-width:700px;
+  height:320px;
+  margin-bottom:3rem;
+}
+
+/* ---- 6. Vehicle Grid (centered) ---- */
+.vehicle-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:2rem;
+  width:100%;
+  max-width:900px;
+}
+
+.vehicle-item{
+  background:var(--white);
+  border:2px solid transparent;
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:2.5rem 1.5rem;
+  transition:.3s;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+.vehicle-item:hover{
+  transform:translateY(-8px) scale(1.03);
+  border-color:var(--blue);
+  box-shadow:var(--shadow-lg);
+}
+
+.vehicle-icon{
+  font-size:3.5rem;
+  margin-bottom:1rem;
+  filter:drop-shadow(0 0 10px var(--blue));
+}
+
+.vehicle-name{
+  font-size:1.5rem;
+  font-weight:700;
+  color:var(--slate-800);
+  margin-bottom:.5rem;
+}
+
+.vehicle-price{
+  font-size:1.1rem;
+  font-weight:600;
+  color:var(--blue);
+  margin-bottom:.75rem;
+}
+
+.vehicle-fuel{
+  font-size:.95rem;
+  color:var(--slate-600);
+  margin-bottom:1.5rem;
+}
+
+.vehicle-link{
+  padding:.6rem 1.4rem;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  color:var(--white);
+  border-radius:2rem;
+  text-decoration:none;
+  font-weight:600;
+  transition:.3s;
+}
+
+.vehicle-link:hover{
+  background:linear-gradient(135deg,var(--purple),var(--blue));
+  box-shadow:0 4px 12px rgba(59,130,246,.4);
+}
+
+/* ---- 7. Empty State ---- */
+.empty-state{
+  color:var(--slate-600);
+  font-size:1.2rem;
+}
+
+/* ---- 8. Back Button ---- */
+.back-button{
+  margin-top:2.5rem;
+  padding:.9rem 2.2rem;
+  background:var(--slate-100);
+  color:var(--slate-800);
+  border:none;
+  border-radius:var(--radius);
+  font-weight:600;
+  cursor:pointer;
+  transition:.3s;
+}
+
+.back-button:hover{
+  background:var(--slate-600);
+  color:var(--white);
+}
+
+/* ---- 9. Responsive ---- */
+@media(max-width:600px){
+  .recommendation-card{padding:2rem 1.5rem;}
+  .recommendation-title{font-size:2.2rem;}
+  .chart-wrapper{height:260px;}
+}

@@ -34,3 +34,6 @@ def send_welcome_email(user):
     except Exception as e:
         logger.error(f"Erreur lors de l'envoi de l'email de bienvenue à {user.email}: {e}")
         raise
+
+
+    

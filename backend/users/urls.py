@@ -1,4 +1,4 @@
-# urls.py
+# backend/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import (
@@ -8,7 +8,8 @@ from rest_framework_simplejwt.views import (
 )
 from .views import (
     LoginView, LogoutView, SignUpView, UserProfileView, UserStatsView,
-    UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet, UserViewSet, UpdateAgenceView
+    UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
+    UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView
 )
 
 router = DefaultRouter()
@@ -20,7 +21,7 @@ router.register(r'users', UserViewSet, basename='user')
 urlpatterns = [
     # Authentication routes
     path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),
+    path('logout/', LogoutView.as_view(), name='logout'),  # Fixed typo
     path('inscription/', SignUpView.as_view(), name='signup'),
     # JWT routes
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -31,6 +32,9 @@ urlpatterns = [
     path('profile/photo/', UserPhotoUploadView.as_view(), name='user-photo-upload'),
     path('profile/stats/', UserStatsView.as_view(), name='user-stats'),
     path('update_agence/', UpdateAgenceView.as_view(), name='update-agence'),
+    # Demand forecast and recommendations routes
+    path('demand-forecast/', DemandForecastView.as_view(), name='demand_forecast'),
+    path('recommendations/', RecommendationView.as_view(), name='recommendations'),
     # Router routes
     path('', include(router.urls)),
 ]

@@ -1,3 +1,4 @@
+# backend/views.py
 from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -24,6 +25,11 @@ from .serializers import (
 )
 from .permissions import IsAdminUser, IsAgencyUser, IsClientUser, IsAdminOrAgency, IsClientOrAgencyOrAdmin
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+from .demand_forecast import ensemble_predict_demand, train_arima_model, train_xgboost_model, predict_demand
+from .recommendation_system import RecommendationEngine
+from rest_framework_jwt.authentication import JSONWebTokenAuthentication
+from bson.decimal128 import Decimal128
+from pymongo.errors import BulkWriteError  # Added for error handling
 
 logger = logging.getLogger(__name__)
 
@@ -256,18 +262,23 @@ class UserStatsView(APIView):
         try:
             user = request.user
             reservations = Reservation.objects.filter(user_id=user.id)
+            total_depense = reservations.aggregate(total=Sum('montant_total'))['total'] or 0
+            if isinstance(total_depense, Decimal128):
+                total_depense = float(total_depense.to_decimal())
+            budget_journalier = float(user.budget_journalier.to_decimal()) if isinstance(user.budget_journalier, Decimal128) else float(user.budget_journalier or 0)
+
             stats = {
                 'total_reservations': reservations.count(),
                 'reservations_actives': reservations.filter(statut='confirmee').count(),
                 'reservations_terminees': reservations.filter(statut='terminee').count(),
                 'reservations_annulees': reservations.filter(statut='annulee').count(),
-                'total_depense': float(reservations.aggregate(total=Sum('montant_total'))['total'] or 0),
+                'total_depense': total_depense,
                 'vehicule_prefere': user.preference_carburant or 'Non défini',
                 'membre_depuis': user.date_joined.strftime('%Y-%m-%d'),
                 'derniere_connexion': user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Jamais',
                 'agence_associee': AgenceSerializer(user.agence).data if user.agence else None,
                 'compte_actif': user.is_active,
-                'budget_journalier': float(user.budget_journalier) if user.budget_journalier else 0
+                'budget_journalier': budget_journalier,
             }
             logger.info(f"Statistiques récupérées pour l'utilisateur {user.email}")
             return Response({
@@ -277,13 +288,13 @@ class UserStatsView(APIView):
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des statistiques pour {request.user.email}: {str(e)}")
             return Response({
-                'error': 'Erreur lors de la récupération des statistiques'
+                'error': f'Erreur lors de la récupération des statistiques: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class VehiculeViewSet(ModelViewSet):
     queryset = Vehicule.objects.all()
     serializer_class = VehiculeSerializer
-    permission_classes = [IsAdminUser | IsAgencyUser | IsClientUser]
+    permission_classes = [AllowAny]
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
@@ -291,8 +302,13 @@ class VehiculeViewSet(ModelViewSet):
         params = self.request.query_params
         user = self.request.user
 
+        logger.debug(f"get_queryset - User: {user.email if user.is_authenticated else 'anonymous'}, Role: {user.role if user.is_authenticated else 'none'}")
         if user.is_authenticated and user.role == 'agence' and user.agence:
+            logger.debug(f"Filtering queryset by agence: {user.agence.id}")
             queryset = queryset.filter(agence=user.agence)
+        elif user.is_authenticated and user.role == 'agence' and not user.agence:
+            logger.warning(f"Agency user {user.email} has no associated agence")
+            queryset = queryset.none()  # Return empty queryset for agency users without an agency
 
         if params.get('carburant'):
             queryset = queryset.filter(carburant=params.get('carburant'))
@@ -320,6 +336,7 @@ class VehiculeViewSet(ModelViewSet):
         if params.get('localisation'):
             queryset = queryset.filter(localisation__icontains=params.get('localisation'))
 
+        logger.debug(f"get_queryset - Final queryset size: {queryset.count()}")
         return queryset.order_by('-created_at').select_related('agence')
 
     def perform_create(self, serializer):
@@ -330,6 +347,14 @@ class VehiculeViewSet(ModelViewSet):
             else:
                 serializer.save()
             logger.info(f"Véhicule créé: {serializer.validated_data['marque']} {serializer.validated_data['modele']} par {user.email}")
+        except BulkWriteError as e:
+            if 'E11000 duplicate key error' in str(e):
+                logger.error(f"Erreur de clé en double lors de la création du véhicule pour {user.email}: {str(e)}")
+                return Response({
+                    'error': 'Un véhicule avec cette immatriculation existe déjà.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            logger.error(f"Erreur lors de la création du véhicule: {str(e)}")
+            raise
         except Exception as e:
             logger.error(f"Erreur lors de la création du véhicule: {str(e)}")
             raise
@@ -354,21 +379,57 @@ class VehiculeViewSet(ModelViewSet):
     def stats(self, request):
         try:
             queryset = self.get_queryset()
+            logger.debug(f"Stats - Queryset size: {queryset.count()}")
+
+            # Compute individual stats with error handling
+            total = queryset.count()
+            logger.debug(f"Stats - Total vehicles: {total}")
+
+            disponibles = queryset.filter(statut='disponible').count()
+            logger.debug(f"Stats - Disponibles: {disponibles}")
+
+            loues = queryset.filter(statut='loue').count()
+            logger.debug(f"Stats - Loués: {loues}")
+
+            maintenance = queryset.filter(statut='maintenance').count()
+            logger.debug(f"Stats - Maintenance: {maintenance}")
+
+            hors_service = queryset.filter(statut='hors_service').count()
+            logger.debug(f"Stats - Hors service: {hors_service}")
+
+            # Compute par_carburant
+            par_carburant_query = queryset.values('carburant').annotate(count=Count('id')).values_list('carburant', 'count')
+            par_carburant = dict(par_carburant_query)
+            logger.debug(f"Stats - Par carburant: {par_carburant}")
+
+            # Compute prix_moyen
+            avg_price = queryset.aggregate(avg_price=Avg('prix_par_jour'))['avg_price']
+            logger.debug(f"Stats - Raw avg_price: {avg_price}, type: {type(avg_price)}")
+            prix_moyen = 0.0
+            if avg_price is not None:
+                if isinstance(avg_price, Decimal128):
+                    prix_moyen = float(avg_price.to_decimal())
+                elif isinstance(avg_price, (int, float)):
+                    prix_moyen = float(avg_price)
+                else:
+                    logger.warning(f"Stats - Unexpected avg_price type: {type(avg_price)}")
+                    prix_moyen = 0.0
+
             stats = {
-                'total': queryset.count(),
-                'disponibles': queryset.filter(statut='disponible').count(),
-                'loues': queryset.filter(statut='loue').count(),
-                'maintenance': queryset.filter(statut='maintenance').count(),
-                'hors_service': queryset.filter(statut='hors_service').count(),
-                'par_carburant': dict(queryset.values('carburant').annotate(count=Count('id')).values_list('carburant', 'count')),
-                'prix_moyen': float(queryset.aggregate(avg_price=Avg('prix_par_jour'))['avg_price'] or 0)
+                'total': total,
+                'disponibles': disponibles,
+                'loues': loues,
+                'maintenance': maintenance,
+                'hors_service': hors_service,
+                'par_carburant': par_carburant,
+                'prix_moyen': prix_moyen
             }
             logger.info(f"Statistiques véhicules récupérées pour {request.user.email if request.user.is_authenticated else 'utilisateur anonyme'}")
             return Response(stats)
         except Exception as e:
-            logger.error(f"Erreur lors de la récupération des statistiques véhicules: {str(e)}")
+            logger.error(f"Erreur lors de la récupération des statistiques véhicules: {str(e)}", exc_info=True)
             return Response({
-                'error': 'Erreur lors de la récupération des statistiques'
+                'error': f'Erreur lors de la récupération des statistiques: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class AgenceViewSet(ModelViewSet):
@@ -569,12 +630,6 @@ class ReservationViewSet(ModelViewSet):
             logger.error(f"Erreur lors de la mise à jour du statut de la réservation pour {pk}: {str(e)}")
             return Response({
                 'error': 'Erreur lors de la mise à jour du statut'
-            })
-
-        except Exception as e:
-            logger.error(f"Erreur lors de la mise à jour du statut de la réservation {pk}: {str(e)}")
-            return Response({
-                'error': 'Erreur lors de la mise à jour du statut'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminOrAgency])
@@ -590,16 +645,13 @@ class ReservationViewSet(ModelViewSet):
                 'revenus_total': float(queryset.aggregate(total=Sum('montant_total'))['total'] or 0),
                 'moyenne_duree': float(queryset.aggregate(
                     avg_duration=Avg('date_fin') - Avg('date_debut')
-                )['avg_duration'].days if queryset.exists() else 0
-                )
+                )['avg_duration'].days if queryset.exists() else 0)
             }
             logger.info(f"Statistiques des réservations récupérées pour {request.user.email}")
             return Response({
                 'stats': stats,
-                'message': 'Statistiques récupérées statistiquement avec succès'
-            }, status=status.HTTP_200_OK
-            )
-
+                'message': 'Statistiques récupérées avec succès'
+            }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des statistiques des réservations: {str(e)}")
             return Response({
@@ -634,13 +686,12 @@ class UserViewSet(ModelViewSet):
         return queryset.order_by('-date_joined')
 
     def perform_create(self, serializer):
-      try:
-        user = serializer.save()
-        logger.info(f"Utilisateur créé: {user.email} par {self.request.user.email}")
-      except Exception as e:
-        logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
-        raise
-
+        try:
+            user = serializer.save()
+            logger.info(f"Utilisateur créé: {user.email} par {self.request.user.email}")
+        except Exception as e:
+            logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
+            raise
 
     def perform_update(self, serializer):
         try:
@@ -699,10 +750,105 @@ class UserViewSet(ModelViewSet):
             logger.info(f"Statistiques des utilisateurs récupérées pour {request.user.email}")
             return Response({
                 'stats': stats,
-                'message': 'Statistiques récupérées statistiquement avec succès'
+                'message': 'Statistiques récupérées avec succès'
             }, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des statistiques des utilisateurs: {str(e)}")
             return Response({
                 'error': 'Erreur lors de la récupération des statistiques'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DemandForecastView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrAgency]
+    authentication_classes = [JSONWebTokenAuthentication]
+
+    def get(self, request):
+        try:
+            location = request.query_params.get('location', 'Tunis')
+            carburant = request.query_params.get('carburant', 'électrique')
+            date = request.query_params.get('date')
+            
+            if not date:
+                logger.error(f"Prédiction de la demande échouée : date manquante pour {request.user.email}")
+                return Response({"error": "Date requise"}, status=status.HTTP_400_BAD_REQUEST)
+
+            holidays = [
+                "2025-01-01", "2025-01-14", "2025-03-20", "2025-04-09",
+                "2025-05-01", "2025-07-25", "2025-08-13", "2025-10-15",
+                "2025-03-30", "2025-03-31", "2025-04-01",
+                "2025-06-06", "2025-06-07", "2025-06-26"
+            ]
+            is_holiday = 1 if date in holidays else 0
+            is_family_event = 1 if date in ["2025-03-30", "2025-03-31", "2025-04-01", "2025-06-06", "2025-06-07"] else 0
+            is_rainy = 0
+            taux_occupation = 0.5
+            
+            csv_path = os.path.join(settings.BASE_DIR, 'data', 'demand_forecast_dataset_2025.csv')
+            if not os.path.exists(csv_path):
+                logger.error(f"Fichier CSV non trouvé : {csv_path}")
+                return Response({"error": "Données historiques non disponibles"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            context = [is_rainy, is_family_event, is_holiday, taux_occupation]
+            predicted_demand = ensemble_predict_demand(csv_path, location, carburant, context)
+            
+            if predicted_demand == 0:
+                logger.warning(f"Aucune prédiction pour {location} - {carburant}")
+                return Response({"error": f"Aucune donnée pour {location} - {carburant}"}, status=status.HTTP_404_NOT_FOUND)
+
+            logger.info(f"Prédiction réussie pour {location} - {carburant} le {date} : {predicted_demand} réservations")
+            return Response({
+                "location": location,
+                "carburant": carburant,
+                "date": date,
+                "predicted_demand": predicted_demand
+            }, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            logger.error(f"Erreur lors de la prédiction de la demande pour {request.user.email}: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RecommendationView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = [JSONWebTokenAuthentication]
+
+    def get(self, request):
+        try:
+            n_items = int(request.query_params.get('n_items', 5))
+            type_vehicule = request.query_params.get('type_vehicule', None)
+            if n_items < 1 or n_items > 20:
+                logger.error(f"Nombre d'items invalide ({n_items}) pour {request.user.email}")
+                return Response({"error": "n_items doit être entre 1 et 20"}, status=status.HTTP_400_BAD_REQUEST)
+
+            engine = RecommendationEngine()
+            recommendations = engine.recommend_vehicles(request.user.id, n_items=n_items)
+
+            if not recommendations:
+                logger.warning(f"Aucune recommandation pour l'utilisateur {request.user.email}")
+                return Response({"recommendations": []}, status=status.HTTP_200_OK)
+
+            if type_vehicule:
+                recommendations = [v for v in recommendations if v.get('type_vehicule') == type_vehicule]
+
+            recommendations_data = [
+                {
+                    "id": vehicle["id"],
+                    "marque": vehicle["marque"],
+                    "modele": vehicle["modele"],
+                    "carburant": vehicle["carburant"],
+                    "prix_par_jour": float(vehicle["prix_par_jour"]),
+                    "localisation": vehicle["localisation"],
+                    "type_vehicule": vehicle.get("type_vehicule", ""),
+                    "eco_score": float(engine.calculate_eco_score(vehicle["emissionsCO2"], vehicle["carburant"]))
+                }
+                for vehicle in recommendations[:n_items]
+            ]
+
+            logger.info(f"{len(recommendations_data)} recommandations générées pour {request.user.email}")
+            return Response({"recommendations": recommendations_data}, status=status.HTTP_200_OK)
+        
+        except ValueError:
+            logger.error(f"Paramètre n_items invalide pour {request.user.email}")
+            return Response({"error": "n_items doit être un entier valide"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Erreur lors de la génération des recommandations pour {request.user.email}: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -12,21 +12,18 @@ import AgencyManagement from './components/AgencyManagement';
 import Sidebar from './components/Sidebar';
 import ProtectedRoute from './components/ProtectedRoute';
 import UserManagement from './components/UserManagement';
+import DemandForecast from './components/DemandForecast';
+import RecommendationResults from './components/RecommendationResults';
+
+
 function App() {
     const [token, setToken] = useState('');
     const [user, setUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        console.log('App - Token:', !!token);
-        console.log('App - User:', user);
-        console.log('App - Mode:', 'ACCÈS RESTREINT PAR RÔLES');
-    }, [token, user]);
-
-    useEffect(() => {
         const initializeApp = () => {
             try {
-                console.log('🚀 Initialisation avec contrôle des permissions...');
                 const storedToken = localStorage.getItem('token');
                 if (storedToken) {
                     setToken(storedToken);
@@ -37,13 +34,11 @@ function App() {
                         const parsedUser = JSON.parse(storedUser);
                         setUser(parsedUser);
                     } catch (error) {
-                        console.error('❌ Erreur parsing user data:', error);
                         localStorage.removeItem('user');
                     }
                 }
-                console.log('✅ Application prête');
             } catch (error) {
-                console.error('❌ Erreur initialisation app:', error);
+                // Gérer les erreurs sans console.log en production
             } finally {
                 setIsLoading(false);
             }
@@ -53,7 +48,6 @@ function App() {
     }, []);
 
     const updateUser = useCallback((userData) => {
-        console.log('🔄 Mise à jour utilisateur:', userData);
         setUser(userData);
         if (userData) {
             localStorage.setItem('user', JSON.stringify(userData));
@@ -63,7 +57,6 @@ function App() {
     }, []);
 
     const handleLogout = useCallback(() => {
-        console.log('🚪 Déconnexion...');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setToken('');
@@ -71,7 +64,6 @@ function App() {
     }, []);
 
     const handleLogin = useCallback((newToken, userData) => {
-        console.log('🔑 Connexion...', { token: !!newToken, user: userData });
         setToken(newToken);
         setUser(userData);
         localStorage.setItem('token', newToken);
@@ -82,7 +74,7 @@ function App() {
 
     if (isLoading) {
         return (
-            <div className="loading-screen">
+            <div className="loading-screen" role="status" aria-live="polite">
                 <div className="loading-spinner">
                     <div className="spinner"></div>
                     <p>Chargement de VitaRenta...</p>
@@ -140,13 +132,13 @@ function App() {
                             }
                         />
                         <Route
-    path="/admin/users"
-    element={
-        <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
-            <UserManagement token={token} user={user} onLogout={handleLogout} />
-        </ProtectedRoute>
-    }
-/>
+                            path="/admin/users"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
+                                    <UserManagement token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
                         <Route
                             path="/admin/vehicules"
                             element={
@@ -164,51 +156,34 @@ function App() {
                             }
                         />
                         <Route
-                            path="/admin/users"
+                            path="/demand-prediction"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
-                                    <div className="admin-users-placeholder">
-                                        <div className="free-access-info">
-                                            <i className="fas fa-unlock-alt"></i>
-                                            <span>Accès réservé aux administrateurs</span>
-                                        </div>
-                                        <h1>🔧 Gestion des Utilisateurs</h1>
-                                        <p>Interface de gestion des utilisateurs accessible aux admins uniquement</p>
-                                        <div className="placeholder-features">
-                                            <div className="feature-item">
-                                                <i className="fas fa-users"></i>
-                                                <span>Consultation des utilisateurs</span>
-                                            </div>
-                                            <div className="feature-item">
-                                                <i className="fas fa-user-edit"></i>
-                                                <span>Modification des profils</span>
-                                            </div>
-                                            <div className="feature-item">
-                                                <i className="fas fa-user-shield"></i>
-                                                <span>Gestion des rôles</span>
-                                            </div>
-                                        </div>
-                                        <div className="error-actions">
-                                            <Link to="/dashboard" className="btn btn-primary">
-                                                Retour au tableau de bord
-                                            </Link>
-                                        </div>
-                                    </div>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['agent', 'admin']}>
+                                    <DemandForecast token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
                         />
                         <Route
+                            path="/recommendations"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agent', 'admin']}>
+                                    <RecommendationResults token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
+                       
+                        <Route
                             path="/unauthorized"
                             element={
-                                <div className="error-page">
+                                <div className="error-page" role="alert">
                                     <div className="error-content">
                                         <h1>🚫 Accès non autorisé</h1>
                                         <p>Vous n'avez pas les permissions nécessaires pour accéder à cette page.</p>
                                         <div className="error-actions">
-                                            <Link to="/" className="btn btn-primary">
+                                            <Link to="/" className="btn btn-primary" aria-label="Retour à l'accueil">
                                                 🏠 Retour à l'accueil
                                             </Link>
-                                            <Link to="/dashboard" className="btn btn-secondary">
+                                            <Link to="/dashboard" className="btn btn-secondary" aria-label="Tableau de bord">
                                                 📊 Tableau de bord
                                             </Link>
                                         </div>
@@ -219,18 +194,18 @@ function App() {
                         <Route
                             path="*"
                             element={
-                                <div className="error-page">
+                                <div className="error-page" role="alert">
                                     <div className="error-content">
                                         <h1>🔍 404 - Page non trouvée</h1>
                                         <p>La page que vous cherchez n'existe pas.</p>
                                         <div className="error-actions">
-                                            <Link to="/" className="btn btn-primary">
+                                            <Link to="/" className="btn btn-primary" aria-label="Retour à l'accueil">
                                                 🏠 Retour à l'accueil
                                             </Link>
-                                            <Link to="/dashboard" className="btn btn-secondary">
+                                            <Link to="/dashboard" className="btn btn-secondary" aria-label="Tableau de bord">
                                                 📊 Tableau de bord
                                             </Link>
-                                            <Link to="/vehicules" className="btn btn-secondary">
+                                            <Link to="/vehicules" className="btn btn-secondary" aria-label="Voir les véhicules">
                                                 🚗 Voir les véhicules
                                             </Link>
                                         </div>
@@ -240,11 +215,11 @@ function App() {
                         />
                     </Routes>
                 </main>
-                <footer className="footer">
+                <footer className="footer" role="contentinfo">
                     <div className="footer-content">
                         <div className="footer-main">
                             <div className="footer-brand">
-                                <span className="footer-logo">🚗</span>
+                                <span className="footer-logo" aria-hidden="true">🚗</span>
                                 <h3>VitaRenta</h3>
                                 <p>Votre partenaire de confiance pour la location de véhicules.</p>
                                 <div className="footer-access-info">
@@ -254,31 +229,33 @@ function App() {
                             <div className="footer-links">
                                 <div className="footer-section">
                                     <h4>Services</h4>
-                                    <Link to="/vehicules">Location de véhicules</Link>
-                                    <Link to="/agences">Agences</Link>
-                                    <Link to="/dashboard">Tableau de bord</Link>
-                                    <Link to="/profile">Profil</Link>
+                                    <Link to="/vehicules" aria-label="Location de véhicules">Location de véhicules</Link>
+                                    <Link to="/agences" aria-label="Agences">Agences</Link>
+                                    <Link to="/dashboard" aria-label="Tableau de bord">Tableau de bord</Link>
+                                    <Link to="/profile" aria-label="Profil">Profil</Link>
+                                    <Link to="/recommendations" aria-label="Recommandations">Recommandations</Link>
                                 </div>
                                 {user?.role === 'admin' && (
                                     <div className="footer-section">
                                         <h4>Gestion</h4>
-                                        <Link to="/agent/vehicules">Gestion véhicules</Link>
-                                        <Link to="/admin/agences">Admin agences</Link>
-                                        <Link to="/admin/vehicules">Admin véhicules</Link>
-                                        <Link to="/admin/users">Admin utilisateurs</Link>
+                                        <Link to="/agent/vehicules" aria-label="Gestion véhicules">Gestion véhicules</Link>
+                                        <Link to="/admin/agences" aria-label="Admin agences">Admin agences</Link>
+                                        <Link to="/admin/vehicules" aria-label="Admin véhicules">Admin véhicules</Link>
+                                        <Link to="/admin/users" aria-label="Admin utilisateurs">Admin utilisateurs</Link>
+                                        <Link to="/demand-prediction" aria-label="Prédictions">Prédictions</Link>
                                     </div>
                                 )}
                                 <div className="footer-section">
                                     <h4>Support</h4>
-                                    <a href="/contact">Contact</a>
-                                    <a href="/faq">FAQ</a>
-                                    <a href="/help">Aide</a>
+                                    <Link to="/contact" aria-label="Contact">Contact</Link>
+                                    <Link to="/faq" aria-label="FAQ">FAQ</Link>
+                                    <Link to="/help" aria-label="Aide">Aide</Link>
                                 </div>
                                 <div className="footer-section">
                                     <h4>Légal</h4>
-                                    <a href="/privacy">Confidentialité</a>
-                                    <a href="/terms">Conditions</a>
-                                    <a href="/cookies">Cookies</a>
+                                    <Link to="/privacy" aria-label="Confidentialité">Confidentialité</Link>
+                                    <Link to="/terms" aria-label="Conditions">Conditions</Link>
+                                    <Link to="/cookies" aria-label="Cookies">Cookies</Link>
                                 </div>
                             </div>
                         </div>
@@ -288,10 +265,18 @@ function App() {
                                 <span>🔒 Mode accès restreint activé</span>
                             </div>
                             <div className="footer-social">
-                                <a href="#" title="Facebook">📘</a>
-                                <a href="#" title="Twitter">🐦</a>
-                                <a href="#" title="Instagram">📷</a>
-                                <a href="#" title="LinkedIn">💼</a>
+                                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+                                    📘
+                                </a>
+                                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+                                    🐦
+                                </a>
+                                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                                    📷
+                                </a>
+                                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                                    💼
+                                </a>
                             </div>
                         </div>
                     </div>

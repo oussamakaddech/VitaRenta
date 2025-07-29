@@ -87,7 +87,10 @@ TEMPLATES = [
         },
     },
 ]
-
+DATASETS = {
+    'recommendation': os.path.join(BASE_DIR, 'data', 'recommendation_dataset_cars_2025.csv'),
+    'demand_forecast': os.path.join(BASE_DIR, 'data', 'demand_forecast_dataset_2025.csv'),
+}
 # Configuration de la base de données
 USE_SQLITE = os.getenv("USE_SQLITE", "False") == "True"
 FORCE_MONGODB = os.getenv("FORCE_MONGODB", "True") == "True"
@@ -97,6 +100,7 @@ if USE_SQLITE and not FORCE_MONGODB:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
+            
         }
     }
     print("🔄 Utilisation de SQLite")
@@ -284,3 +288,9 @@ DECIMAL_SEPARATOR = ","
 USE_THOUSAND_SEPARATOR = True
 THOUSAND_SEPARATOR = " "
 NUMBER_GROUPING = 3
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+OPENWEATHER_API_KEY = 'bd5e378503939ddaee76f12ad7a97608'  # Remplacez par une clé valide ou laissez vide pour désactiver

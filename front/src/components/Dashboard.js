@@ -120,7 +120,6 @@ const StatCard = ({
         return 'trend-stable';
     };
 
-    // Sparkles aléatoires pour effet visuel
     const sparkles = Array.from({ length: 5 }, (_, i) => ({
         id: i,
         top: Math.random() * 100,
@@ -147,8 +146,8 @@ const StatCard = ({
                     {number}
                     {trendValue && (
                         <span style={{ fontSize: '1rem', opacity: 0.8 }}>
-              {trendValue > 0 ? '+' : ''}{trendValue}%
-            </span>
+                            {trendValue > 0 ? '+' : ''}{trendValue}%
+                        </span>
                     )}
                 </div>
 
@@ -196,31 +195,96 @@ const StatsDashboard = ({ token, user, onLogout }) => {
         revenue: 0,
         utilisation: 0
     });
-
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Vérification de l'authentification
-    if (!token) {
+    // Vérification de l'authentification et du rôle
+    if (!token || !user) {
         return <Navigate to="/login" replace />;
     }
+    if (!['admin', 'agence'].includes(user.role)) {
+        return <Navigate to="/unauthorized" replace />;
+    }
+
+    // Fonction pour rafraîchir le token
+    const refreshToken = async () => {
+        try {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                throw new Error('No refresh token available');
+            }
+            const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
+                refresh: refreshToken
+            });
+            const newToken = response.data.access;
+            localStorage.setItem('access_token', newToken);
+            return newToken;
+        } catch (error) {
+            console.error('Erreur lors du rafraîchissement du token:', error);
+            onLogout();
+            return null;
+        }
+    };
 
     // Chargement des statistiques
     useEffect(() => {
         const fetchStats = async () => {
             try {
                 setLoading(true);
+                let accessToken = token;
 
-                // Simulation de données pour démonstration
-                // Remplacez par vos vraies APIs
-                const [vehiculesResponse, reservationsResponse] = await Promise.all([
-                    axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    }),
-                    axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    }).catch(() => ({ data: { total: 0, revenue: 0 } }))
-                ]);
+                // Tentative de requête avec le token actuel
+                let vehiculesResponse, reservationsResponse;
+                try {
+                    [vehiculesResponse, reservationsResponse] = await Promise.all([
+                        axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
+                            headers: { Authorization: `Bearer ${accessToken}` }
+                        }).catch(() => ({
+                            data: {
+                                total: 0,
+                                disponibles: 0,
+                                loues: 0,
+                                maintenance: 0,
+                                hors_service: 0,
+                                par_carburant: {},
+                                prix_moyen: 0
+                            }
+                        })),
+                        axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
+                            headers: { Authorization: `Bearer ${accessToken}` }
+                        }).catch(() => ({ data: { total: 0, revenus_total: 0 } }))
+                    ]);
+                } catch (error) {
+                    if (error.response?.status === 401) {
+                        // Tentative de rafraîchissement du token
+                        accessToken = await refreshToken();
+                        if (!accessToken) {
+                            setError('Session expirée. Veuillez vous reconnecter.');
+                            return;
+                        }
+                        // Nouvelle tentative avec le token rafraîchi
+                        [vehiculesResponse, reservationsResponse] = await Promise.all([
+                            axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
+                                headers: { Authorization: `Bearer ${accessToken}` }
+                            }).catch(() => ({
+                                data: {
+                                    total: 0,
+                                    disponibles: 0,
+                                    loues: 0,
+                                    maintenance: 0,
+                                    hors_service: 0,
+                                    par_carburant: {},
+                                    prix_moyen: 0
+                                }
+                            })),
+                            axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
+                                headers: { Authorization: `Bearer ${accessToken}` }
+                            }).catch(() => ({ data: { total: 0, revenus_total: 0 } }))
+                        ]);
+                    } else {
+                        throw error;
+                    }
+                }
 
                 const vehiculesData = vehiculesResponse.data;
                 const reservationsData = reservationsResponse.data;
@@ -231,25 +295,22 @@ const StatsDashboard = ({ token, user, onLogout }) => {
                     loues: vehiculesData.loues || 0,
                     maintenance: vehiculesData.maintenance || 0,
                     reservations: reservationsData.total || 0,
-                    revenue: reservationsData.revenue || 0,
+                    revenue: reservationsData.revenus_total || 0,
                     utilisation: vehiculesData.total > 0 ?
                         Math.round((vehiculesData.loues / vehiculesData.total) * 100) : 0
                 });
-
             } catch (error) {
                 console.error('Erreur lors du chargement des statistiques:', error);
-                setError('Impossible de charger les statistiques');
+                setError(error.response?.data?.error || 'Impossible de charger certaines statistiques');
             } finally {
                 setLoading(false);
             }
         };
 
         fetchStats();
-
-        // Actualisation automatique toutes les 30 secondes
         const interval = setInterval(fetchStats, 30000);
         return () => clearInterval(interval);
-    }, [token]);
+    }, [token, onLogout]);
 
     // Données simulées pour les graphiques
     const vehiclesTrend = [45, 48, 52, 49, 55, 58, 60];
