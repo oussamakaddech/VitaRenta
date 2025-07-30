@@ -34,7 +34,7 @@ const DemandForecast = ({ token, user, onLogout }) => {
     setError('');
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/demand-forecast/`, {
+      const response = await axios.get(`${API_BASE_URL}/api/demand-forecast/`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { location: selectedLocation, carburant: selectedFuel, date: selectedDate },
         timeout: 10000,

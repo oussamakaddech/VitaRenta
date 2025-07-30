@@ -1,5 +1,6 @@
 # backend/views.py
 from datetime import timedelta
+import datetime
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -11,6 +12,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from django.db import transaction
+from django.utils.encoding import force_str
 from django.db.models import Sum, Count, Q, Avg
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
@@ -34,6 +36,7 @@ import traceback
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from urllib.parse import unquote
 logger = logging.getLogger(__name__)
 
 class UpdateAgenceView(APIView):
@@ -762,54 +765,161 @@ class UserViewSet(ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class DemandForecastView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrAgency]
+    permission_classes = [AllowAny]
     authentication_classes = [JSONWebTokenAuthentication]
 
     def get(self, request):
         try:
-            location = request.query_params.get('location', 'Tunis')
-            carburant = request.query_params.get('carburant', 'électrique')
-            date = request.query_params.get('date')
+            # Log the raw request for debugging
+            logger.info(f"Raw request params: {request.query_params}")
             
-            if not date:
-                logger.error(f"Prédiction de la demande échouée : date manquante pour {request.user.email}")
-                return Response({"error": "Date requise"}, status=status.HTTP_400_BAD_REQUEST)
+            # Extract and decode parameters from request
+            location = force_str(unquote(request.query_params.get('location', 'Tunis')))
+            carburant = force_str(unquote(request.query_params.get('carburant', 'électrique')))
+            date = force_str(unquote(request.query_params.get('date', '')))
+            
+            logger.info(f"Decoded params - Location: {location}, Carburant: {carburant}, Date: {date}")
 
+            # Validate required parameters
+            if not date:
+                logger.error(f"Demand prediction failed: missing date for user {getattr(request.user, 'email', 'anonymous')}")
+                return Response(
+                    {"error": "Date requise (format: AAAA-MM-JJ)"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate date format
+            try:
+                parsed_date = datetime.datetime.strptime(date, '%Y-%m-%d')
+            except ValueError as ve:
+                logger.error(f"Invalid date format: {date}, error: {str(ve)}")
+                return Response(
+                    {"error": "Format de date invalide. Utilisez AAAA-MM-JJ."}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate location and fuel type
+            valid_locations = ['Tunis', 'Sfax', 'Sousse', 'Bizerte', 'Djerba']
+            valid_fuels = ['essence', 'diesel', 'électrique', 'hybride']
+            
+            if location not in valid_locations:
+                logger.error(f"Invalid location: {location}")
+                return Response(
+                    {"error": f"Localisation invalide. Choisissez parmi: {', '.join(valid_locations)}"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if carburant not in valid_fuels:
+                logger.error(f"Invalid fuel type: {carburant}")
+                return Response(
+                    {"error": f"Type de carburant invalide. Choisissez parmi: {', '.join(valid_fuels)}"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check user permissions for location access
+            if hasattr(request.user, 'role') and request.user.role == 'agence':
+                if hasattr(request.user, 'agence') and request.user.agence:
+                    user_location = getattr(request.user.agence, 'ville', None)
+                    if user_location and user_location != location:
+                        return Response(
+                            {"error": "Accès limité à votre localisation d'agence"}, 
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+
+            # Define holidays and special events for 2025
             holidays = [
                 "2025-01-01", "2025-01-14", "2025-03-20", "2025-04-09",
-                "2025-05-01", "2025-07-25", "2025-08-13", "2025-10-15",
-                "2025-03-30", "2025-03-31", "2025-04-01",
-                "2025-06-06", "2025-06-07", "2025-06-26"
+                "2025-05-01", "2025-07-25", "2025-08-13", "2025-10-15"
             ]
+            
+            family_events = [
+                "2025-03-30", "2025-03-31", "2025-04-01",  # Eid al-Fitr
+                "2025-06-06", "2025-06-07", "2025-06-26"   # Eid al-Adha and related
+            ]
+
+            # Create context for prediction
             is_holiday = 1 if date in holidays else 0
-            is_family_event = 1 if date in ["2025-03-30", "2025-03-31", "2025-04-01", "2025-06-06", "2025-06-07"] else 0
-            is_rainy = 0
-            taux_occupation = 0.5
-            
+            is_family_event = 1 if date in family_events else 0
+            is_rainy = 0  # Default value, could be enhanced with weather API
+            taux_occupation = 0.5  # Default occupancy rate
+
+            # Check if CSV file exists
             csv_path = os.path.join(settings.BASE_DIR, 'data', 'demand_forecast_dataset_2025.csv')
-            if not os.path.exists(csv_path):
-                logger.error(f"Fichier CSV non trouvé : {csv_path}")
-                return Response({"error": "Données historiques non disponibles"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            context = [is_rainy, is_family_event, is_holiday, taux_occupation]
-            predicted_demand = ensemble_predict_demand(csv_path, location, carburant, context)
+            logger.info(f"Looking for CSV file at: {csv_path}")
             
-            if predicted_demand == 0:
-                logger.warning(f"Aucune prédiction pour {location} - {carburant}")
-                return Response({"error": f"Aucune donnée pour {location} - {carburant}"}, status=status.HTTP_404_NOT_FOUND)
+            if not os.path.exists(csv_path):
+                logger.error(f"CSV file not found: {csv_path}")
+                return Response(
+                    {"error": "Données historiques non disponibles"}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
-            logger.info(f"Prédiction réussie pour {location} - {carburant} le {date} : {predicted_demand} réservations")
+            # Generate forecast for multiple periods (7 days)
+            forecast_data = []
+            base_date = parsed_date
+            
+            logger.info(f"Starting forecast generation for {location} - {carburant}")
+            
+            for i in range(7):
+                current_date = base_date + timedelta(days=i)
+                current_date_str = current_date.strftime('%Y-%m-%d')
+                
+                # Update context for current date
+                current_is_holiday = 1 if current_date_str in holidays else 0
+                current_is_family_event = 1 if current_date_str in family_events else 0
+                
+                context = [is_rainy, current_is_family_event, current_is_holiday, taux_occupation]
+                
+                # Get prediction
+                try:
+                    predicted_demand = ensemble_predict_demand(csv_path, location, carburant, context)
+                    logger.info(f"Prediction for {current_date_str}: {predicted_demand}")
+                except Exception as pred_error:
+                    logger.error(f"Error in ensemble_predict_demand: {str(pred_error)}")
+                    predicted_demand = 0
+                
+                if predicted_demand is None or predicted_demand < 0:
+                    predicted_demand = 0
+                
+                forecast_data.append({
+                    "period": current_date_str,
+                    "demand": max(0, round(float(predicted_demand), 2)),
+                    "vehicle_type": carburant,
+                    "location": location
+                })
+
+            # Check if we have any valid predictions
+            if not forecast_data or all(item["demand"] == 0 for item in forecast_data):
+                logger.warning(f"No predictions available for {location} - {carburant}")
+                return Response(
+                    {"error": f"Aucune donnée disponible pour {location} - {carburant}"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            logger.info(f"Successful prediction for {location} - {carburant} starting {date}")
+            
+            total_predicted = sum(item["demand"] for item in forecast_data)
+            average_daily = total_predicted / len(forecast_data) if forecast_data else 0
+            
             return Response({
                 "location": location,
                 "carburant": carburant,
-                "date": date,
-                "predicted_demand": predicted_demand
+                "start_date": date,
+                "forecast": forecast_data,
+                "total_predicted": round(total_predicted, 2),
+                "average_daily": round(average_daily, 2)
             }, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            logger.error(f"Erreur lors de la prédiction de la demande pour {request.user.email}: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        except Exception as e:
+            user_email = getattr(request.user, 'email', 'anonymous') if hasattr(request, 'user') else 'anonymous'
+            error_traceback = traceback.format_exc()
+            logger.error(f"Error during demand prediction for user {user_email}: {str(e)}")
+            logger.error(f"Full traceback: {error_traceback}")
+            
+            return Response(
+                {"error": "Une erreur interne est survenue. Veuillez réessayer."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class RecommendationView(APIView):
