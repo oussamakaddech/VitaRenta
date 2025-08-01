@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import debounce from 'lodash/debounce';
 import './VehiculeList.css';
@@ -6,6 +7,7 @@ import './VehiculeList.css';
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const VehiculeList = ({ token, user, onLogout }) => {
+    const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
     const [filteredVehicles, setFilteredVehicles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -13,14 +15,13 @@ const VehiculeList = ({ token, user, onLogout }) => {
     const [success, setSuccess] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({
-        type: '',
+        marque: '',
         carburant: '',
         prix_min: '',
         prix_max: '',
         places_min: '',
         localisation: '',
-        statut: '', // Supprimer le filtre par défaut
-        marque: '',
+        statut: '',
         transmission: '',
     });
     const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -29,6 +30,10 @@ const VehiculeList = ({ token, user, onLogout }) => {
         date_debut: '',
         date_fin: '',
         notes: '',
+        assurance_complete: false,
+        conducteur_supplementaire: false,
+        gps: false,
+        siege_enfant: false,
     });
     const [reservationLoading, setReservationLoading] = useState(false);
     const [viewMode, setViewMode] = useState('grid');
@@ -48,49 +53,62 @@ const VehiculeList = ({ token, user, onLogout }) => {
     );
 
     const fetchVehicles = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
+    try {
+        setLoading(true);
+        setError(null);
+        let url = `${API_BASE_URL}/api/vehicules/`;
+        const params = [];
+        if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
+        if (filters.marque) params.push(`marque=${encodeURIComponent(filters.marque)}`);
+        if (filters.carburant) params.push(`carburant=${filters.carburant}`);
+        if (filters.localisation) params.push(`localisation=${encodeURIComponent(filters.localisation)}`);
+        if (filters.statut) params.push(`statut=${filters.statut}`);
+        if (filters.prix_min) params.push(`prix_min=${filters.prix_min}`);
+        if (filters.prix_max) params.push(`prix_max=${filters.prix_max}`);
+        if (filters.places_min) params.push(`places_min=${filters.places_min}`);
+        if (filters.transmission) params.push(`transmission=${filters.transmission}`);
+        if (params.length) url += `?${params.join('&')}`;
 
-            let url = `${API_BASE_URL}/api/vehicules/`;
-            const params = [];
+        console.log('Fetching vehicles from:', url);
+        const response = await axios.get(url, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            timeout: 10000,
+        });
 
-            if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
-            if (filters.type) params.push(`type=${filters.type}`);
-            if (filters.carburant) params.push(`carburant=${filters.carburant}`);
-            if (filters.localisation) params.push(`localisation=${filters.localisation}`);
-            if (filters.statut) params.push(`statut=${filters.statut}`);
-            if (filters.prix_min) params.push(`prix_min=${filters.prix_min}`);
-            if (filters.prix_max) params.push(`prix_max=${filters.prix_max}`);
-            if (filters.places_min) params.push(`places_min=${filters.places_min}`);
-            if (filters.marque) params.push(`marque=${filters.marque}`);
-            if (filters.transmission) params.push(`transmission=${filters.transmission}`);
+        console.log('API response:', response.data);
+        const vehiclesData = Array.isArray(response.data)
+            ? response.data.map(vehicle => ({
+                ...vehicle,
+                image: vehicle.image ? `${API_BASE_URL}/${vehicle.image}` : 'https://via.placeholder.com/400x220?text=Aucune+image'
+            }))
+            : Array.isArray(response.data.results)
+            ? response.data.results.map(vehicle => ({
+                ...vehicle,
+                image: vehicle.image ? `${API_BASE_URL}/${vehicle.image}` : 'https://via.placeholder.com/400x220?text=Aucune+image'
+            }))
+            : [];
 
-            if (params.length) url += `?${params.join('&')}`;
-
-            console.log('Fetching vehicles from:', url);
-            const response = await axios.get(url, {
-                headers: token ? { Authorization: `Token ${token}` } : {},
-            });
-
-            console.log('API response:', response.data);
-            const vehiclesData = Array.isArray(response.data)
-                ? response.data
-                : Array.isArray(response.data.results)
-                    ? response.data.results
-                    : [];
-            console.log('Processed vehicles:', vehiclesData);
-            setVehicles(vehiclesData);
-            setFilteredVehicles(vehiclesData);
-        } catch (err) {
-            console.error('Erreur lors du chargement des véhicules:', err.response?.data || err);
-            setError('Erreur lors du chargement des véhicules');
-            setVehicles([]);
-            setFilteredVehicles([]);
-        } finally {
-            setLoading(false);
+        console.log('Processed vehicles:', vehiclesData);
+        setVehicles(vehiclesData);
+        setFilteredVehicles(vehiclesData);
+    } catch (err) {
+        console.error('Erreur lors du chargement des véhicules:', err.response?.data || err);
+        const status = err.response?.status;
+        let errorMsg = 'Erreur lors du chargement des véhicules';
+        if (status === 401) {
+            errorMsg = 'Session expirée. Veuillez vous reconnecter.';
+            onLogout();
+            navigate('/login');
+        } else if (status === 403) {
+            errorMsg = 'Accès non autorisé.';
         }
-    }, [searchTerm, filters, token]);
+        setError(errorMsg);
+        setVehicles([]);
+        setFilteredVehicles([]);
+    } finally {
+        setLoading(false);
+    }
+}, [searchTerm, filters, token, onLogout, navigate]);
 
     const sortVehicles = useCallback((vehiclesList, sortOption) => {
         if (!Array.isArray(vehiclesList)) return [];
@@ -102,8 +120,6 @@ const VehiculeList = ({ token, user, onLogout }) => {
                     return (b.prix_par_jour || 0) - (a.prix_par_jour || 0);
                 case 'marque':
                     return (a.marque || '').localeCompare(b.marque || '');
-                case 'type':
-                    return (a.type || '').localeCompare(b.type || '');
                 case 'carburant':
                     return (a.carburant || '').localeCompare(b.carburant || '');
                 case 'places':
@@ -134,14 +150,13 @@ const VehiculeList = ({ token, user, onLogout }) => {
 
     const resetFilters = () => {
         setFilters({
-            type: '',
+            marque: '',
             carburant: '',
             prix_min: '',
             prix_max: '',
             places_min: '',
             localisation: '',
             statut: '',
-            marque: '',
             transmission: '',
         });
         setSearchTerm('');
@@ -157,6 +172,11 @@ const VehiculeList = ({ token, user, onLogout }) => {
     };
 
     const openReservationModal = (vehicle) => {
+        if (!token || !user?.id) {
+            setError('Vous devez être connecté pour réserver un véhicule.');
+            navigate('/login');
+            return;
+        }
         setSelectedVehicle(vehicle);
         setShowReservationModal(true);
     };
@@ -168,6 +188,10 @@ const VehiculeList = ({ token, user, onLogout }) => {
             date_debut: '',
             date_fin: '',
             notes: '',
+            assurance_complete: false,
+            conducteur_supplementaire: false,
+            gps: false,
+            siege_enfant: false,
         });
     };
 
@@ -177,8 +201,37 @@ const VehiculeList = ({ token, user, onLogout }) => {
         }
         const startDate = new Date(reservationData.date_debut);
         const endDate = new Date(reservationData.date_fin);
-        const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) || 1;
-        return days * selectedVehicle.prix_par_jour;
+        const days = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
+        let total = days * selectedVehicle.prix_par_jour;
+        if (reservationData.assurance_complete) total += 20 * days;
+        if (reservationData.conducteur_supplementaire) total += 10 * days;
+        if (reservationData.gps) total += 5 * days;
+        if (reservationData.siege_enfant) total += 8 * days;
+        return total;
+    };
+
+    const validateReservationData = (data, vehicle) => {
+        const errors = [];
+        if (!data.date_debut) errors.push('Date de début requise');
+        if (!data.date_fin) errors.push('Date de fin requise');
+        if (!vehicle?.id) errors.push('Véhicule requis');
+        if (vehicle?.statut !== 'disponible') errors.push('Le véhicule n\'est pas disponible');
+
+        const startDate = new Date(data.date_debut);
+        const endDate = new Date(data.date_fin);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            errors.push('Dates invalides');
+        } else {
+            if (startDate < now) errors.push('La date de début ne peut pas être dans le passé');
+            if (startDate >= endDate) errors.push('La date de fin doit être après la date de début');
+            const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+            if (diffDays > 30) errors.push('La réservation ne peut pas dépasser 30 jours');
+        }
+
+        return errors;
     };
 
     const handleReservation = async () => {
@@ -186,28 +239,16 @@ const VehiculeList = ({ token, user, onLogout }) => {
             setError('Aucun véhicule sélectionné');
             return;
         }
-        if (!reservationData.date_debut || !reservationData.date_fin) {
-            setError('Veuillez remplir les dates de début et de fin');
-            return;
-        }
         if (!token || !user?.id) {
             setError('Vous devez être connecté pour effectuer une réservation');
+            onLogout();
+            navigate('/login');
             return;
         }
 
-        const startDate = new Date(reservationData.date_debut);
-        const endDate = new Date(reservationData.date_fin);
-
-        if (isNaN(startDate) || isNaN(endDate)) {
-            setError('Dates invalides');
-            return;
-        }
-        if (startDate >= endDate) {
-            setError('La date de fin doit être postérieure à la date de début');
-            return;
-        }
-        if (startDate < new Date()) {
-            setError('La date de début ne peut pas être dans le passé');
+        const errors = validateReservationData(reservationData, selectedVehicle);
+        if (errors.length > 0) {
+            setError(errors.join('; '));
             return;
         }
 
@@ -216,31 +257,75 @@ const VehiculeList = ({ token, user, onLogout }) => {
             setError(null);
 
             const reservationPayload = {
-                vehicule_id: selectedVehicle.id,
+                vehicule_id: String(selectedVehicle.id),
                 date_debut: new Date(reservationData.date_debut).toISOString(),
                 date_fin: new Date(reservationData.date_fin).toISOString(),
-                user_id: user.id,
                 commentaires: reservationData.notes || '',
+                assurance_complete: reservationData.assurance_complete,
+                conducteur_supplementaire: reservationData.conducteur_supplementaire,
+                gps: reservationData.gps,
+                siege_enfant: reservationData.siege_enfant,
             };
 
             console.log('Reservation payload:', reservationPayload);
-            const config = token ? { headers: { Authorization: `Token ${token}` } } : {};
-            const response = await axios.post(`${API_BASE_URL}/api/reservations/`, reservationPayload, config);
-            console.log('Reservation response:', response.data);
 
+            const response = await axios.post(
+                `${API_BASE_URL}/api/reservations/`,
+                reservationPayload,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 10000,
+                }
+            );
+
+            console.log('Reservation response:', response.data);
             setSuccess('Réservation effectuée avec succès !');
             closeReservationModal();
-            fetchVehicles();
+            await fetchVehicles();
             showSuccessNotification('Réservation confirmée !');
         } catch (err) {
-            console.error('Erreur lors de la réservation:', err.response?.data || err);
-            setError(
-                err.response?.data?.non_field_errors?.[0] ||
-                err.response?.data?.vehicule_id?.[0] ||
-                err.response?.data?.detail ||
-                JSON.stringify(err.response?.data) ||
-                'Erreur lors de la réservation. Vérifiez les données et réessayez.'
-            );
+            console.error('Erreur lors de la réservation:', err);
+            let errorMessage = 'Erreur lors de la réservation';
+            if (err.response) {
+                const { status, data } = err.response;
+                switch (status) {
+                    case 401:
+                        errorMessage = 'Session expirée. Veuillez vous reconnecter.';
+                        onLogout();
+                        navigate('/login');
+                        break;
+                    case 403:
+                        errorMessage = 'Vous n\'êtes pas autorisé à effectuer cette action.';
+                        break;
+                    case 400:
+                        if (data.non_field_errors) {
+                            errorMessage = data.non_field_errors[0];
+                        } else if (data.vehicule_id) {
+                            errorMessage = `Véhicule : ${data.vehicule_id[0]}`;
+                        } else if (data.date_debut) {
+                            errorMessage = `Date de début : ${data.date_debut[0]}`;
+                        } else if (data.date_fin) {
+                            errorMessage = `Date de fin : ${data.date_fin[0]}`;
+                        } else {
+                            errorMessage = Object.values(data)[0]?.[0] || 'Données invalides';
+                        }
+                        break;
+                    case 404:
+                        errorMessage = 'Véhicule non trouvé.';
+                        break;
+                    case 500:
+                        errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.';
+                        break;
+                    default:
+                        errorMessage = data.detail || 'Erreur inconnue';
+                }
+            } else if (err.request) {
+                errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion internet.';
+            }
+            setError(errorMessage);
         } finally {
             setReservationLoading(false);
         }
@@ -250,11 +335,11 @@ const VehiculeList = ({ token, user, onLogout }) => {
         const notification = document.createElement('div');
         notification.className = 'vehicule-success-notification';
         notification.innerHTML = `
-      <div class="vehicule-success-content">
-        <i class="fas fa-check-circle vehicule-success-icon"></i>
-        <span class="vehicule-success-text">${message}</span>
-      </div>
-    `;
+            <div class="vehicule-success-content">
+                <i class="fas fa-check-circle vehicule-success-icon"></i>
+                <span class="vehicule-success-text">${message}</span>
+            </div>
+        `;
         document.body.appendChild(notification);
         setTimeout(() => notification.remove(), 3000);
     };
@@ -311,9 +396,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                 {user.first_name ? user.first_name.charAt(0) : 'U'}
                             </div>
                             <div className="vehicule-user-details">
-                <span className="vehicule-user-name">
-                  {user.first_name} {user.last_name}
-                </span>
+                                <span className="vehicule-user-name">
+                                    {user.first_name} {user.last_name}
+                                </span>
                                 <span className="vehicule-user-role">Client</span>
                             </div>
                             <div className="vehicule-stats-compact">
@@ -404,20 +489,15 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                 <div className="vehicule-form-group">
                                     <label className="vehicule-form-label">
                                         <i className="fas fa-car vehicule-label-icon"></i>
-                                        Type de véhicule
+                                        Marque
                                     </label>
-                                    <select
-                                        className="vehicule-sort-select"
-                                        value={filters.type}
-                                        onChange={(e) => handleFilterChange('type', e.target.value)}
-                                    >
-                                        <option value="">Tous les types</option>
-                                        <option value="berline">Berline</option>
-                                        <option value="suv">SUV</option>
-                                        <option value="compact">Compact</option>
-                                        <option value="luxe">Luxe</option>
-                                        <option value="utilitaire">Utilitaire</option>
-                                    </select>
+                                    <input
+                                        type="text"
+                                        className="vehicule-input"
+                                        placeholder="Ex: Toyota"
+                                        value={filters.marque}
+                                        onChange={(e) => handleFilterChange('marque', e.target.value)}
+                                    />
                                 </div>
                                 <div className="vehicule-form-group">
                                     <label className="vehicule-form-label">
@@ -505,6 +585,21 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                         <option value="hors_service">Hors service</option>
                                     </select>
                                 </div>
+                                <div className="vehicule-form-group">
+                                    <label className="vehicule-form-label">
+                                        <i className="fas fa-cog vehicule-label-icon"></i>
+                                        Transmission
+                                    </label>
+                                    <select
+                                        className="vehicule-sort-select"
+                                        value={filters.transmission}
+                                        onChange={(e) => handleFilterChange('transmission', e.target.value)}
+                                    >
+                                        <option value="">Tous</option>
+                                        <option value="manuelle">Manuelle</option>
+                                        <option value="automatique">Automatique</option>
+                                    </select>
+                                </div>
                                 <div className="vehicule-filter-actions">
                                     <button className="vehicule-btn-secondary" onClick={resetFilters}>
                                         <i className="fas fa-undo"></i> Réinitialiser
@@ -530,7 +625,6 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                     <option value="prix_asc">Prix croissant</option>
                                     <option value="prix_desc">Prix décroissant</option>
                                     <option value="marque">Marque</option>
-                                    <option value="type">Type</option>
                                     <option value="carburant">Carburant</option>
                                     <option value="places">Nombre de places</option>
                                     <option value="recent">Plus récent</option>
@@ -564,31 +658,33 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                         {paginatedVehicles.map((vehicle) => (
                                             <div key={vehicle.id} className="vehicule-vehicle-card">
                                                 <div className="vehicule-vehicle-image">
-                                                    <img
-                                                        src={vehicle.image || '/api/placeholder/400/220'}
-                                                        alt={`${vehicle.marque} ${vehicle.modele}`}
-                                                    />
+    <img
+        src={vehicle.image}
+        alt={`${vehicle.marque} ${vehicle.modele}`}
+        onError={(e) => (e.target.src = 'https://via.placeholder.com/400x220?text=Image+non+disponible')}
+        className="vehicule-image"
+    />
                                                     <div className="vehicule-vehicle-overlay">
-                                                        <button
-                                                            className={`vehicule-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
-                                                            onClick={() => toggleFavorite(vehicle.id)}
-                                                        >
-                                                            <i className="fas fa-heart"></i>
-                                                        </button>
-                                                        <button
-                                                            className="vehicule-details-btn"
-                                                            onClick={() => setShowVehicleDetails(vehicle)}
-                                                        >
-                                                            <i className="fas fa-info"></i>
-                                                        </button>
-                                                    </div>
+        <button
+            className={`vehicule-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
+            onClick={() => toggleFavorite(vehicle.id)}
+        >
+            <i className="fas fa-heart"></i>
+        </button>
+        <button
+            className="vehicule-details-btn"
+            onClick={() => setShowVehicleDetails(vehicle)}
+        >
+            <i className="fas fa-info"></i>
+        </button>
+    </div>
                                                     <div className="vehicule-vehicle-badges">
-                            <span className={`fuel-badge fuel-${vehicle.carburant?.toLowerCase() || 'essence'}`}>
-                              {vehicle.carburant || 'Essence'}
-                            </span>
+                                                        <span className={`fuel-badge fuel-${vehicle.carburant?.toLowerCase() || 'essence'}`}>
+                                                            {vehicle.carburant || 'Essence'}
+                                                        </span>
                                                         <span className={`status-badge status-${vehicle.statut?.toLowerCase() || 'disponible'}`}>
-                              {vehicle.statut || 'Disponible'}
-                            </span>
+                                                            {vehicle.statut || 'Disponible'}
+                                                        </span>
                                                     </div>
                                                 </div>
                                                 <div className="vehicule-vehicle-content">
@@ -596,10 +692,6 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                                         <h3 className="vehicule-vehicle-title">
                                                             {vehicle.marque || 'Marque'} {vehicle.modele || 'Modèle'}
                                                         </h3>
-                                                        <div className="vehicule-vehicle-type">
-                                                            <i className="fas fa-car"></i>
-                                                            <span>{vehicle.type || 'Type'}</span>
-                                                        </div>
                                                     </div>
                                                     <div className="vehicule-vehicle-specs">
                                                         <div className="vehicule-spec-item">
@@ -699,16 +791,16 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                             <span className="vehicule-info-value">{selectedVehicle.prix_par_jour}€</span>
                                         </div>
                                         <div className="vehicule-info-item">
-                                            <span className="vehicule-info-label">Type:</span>
-                                            <span className="vehicule-info-value">{selectedVehicle.type}</span>
-                                        </div>
-                                        <div className="vehicule-info-item">
                                             <span className="vehicule-info-label">Carburant:</span>
                                             <span className="vehicule-info-value">{selectedVehicle.carburant}</span>
                                         </div>
                                         <div className="vehicule-info-item">
                                             <span className="vehicule-info-label">Places:</span>
                                             <span className="vehicule-info-value">{selectedVehicle.nombre_places}</span>
+                                        </div>
+                                        <div className="vehicule-info-item">
+                                            <span className="vehicule-info-label">Transmission:</span>
+                                            <span className="vehicule-info-value">{selectedVehicle.transmission}</span>
                                         </div>
                                     </div>
                                     <div className="vehicule-form-grid">
@@ -748,24 +840,83 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                                 min={reservationData.date_debut || new Date().toISOString().split('T')[0]}
                                             />
                                         </div>
-                                    </div>
-                                    <div className="vehicule-form-group">
-                                        <label className="vehicule-form-label">
-                                            <i className="fas fa-sticky-note vehicule-label-icon"></i>
-                                            Notes (optionnel)
-                                        </label>
-                                        <textarea
-                                            className="vehicule-input"
-                                            placeholder="Informations supplémentaires..."
-                                            value={reservationData.notes}
-                                            onChange={(e) =>
-                                                setReservationData((prev) => ({
-                                                    ...prev,
-                                                    notes: e.target.value,
-                                                }))
-                                            }
-                                            rows={3}
-                                        />
+                                        <div className="vehicule-form-group">
+                                            <label className="vehicule-form-label">
+                                                <i className="fas fa-sticky-note vehicule-label-icon"></i>
+                                                Notes (optionnel)
+                                            </label>
+                                            <textarea
+                                                className="vehicule-input"
+                                                placeholder="Informations supplémentaires..."
+                                                value={reservationData.notes}
+                                                onChange={(e) =>
+                                                    setReservationData((prev) => ({
+                                                        ...prev,
+                                                        notes: e.target.value,
+                                                    }))
+                                                }
+                                                rows={3}
+                                            />
+                                        </div>
+                                        <div className="vehicule-form-group">
+                                            <label className="vehicule-form-label">
+                                                Options supplémentaires
+                                            </label>
+                                            <div className="vehicule-checkbox-group">
+                                                <label>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={reservationData.assurance_complete}
+                                                        onChange={(e) =>
+                                                            setReservationData((prev) => ({
+                                                                ...prev,
+                                                                assurance_complete: e.target.checked,
+                                                            }))
+                                                        }
+                                                    />
+                                                    Assurance complète (20€/jour)
+                                                </label>
+                                                <label>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={reservationData.conducteur_supplementaire}
+                                                        onChange={(e) =>
+                                                            setReservationData((prev) => ({
+                                                                ...prev,
+                                                                conducteur_supplementaire: e.target.checked,
+                                                            }))
+                                                        }
+                                                    />
+                                                    Conducteur supplémentaire (10€/jour)
+                                                </label>
+                                                <label>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={reservationData.gps}
+                                                        onChange={(e) =>
+                                                            setReservationData((prev) => ({
+                                                                ...prev,
+                                                                gps: e.target.checked,
+                                                            }))
+                                                        }
+                                                    />
+                                                    GPS (5€/jour)
+                                                </label>
+                                                <label>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={reservationData.siege_enfant}
+                                                        onChange={(e) =>
+                                                            setReservationData((prev) => ({
+                                                                ...prev,
+                                                                siege_enfant: e.target.checked,
+                                                            }))
+                                                        }
+                                                    />
+                                                    Siège enfant (8€/jour)
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                     {reservationData.date_debut && reservationData.date_fin && (
                                         <div className="vehicule-price-summary">
@@ -773,8 +924,32 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                             <div className="vehicule-price-breakdown">
                                                 <div className="vehicule-price-item">
                                                     <span>Location ({Math.ceil((new Date(reservationData.date_fin) - new Date(reservationData.date_debut)) / (1000 * 60 * 60 * 24))} jours)</span>
-                                                    <span>{calculateTotalPrice()}€</span>
+                                                    <span>{(Math.ceil((new Date(reservationData.date_fin) - new Date(reservationData.date_debut)) / (1000 * 60 * 60 * 24)) * selectedVehicle.prix_par_jour)}€</span>
                                                 </div>
+                                                {reservationData.assurance_complete && (
+                                                    <div className="vehicule-price-item">
+                                                        <span>Assurance complète</span>
+                                                        <span>{20 * Math.ceil((new Date(reservationData.date_fin) - new Date(reservationData.date_debut)) / (1000 * 60 * 60 * 24))}€</span>
+                                                    </div>
+                                                )}
+                                                {reservationData.conducteur_supplementaire && (
+                                                    <div className="vehicule-price-item">
+                                                        <span>Conducteur supplémentaire</span>
+                                                        <span>{10 * Math.ceil((new Date(reservationData.date_fin) - new Date(reservationData.date_debut)) / (1000 * 60 * 60 * 24))}€</span>
+                                                    </div>
+                                                )}
+                                                {reservationData.gps && (
+                                                    <div className="vehicule-price-item">
+                                                        <span>GPS</span>
+                                                        <span>{5 * Math.ceil((new Date(reservationData.date_fin) - new Date(reservationData.date_debut)) / (1000 * 60 * 60 * 24))}€</span>
+                                                    </div>
+                                                )}
+                                                {reservationData.siege_enfant && (
+                                                    <div className="vehicule-price-item">
+                                                        <span>Siège enfant</span>
+                                                        <span>{8 * Math.ceil((new Date(reservationData.date_fin) - new Date(reservationData.date_debut)) / (1000 * 60 * 60 * 24))}€</span>
+                                                    </div>
+                                                )}
                                                 <div className="vehicule-price-item vehicule-price-total">
                                                     <span>Total</span>
                                                     <span>{calculateTotalPrice()}€</span>
@@ -828,13 +1003,6 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                         </div>
                                         <div className="vehicule-specs-grid">
                                             <div className="vehicule-spec-detail">
-                                                <i className="fas fa-car"></i>
-                                                <div>
-                                                    <strong>Type</strong>
-                                                    <span>{showVehicleDetails.type || 'Non spécifié'}</span>
-                                                </div>
-                                            </div>
-                                            <div className="vehicule-spec-detail">
                                                 <i className="fas fa-gas-pump"></i>
                                                 <div>
                                                     <strong>Carburant</strong>
@@ -867,6 +1035,13 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                                 <div>
                                                     <strong>Localisation</strong>
                                                     <span>{showVehicleDetails.localisation || 'Non spécifié'}</span>
+                                                </div>
+                                            </div>
+                                            <div className="vehicule-spec-detail">
+                                                <i className="fas fa-euro-sign"></i>
+                                                <div>
+                                                    <strong>Prix par jour</strong>
+                                                    <span>{showVehicleDetails.prix_par_jour || 'Non spécifié'}€</span>
                                                 </div>
                                             </div>
                                         </div>

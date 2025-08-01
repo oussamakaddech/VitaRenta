@@ -7,9 +7,9 @@ import { useLocation } from 'react-router-dom';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-const AgencyManager = ({ token, user, onLogout }) => {
-    if (!token || !user || user.role !== 'admin') {
-        return <Navigate to="/unauthorized" replace />;
+const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
+    if (!token || !user) {
+        return <Navigate to="/login" replace />;
     }
 
     const location = useLocation();
@@ -31,7 +31,6 @@ const AgencyManager = ({ token, user, onLogout }) => {
         recentAgencies: 0
     });
     const [totalPagesAgencies, setTotalPagesAgencies] = useState(1);
-
     const [formData, setFormData] = useState({
         nom: '',
         adresse: '',
@@ -71,17 +70,19 @@ const AgencyManager = ({ token, user, onLogout }) => {
             if (searchTerm.trim()) params.append('search', searchTerm.trim());
             params.append('page', currentPageAgencies);
             params.append('page_size', itemsPerPage);
+
             const response = await axios.get(`${API_BASE_URL}/api/agences/?${params}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
+
             const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
             setAgencies(data);
             setTotalPagesAgencies(response.data.total_pages || Math.ceil(data.length / itemsPerPage));
             if (data.length > 0) {
                 setTimeout(() => setAnimateCards(true), 100);
             } else {
-                setError('Aucune agence disponible. Veuillez créer une nouvelle agence ou vérifier votre connexion.');
+                setError('Aucune agence disponible. Veuillez créer une agence.');
             }
             updateStats(data);
         } catch (err) {
@@ -129,7 +130,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
             resetForm();
             setModalState({ type: null, data: null });
             fetchAgencies();
-            if (user && !user.agence && ['admin', 'agence'].includes(user.role)) {
+            if (user && !user.agence && user.role === 'agence') {
                 await assignAgencyToUser(response.data.id);
             }
         } catch (err) {
@@ -196,7 +197,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
         setLoading(true);
         setError(null);
         try {
-            await axios.patch(`${API_BASE_URL}/api/users/update_agence/`, { agence_id: agencyId }, {
+            await axios.patch(`${API_BASE_URL}/api/update_agence/`, { agence_id: agencyId }, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
@@ -364,10 +365,11 @@ const AgencyManager = ({ token, user, onLogout }) => {
         return particlesArray;
     }, []);
 
+    const canManageAllAgencies = user.role === 'admin' || user.role === 'agence';
+
     return (
         <div className="agency-manager-container">
             <div className="floating-particles">{particles}</div>
-
             <Sidebar
                 token={token}
                 user={user}
@@ -376,16 +378,16 @@ const AgencyManager = ({ token, user, onLogout }) => {
                 isOpen={isSidebarOpen}
                 setIsOpen={setIsSidebarOpen}
             />
-
             <div className="dashboard-content">
                 <div className="stats-dashboard">
                     <div className="dashboard-header">
                         <h1 className="dashboard-title">
                             <i className="fas fa-building"></i> Gestion des Agences
                         </h1>
-                        <p className="dashboard-subtitle">Gérez les agences de votre réseau</p>
+                        <p className="dashboard-subtitle">
+                            {canManageAllAgencies ? 'Gérez les agences de votre réseau' : 'Gérez votre agence'}
+                        </p>
                     </div>
-
                     {error && (
                         <div className="error-container" role="alert" aria-live="assertive">
                             <i className="fas fa-exclamation-triangle"></i>
@@ -399,7 +401,6 @@ const AgencyManager = ({ token, user, onLogout }) => {
                             </button>
                         </div>
                     )}
-
                     {success && (
                         <div className="success-alert" role="alert" aria-live="polite">
                             <i className="fas fa-check-circle"></i>
@@ -413,41 +414,41 @@ const AgencyManager = ({ token, user, onLogout }) => {
                             </button>
                         </div>
                     )}
-
-                    <div className="stats-grid">
-                        <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
-                            <div className="stat-icon icon-total">
-                                <i className="fas fa-building"></i>
+                    {canManageAllAgencies && (
+                        <div className="stats-grid">
+                            <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
+                                <div className="stat-icon icon-total">
+                                    <i className="fas fa-building"></i>
+                                </div>
+                                <div className="stat-content">
+                                    <div className="stat-number">{stats.totalAgencies}</div>
+                                    <div className="stat-label">Total Agences</div>
+                                    <div className="stat-description">Nombre total d'agences</div>
+                                </div>
                             </div>
-                            <div className="stat-content">
-                                <div className="stat-number">{stats.totalAgencies}</div>
-                                <div className="stat-label">Total Agences</div>
-                                <div className="stat-description">Nombre total d'agences</div>
+                            <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
+                                <div className="stat-icon" style={{ background: 'var(--success-green)' }}>
+                                    <i className="fas fa-check-circle"></i>
+                                </div>
+                                <div className="stat-content">
+                                    <div className="stat-number">{stats.activeAgencies}</div>
+                                    <div className="stat-label">Agences Actives</div>
+                                    <div className="stat-description">Agences en activité</div>
+                                </div>
+                            </div>
+                            <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
+                                <div className="stat-icon" style={{ background: 'var(--warning-yellow)' }}>
+                                    <i className="fas fa-plus-circle"></i>
+                                </div>
+                                <div className="stat-content">
+                                    <div className="stat-number">{stats.recentAgencies}</div>
+                                    <div className="stat-label">Nouvelles (30j)</div>
+                                    <div className="stat-description">Agences créées récemment</div>
+                                </div>
                             </div>
                         </div>
-                        <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
-                            <div className="stat-icon" style={{ background: 'var(--success-green)' }}>
-                                <i className="fas fa-check-circle"></i>
-                            </div>
-                            <div className="stat-content">
-                                <div className="stat-number">{stats.activeAgencies}</div>
-                                <div className="stat-label">Agences Actives</div>
-                                <div className="stat-description">Agences en activité</div>
-                            </div>
-                        </div>
-                        <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
-                            <div className="stat-icon" style={{ background: 'var(--warning-yellow)' }}>
-                                <i className="fas fa-plus-circle"></i>
-                            </div>
-                            <div className="stat-content">
-                                <div className="stat-number">{stats.recentAgencies}</div>
-                                <div className="stat-label">Nouvelles (30j)</div>
-                                <div className="stat-description">Agences créées récemment</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {user && user.agence ? (
+                    )}
+                    {user.agence ? (
                         <div className="user-agency-section">
                             <div className="user-agency-card">
                                 <h3 className="user-agency-title">
@@ -477,48 +478,52 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                 </h3>
                                 <p>
                                     Aucune agence associée.{' '}
-                                    <button
-                                        onClick={openAssignModal}
-                                        className="assign-agency-btn"
-                                        disabled={agencies.length === 0}
-                                        aria-label="Assigner une agence à mon compte"
-                                    >
-                                        Assigner une agence
-                                    </button>
+                                    {canManageAllAgencies ? (
+                                        <button
+                                            onClick={openAssignModal}
+                                            className="assign-agency-btn"
+                                            disabled={agencies.length === 0}
+                                            aria-label="Assigner une agence à mon compte"
+                                        >
+                                            Assigner une agence
+                                        </button>
+                                    ) : (
+                                        <span>Veuillez contacter un administrateur pour associer une agence.</span>
+                                    )}
                                 </p>
                             </div>
                         </div>
                     )}
-
-                    <div className="controls-section">
-                        <div className="controls-header">
-                            <h3 className="controls-title">
-                                <i className="fas fa-search"></i> Recherche
-                            </h3>
-                            <button
-                                onClick={openCreateForm}
-                                className="add-agency-btn"
-                                disabled={loading}
-                                aria-label="Créer une nouvelle agence"
-                            >
-                                <i className="fas fa-plus"></i> Nouvelle Agence
-                            </button>
-                        </div>
-                        <div className="controls-grid">
-                            <div className="search-bar">
-                                <input
-                                    type="text"
-                                    className="search-input"
-                                    placeholder="Rechercher par nom, ville, code postal..."
-                                    value={searchTerm}
-                                    onChange={handleSearchChange}
-                                    aria-label="Rechercher des agences"
-                                />
-                                <i className="fas fa-search search-icon" aria-hidden="true"></i>
+                    {canManageAllAgencies && (
+                        <div className="controls-section">
+                            <div className="controls-header">
+                                <h3 className="controls-title">
+                                    <i className="fas fa-search"></i> Recherche
+                                </h3>
+                                <button
+                                    onClick={openCreateForm}
+                                    className="add-agency-btn"
+                                    disabled={loading}
+                                    aria-label="Créer une nouvelle agence"
+                                >
+                                    <i className="fas fa-plus"></i> Nouvelle Agence
+                                </button>
+                            </div>
+                            <div className="controls-grid">
+                                <div className="search-bar">
+                                    <input
+                                        type="text"
+                                        className="search-input"
+                                        placeholder="Rechercher par nom, ville, code postal..."
+                                        value={searchTerm}
+                                        onChange={handleSearchChange}
+                                        aria-label="Rechercher des agences"
+                                    />
+                                    <i className="fas fa-search search-icon" aria-hidden="true"></i>
+                                </div>
                             </div>
                         </div>
-                    </div>
-
+                    )}
                     <div className="quick-actions">
                         <h3 className="quick-actions-title">
                             <i className="fas fa-bolt"></i> Actions Rapides
@@ -538,41 +543,44 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     <div className="quick-action-description">Recharger les données des agences</div>
                                 </div>
                             </button>
-                            <button
-                                onClick={openCreateForm}
-                                className="quick-action-card"
-                                disabled={loading}
-                                aria-label="Ajouter une nouvelle agence"
-                            >
-                                <div className="quick-action-icon">
-                                    <i className="fas fa-plus"></i>
-                                </div>
-                                <div className="quick-action-content">
-                                    <div className="quick-action-title">Ajouter</div>
-                                    <div className="quick-action-description">Créer une nouvelle agence</div>
-                                </div>
-                            </button>
-                            <button
-                                onClick={openAssignModal}
-                                className="quick-action-card"
-                                disabled={loading || agencies.length === 0}
-                                aria-label="Assigner une agence à mon compte"
-                            >
-                                <div className="quick-action-icon">
-                                    <i className="fas fa-user-plus"></i>
-                                </div>
-                                <div className="quick-action-content">
-                                    <div className="quick-action-title">Assigner</div>
-                                    <div className="quick-action-description">Associer une agence à mon compte</div>
-                                </div>
-                            </button>
+                            {canManageAllAgencies && (
+                                <>
+                                    <button
+                                        onClick={openCreateForm}
+                                        className="quick-action-card"
+                                        disabled={loading}
+                                        aria-label="Ajouter une nouvelle agence"
+                                    >
+                                        <div className="quick-action-icon">
+                                            <i className="fas fa-plus"></i>
+                                        </div>
+                                        <div className="quick-action-content">
+                                            <div className="quick-action-title">Ajouter</div>
+                                            <div className="quick-action-description">Créer une nouvelle agence</div>
+                                        </div>
+                                    </button>
+                                    <button
+                                        onClick={openAssignModal}
+                                        className="quick-action-card"
+                                        disabled={loading || agencies.length === 0}
+                                        aria-label="Assigner une agence à mon compte"
+                                    >
+                                        <div className="quick-action-icon">
+                                            <i className="fas fa-user-plus"></i>
+                                        </div>
+                                        <div className="quick-action-content">
+                                            <div className="quick-action-title">Assigner</div>
+                                            <div className="quick-action-description">Associer une agence à mon compte</div>
+                                        </div>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
-
                     <div className="agencies-section">
                         <div className="agencies-header">
                             <h3 className="agencies-title">
-                                <i className="fas fa-list"></i> Liste des Agences
+                                <i className="fas fa-list"></i> {canManageAllAgencies ? 'Liste des Agences' : 'Ma Agence'}
                             </h3>
                         </div>
                         {loading ? (
@@ -585,11 +593,13 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                 <i className="fas fa-inbox empty-icon" aria-hidden="true"></i>
                                 <h4>Aucune agence trouvée</h4>
                                 <p>
-                                    {searchTerm
-                                        ? "Aucune agence ne correspond à vos critères de recherche."
-                                        : "Aucune agence n’a été chargée. Créez une nouvelle agence pour commencer."}
+                                    {canManageAllAgencies
+                                        ? searchTerm
+                                            ? "Aucune agence ne correspond à vos critères de recherche."
+                                            : "Aucune agence n’a été chargée. Créez une nouvelle agence pour commencer."
+                                        : "Aucune agence associée à votre compte."}
                                 </p>
-                                {!searchTerm && (
+                                {canManageAllAgencies && !searchTerm && (
                                     <button
                                         onClick={openCreateForm}
                                         className="add-first-agency-btn"
@@ -655,28 +665,32 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                                     >
                                                         <i className="fas fa-edit"></i>
                                                     </button>
-                                                    <button
-                                                        onClick={() => deleteAgency(agency.id)}
-                                                        className="action-btn delete-btn"
-                                                        title="Supprimer"
-                                                        aria-label={`Supprimer l'agence ${agency.nom || 'inconnue'}`}
-                                                    >
-                                                        <i className="fas fa-trash"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => assignAgencyToUser(agency.id)}
-                                                        className="action-btn assign-btn"
-                                                        title="Assigner à mon compte"
-                                                        aria-label={`Assigner l'agence ${agency.nom || 'inconnue'} à mon compte`}
-                                                    >
-                                                        <i className="fas fa-user-plus"></i>
-                                                    </button>
+                                                    {canManageAllAgencies && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => deleteAgency(agency.id)}
+                                                                className="action-btn delete-btn"
+                                                                title="Supprimer"
+                                                                aria-label={`Supprimer l'agence ${agency.nom || 'inconnue'}`}
+                                                            >
+                                                                <i className="fas fa-trash"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => assignAgencyToUser(agency.id)}
+                                                                className="action-btn assign-btn"
+                                                                title="Assigner à mon compte"
+                                                                aria-label={`Assigner l'agence ${agency.nom || 'inconnue'} à mon compte`}
+                                                            >
+                                                                <i className="fas fa-user-plus"></i>
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
-                                {totalPagesAgencies > 1 && (
+                                {canManageAllAgencies && totalPagesAgencies > 1 && (
                                     <div className="pagination-section">
                                         <div className="pagination">
                                             <button
@@ -706,14 +720,12 @@ const AgencyManager = ({ token, user, onLogout }) => {
                     </div>
                 </div>
             </div>
-
-            {modalState.type === 'create' || modalState.type === 'edit' ? (
+            {modalState.type === 'create' && canManageAllAgencies ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 id="modal-title">
-                                <i className={`fas fa-${modalState.type === 'edit' ? 'edit' : 'plus'}`}></i>
-                                {modalState.type === 'edit' ? "Modifier l'agence" : 'Nouvelle agence'}
+                                <i className="fas fa-plus"></i> Nouvelle agence
                             </h2>
                             <button
                                 onClick={closeModal}
@@ -859,7 +871,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     type="button"
                                     onClick={closeModal}
                                     className="cancel-btn"
-                                    aria-label="Annuler la création ou modification"
+                                    aria-label="Annuler la création"
                                 >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
@@ -867,16 +879,184 @@ const AgencyManager = ({ token, user, onLogout }) => {
                                     type="submit"
                                     className="submit-btn"
                                     disabled={loading}
-                                    aria-label={isEditMode ? "Modifier l'agence" : "Créer une nouvelle agence"}
+                                    aria-label="Créer une nouvelle agence"
                                 >
-                                    <i className={`fas fa-${loading ? 'spinner fa-spin' : isEditMode ? 'save' : 'plus'}`}></i>
-                                    {loading ? 'Traitement...' : isEditMode ? 'Modifier' : 'Créer'}
+                                    <i className={`fas fa-${loading ? 'spinner fa-spin' : 'plus'}`}></i>
+                                    {loading ? 'Traitement...' : 'Créer'}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
-            ) : modalState.type === 'details' && modalState.data ? (
+            ) : modalState.type === 'edit' ? (
+                <div className="modal-overlay" onClick={closeModal}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2 id="modal-title">
+                                <i className="fas fa-edit"></i> Modifier l'agence
+                            </h2>
+                            <button
+                                onClick={closeModal}
+                                className="modal-close"
+                                aria-label="Fermer le modal"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="agency-form" aria-labelledby="modal-title">
+                            <div className="form-grid">
+                                <div className="form-group">
+                                    <label htmlFor="nom">Nom de l'agence <span aria-hidden="true">*</span></label>
+                                    <input
+                                        type="text"
+                                        id="nom"
+                                        name="nom"
+                                        value={formData.nom}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: Agence Centrale"
+                                        required
+                                        aria-required="true"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="ville">Ville <span aria-hidden="true">*</span></label>
+                                    <input
+                                        type="text"
+                                        id="ville"
+                                        name="ville"
+                                        value={formData.ville}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: Ariana"
+                                        required
+                                        aria-required="true"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="adresse">Adresse <span aria-hidden="true">*</span></label>
+                                    <input
+                                        type="text"
+                                        id="adresse"
+                                        name="adresse"
+                                        value={formData.adresse}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: 123 Rue de la Paix"
+                                        required
+                                        aria-required="true"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="code_postal">Code postal <span aria-hidden="true">*</span></label>
+                                    <input
+                                        type="text"
+                                        id="code_postal"
+                                        name="code_postal"
+                                        value={formData.code_postal}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: 2080"
+                                        pattern="[0-9]{4}"
+                                        maxLength="4"
+                                        required
+                                        aria-required="true"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="pays">Pays <span aria-hidden="true">*</span></label>
+                                    <input
+                                        type="text"
+                                        id="pays"
+                                        name="pays"
+                                        value={formData.pays}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: Tunisia"
+                                        required
+                                        aria-required="true"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="telephone">Téléphone <span aria-hidden="true">*</span></label>
+                                    <input
+                                        type="tel"
+                                        id="telephone"
+                                        name="telephone"
+                                        value={formData.telephone}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: +216 12345678"
+                                        required
+                                        aria-required="true"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="email">Email</label>
+                                    <input
+                                        type="email"
+                                        id="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: contact@agence.com"
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="site_web">Site web</label>
+                                    <input
+                                        type="url"
+                                        id="site_web"
+                                        name="site_web"
+                                        value={formData.site_web}
+                                        onChange={handleFormChange}
+                                        className="form-input"
+                                        placeholder="Ex: https://www.agence.com"
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="description">Description</label>
+                                <textarea
+                                    id="description"
+                                    name="description"
+                                    value={formData.description}
+                                    onChange={handleFormChange}
+                                    className="form-input"
+                                    placeholder="Description de l'agence..."
+                                    rows="4"
+                                />
+                            </div>
+                            {error && (
+                                <div className="error-container" role="alert" aria-live="assertive">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <p className="error-text">{error}</p>
+                                </div>
+                            )}
+                            <div className="form-actions">
+                                <button
+                                    type="button"
+                                    onClick={closeModal}
+                                    className="cancel-btn"
+                                    aria-label="Annuler la modification"
+                                >
+                                    <i className="fas fa-times"></i> Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="submit-btn"
+                                    disabled={loading}
+                                    aria-label="Modifier l'agence"
+                                >
+                                    <i className={`fas fa-${loading ? 'spinner fa-spin' : 'save'}`}></i>
+                                    {loading ? 'Traitement...' : 'Modifier'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : modalState.type === 'details' ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -914,14 +1094,16 @@ const AgencyManager = ({ token, user, onLogout }) => {
                             )}
                         </div>
                         <div className="form-actions">
-                            <button
-                                type="button"
-                                onClick={() => assignAgencyToUser(modalState.data.id)}
-                                className="submit-btn"
-                                aria-label={`Assigner l'agence ${modalState.data.nom || 'inconnue'} à mon compte`}
-                            >
-                                <i className="fas fa-user-plus"></i> Assigner à mon compte
-                            </button>
+                            {canManageAllAgencies && (
+                                <button
+                                    type="button"
+                                    onClick={() => assignAgencyToUser(modalState.data.id)}
+                                    className="submit-btn"
+                                    aria-label={`Assigner l'agence ${modalState.data.nom || 'inconnue'} à mon compte`}
+                                >
+                                    <i className="fas fa-user-plus"></i> Assigner à mon compte
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={closeModal}
@@ -933,7 +1115,7 @@ const AgencyManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 </div>
-            ) : modalState.type === 'assign' ? (
+            ) : modalState.type === 'assign' && canManageAllAgencies ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -997,4 +1179,4 @@ const AgencyManager = ({ token, user, onLogout }) => {
     );
 };
 
-export default AgencyManager;
+export default AgencyManagement;

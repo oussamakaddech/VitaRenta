@@ -1,12 +1,21 @@
-# backend/users/demand_forecast.py
-import pandas as pd
-import numpy as np
-import os
-import logging
+import logging, os, pandas as pd, numpy as np, typing as t
+from functools import lru_cache
 from datetime import datetime, timedelta
+from django.conf import settings
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework_jwt.authentication import JSONWebTokenAuthentication
+from django.utils.encoding import force_str
+from urllib.parse import unquote
+import traceback
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 logger = logging.getLogger(__name__)
-
 def ensemble_predict_demand(csv_path, location='Tunis', carburant='électrique', context=None):
     """
     Simplified ensemble prediction without external dependencies

@@ -35,6 +35,7 @@ urlpatterns = [
     # Demand forecast and recommendations routes
     path('demand-forecast/', DemandForecastView.as_view(), name='demand_forecast'),
     path('recommendations/', RecommendationView.as_view(), name='recommendations'),
+    
     # Router routes
     path('', include(router.urls)),
 ]

@@ -310,11 +310,14 @@ class Reservation(models.Model):
 
     def clean(self):
         super().clean()
+        
         if self.montant_total is not None:
             try:
-                self.montant_total = float(self.montant_total)
-            except (ValueError, TypeError):
+                if not isinstance(self.montant_total, Decimal):
+                    self.montant_total = Decimal(self.montant_total)
+            except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'montant_total': 'Le montant total doit être un nombre valide.'})
+        
         if self.date_debut and self.date_fin and self.date_fin <= self.date_debut:
             raise ValidationError({'date_fin': 'La date de fin doit être postérieure à la date de début.'})
 

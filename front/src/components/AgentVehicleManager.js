@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Sidebar from './Sidebar';
 import './AgentVehicleManager.css';
@@ -15,6 +15,7 @@ const StatutVehicule = {
 };
 
 const VehicleManager = ({ token, user, onLogout }) => {
+    const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -48,7 +49,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
         statut: StatutVehicule.DISPONIBLE,
         date_derniere_maintenance: '',
         prochaine_maintenance: '',
-        image: null
+        image: null,
+        agence_id: user?.role === 'agence' && user?.agence?.id ? user.agence.id : ''
     });
 
     const calculerScoreEcologique = (vehicle) => {
@@ -63,6 +65,11 @@ const VehicleManager = ({ token, user, onLogout }) => {
     };
 
     const fetchVehicles = useCallback(async () => {
+        if (!token || !user) {
+            setError('Vous devez être connecté pour accéder aux véhicules.');
+            navigate('/login');
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
@@ -74,18 +81,25 @@ const VehicleManager = ({ token, user, onLogout }) => {
             setVehicles(data);
         } catch (err) {
             console.error('Fetch vehicles error:', err.response || err);
-            const errorMsg =
-                err.response?.status === 403
-                    ? 'Accès refusé. Vous n\'avez pas les permissions nécessaires.'
-                    : err.response?.status === 404
-                    ? 'Aucun véhicule trouvé.'
-                    : err.response?.data?.message || 'Impossible de charger les véhicules.';
+            const status = err.response?.status;
+            let errorMsg;
+            if (status === 401) {
+                errorMsg = 'Session expirée ou non autorisée. Veuillez vous reconnecter.';
+                onLogout();
+                navigate('/login');
+            } else if (status === 403) {
+                errorMsg = 'Accès refusé. Vous n\'avez pas les permissions nécessaires.';
+            } else if (status === 404) {
+                errorMsg = 'Aucun véhicule trouvé.';
+            } else {
+                errorMsg = err.response?.data?.message || 'Impossible de charger les véhicules.';
+            }
             setError(errorMsg);
             setVehicles([]);
         } finally {
             setLoading(false);
         }
-    }, [token]);
+    }, [token, user, navigate, onLogout]);
 
     const validateVehicleData = (data) => {
         if (!data.marque || data.marque.trim().length < 1) return "La marque est requise";
@@ -110,6 +124,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
             return "La date de dernière maintenance doit être valide";
         if (data.prochaine_maintenance && !isValidDate(data.prochaine_maintenance))
             return "La date de prochaine maintenance doit être valide";
+        if (user?.role === 'agence' && !data.agence_id)
+            return "L'identifiant de l'agence est requis pour les utilisateurs d'agence";
         return '';
     };
 
@@ -146,7 +162,16 @@ const VehicleManager = ({ token, user, onLogout }) => {
             fetchVehicles();
         } catch (err) {
             console.error('Create vehicle error:', err.response || err);
-            setError(err.response?.data?.message || 'Erreur lors de la création du véhicule.');
+            const status = err.response?.status;
+            let errorMsg = err.response?.data?.message || 'Erreur lors de la création du véhicule.';
+            if (status === 401) {
+                errorMsg = 'Session expirée. Veuillez vous reconnecter.';
+                onLogout();
+                navigate('/login');
+            } else if (err.response?.data?.immatriculation) {
+                errorMsg = 'Un véhicule avec cette immatriculation existe déjà.';
+            }
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -180,7 +205,14 @@ const VehicleManager = ({ token, user, onLogout }) => {
             fetchVehicles();
         } catch (err) {
             console.error('Update vehicle error:', err.response || err);
-            setError(err.response?.data?.message || 'Erreur lors de la mise à jour du véhicule.');
+            const status = err.response?.status;
+            let errorMsg = err.response?.data?.message || 'Erreur lors de la mise à jour du véhicule.';
+            if (status === 401) {
+                errorMsg = 'Session expirée. Veuillez vous reconnecter.';
+                onLogout();
+                navigate('/login');
+            }
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -200,7 +232,14 @@ const VehicleManager = ({ token, user, onLogout }) => {
             setVehicleToDelete(null);
         } catch (err) {
             console.error('Delete vehicle error:', err.response || err);
-            setError(err.response?.data?.message || 'Erreur lors de la suppression du véhicule.');
+            const status = err.response?.status;
+            let errorMsg = err.response?.data?.message || 'Erreur lors de la suppression du véhicule.';
+            if (status === 401) {
+                errorMsg = 'Session expirée. Veuillez vous reconnecter.';
+                onLogout();
+                navigate('/login');
+            }
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -219,7 +258,14 @@ const VehicleManager = ({ token, user, onLogout }) => {
             fetchVehicles();
         } catch (err) {
             console.error('Maintenance error:', err.response || err);
-            setError(err.response?.data?.message || 'Erreur lors de la planification de maintenance.');
+            const status = err.response?.status;
+            let errorMsg = err.response?.data?.message || 'Erreur lors de la planification de maintenance.';
+            if (status === 401) {
+                errorMsg = 'Session expirée. Veuillez vous reconnecter.';
+                onLogout();
+                navigate('/login');
+            }
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -249,7 +295,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
             statut: StatutVehicule.DISPONIBLE,
             date_derniere_maintenance: '',
             prochaine_maintenance: '',
-            image: null
+            image: null,
+            agence_id: user?.role === 'agence' && user?.agence?.id ? user.agence.id : ''
         });
         setSelectedVehicle(null);
         setIsEditMode(false);
@@ -284,7 +331,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
             statut: vehicle.statut || StatutVehicule.DISPONIBLE,
             date_derniere_maintenance: vehicle.date_derniere_maintenance || '',
             prochaine_maintenance: vehicle.prochaine_maintenance || '',
-            image: null
+            image: null,
+            agence_id: vehicle.agence_id || (user?.role === 'agence' && user?.agence?.id ? user.agence.id : '')
         });
         setShowModal(true);
     };
@@ -321,8 +369,13 @@ const VehicleManager = ({ token, user, onLogout }) => {
     };
 
     useEffect(() => {
+        if (!token || !user || !['agent', 'admin', 'agence'].includes(user.role)) {
+            setError('Accès réservé aux agents, administrateurs ou utilisateurs d\'agence.');
+            navigate('/login');
+            return;
+        }
         fetchVehicles();
-    }, [fetchVehicles]);
+    }, [fetchVehicles, token, user, navigate]);
 
     useEffect(() => {
         if (error) {
@@ -407,14 +460,14 @@ const VehicleManager = ({ token, user, onLogout }) => {
         resetForm();
     };
 
-    if (!token || !user || !['agent', 'admin'].includes(user.role)) {
+    if (!token || !user || !['agent', 'admin', 'agence'].includes(user.role)) {
         return (
             <div className="vehicle-manager-container">
                 <div className="floating-particles">{generateParticles()}</div>
                 <div className="stats-dashboard">
                     <div className="error-container" role="alert" aria-live="assertive">
                         <i className="fas fa-exclamation-triangle"></i>
-                        <p className="error-text">Accès réservé aux agents et administrateurs.</p>
+                        <p className="error-text">Accès réservé aux agents, administrateurs ou utilisateurs d'agence.</p>
                     </div>
                 </div>
             </div>
@@ -881,6 +934,23 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             className="form-input"
                                         />
                                     </div>
+                                    {user?.role === 'agence' && (
+                                        <div className="form-group">
+                                            <label htmlFor="agence_id">ID de l'Agence *</label>
+                                            <input
+                                                type="text"
+                                                id="agence_id"
+                                                name="agence_id"
+                                                value={formData.agence_id}
+                                                onChange={handleFormChange}
+                                                className="form-input"
+                                                placeholder="Ex: 123"
+                                                required
+                                                aria-required="true"
+                                                disabled={isEditMode && formData.agence_id}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 {error && (
                                     <div className="error-container" role="alert" aria-live="assertive">
@@ -936,6 +1006,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                 <p><strong>Statut:</strong> <span className={`status-badge status-${selectedVehicle.statut}`}>{selectedVehicle.statut}</span></p>
                                 <p><strong>Dernière maintenance:</strong> {selectedVehicle.date_derniere_maintenance || 'Non spécifié'}</p>
                                 <p><strong>Prochaine maintenance:</strong> {selectedVehicle.prochaine_maintenance || 'Non spécifié'}</p>
+                                <p><strong>Agence ID:</strong> {selectedVehicle.agence_id || 'Non spécifié'}</p>
                                 {selectedVehicle.image && (
                                     <div className="vehicle-image-preview">
                                         <img src={selectedVehicle.image} alt={`${selectedVehicle.marque} ${selectedVehicle.modele}`} />

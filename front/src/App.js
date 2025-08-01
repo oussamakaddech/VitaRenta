@@ -15,7 +15,6 @@ import UserManagement from './components/UserManagement';
 import DemandForecast from './components/DemandForecast';
 import RecommendationResults from './components/RecommendationResults';
 
-
 function App() {
     const [token, setToken] = useState('');
     const [user, setUser] = useState(null);
@@ -32,13 +31,18 @@ function App() {
                 if (storedUser) {
                     try {
                         const parsedUser = JSON.parse(storedUser);
-                        setUser(parsedUser);
+                        if (!parsedUser.role || !['client', 'agence', 'admin'].includes(parsedUser.role)) {
+                            console.warn('Rôle utilisateur invalide ou manquant:', parsedUser);
+                            localStorage.removeItem('user');
+                        } else {
+                            setUser(parsedUser);
+                        }
                     } catch (error) {
+                        console.warn('Erreur lors du parsing de user:', error);
                         localStorage.removeItem('user');
                     }
                 }
             } catch (error) {
-                // Gérer les erreurs sans console.log en production
             } finally {
                 setIsLoading(false);
             }
@@ -48,11 +52,13 @@ function App() {
     }, []);
 
     const updateUser = useCallback((userData) => {
-        setUser(userData);
-        if (userData) {
+        if (userData && ['client', 'agence', 'admin'].includes(userData.role)) {
+            setUser(userData);
             localStorage.setItem('user', JSON.stringify(userData));
         } else {
+            console.warn('Données utilisateur invalides:', userData);
             localStorage.removeItem('user');
+            setUser(null);
         }
     }, []);
 
@@ -64,11 +70,13 @@ function App() {
     }, []);
 
     const handleLogin = useCallback((newToken, userData) => {
-        setToken(newToken);
-        setUser(userData);
-        localStorage.setItem('token', newToken);
-        if (userData) {
+        if (userData && ['client', 'agence', 'admin'].includes(userData.role)) {
+            setToken(newToken);
+            setUser(userData);
+            localStorage.setItem('token', newToken);
             localStorage.setItem('user', JSON.stringify(userData));
+        } else {
+            console.warn('Login échoué: rôle invalide:', userData);
         }
     }, []);
 
@@ -102,7 +110,7 @@ function App() {
                         <Route
                             path="/profile"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agent', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
                                     <Profile token={token} setToken={setToken} user={user} setUser={updateUser} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -110,7 +118,7 @@ function App() {
                         <Route
                             path="/vehicules"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agent', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
                                     <VehiculeList token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -118,7 +126,7 @@ function App() {
                         <Route
                             path="/dashboard"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agent', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
                                     <Dashboard token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -126,7 +134,7 @@ function App() {
                         <Route
                             path="/agent/vehicules"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['agent', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['agence', 'admin']}>
                                     <AgentVehicleManager token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -134,7 +142,7 @@ function App() {
                         <Route
                             path="/admin/users"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
                                     <UserManagement token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -142,7 +150,7 @@ function App() {
                         <Route
                             path="/admin/vehicules"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
                                     <AgentVehicleManager token={token} user={user} onLogout={handleLogout} isAdmin={true} />
                                 </ProtectedRoute>
                             }
@@ -150,15 +158,15 @@ function App() {
                         <Route
                             path="/admin/agences"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
-                                    <AgencyManagement token={token} user={user} onLogout={handleLogout} isAdmin={true} />
+                                <ProtectedRoute token={token} user={user} allowedRoles={['agence', 'admin']}>
+                                    <AgencyManagement token={token} user={user} onLogout={handleLogout} isAdmin={user?.role === 'admin'} />
                                 </ProtectedRoute>
                             }
                         />
                         <Route
                             path="/demand-prediction"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['agent', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['agence', 'admin']}>
                                     <DemandForecast token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -166,12 +174,11 @@ function App() {
                         <Route
                             path="/recommendations"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agent', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
                                     <RecommendationResults token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
                         />
-                       
                         <Route
                             path="/unauthorized"
                             element={
@@ -235,7 +242,7 @@ function App() {
                                     <Link to="/profile" aria-label="Profil">Profil</Link>
                                     <Link to="/recommendations" aria-label="Recommandations">Recommandations</Link>
                                 </div>
-                                {user?.role === 'admin' && (
+                                {(user?.role === 'admin' || user?.role === 'agence') && (
                                     <div className="footer-section">
                                         <h4>Gestion</h4>
                                         <Link to="/agent/vehicules" aria-label="Gestion véhicules">Gestion véhicules</Link>

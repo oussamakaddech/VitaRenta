@@ -1,5 +1,7 @@
 # serializers.py
 from decimal import Decimal, InvalidOperation
+import decimal
+from venv import logger
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -8,7 +10,8 @@ import re
 from django.utils import timezone
 from datetime import datetime
 from django.contrib.auth import get_user_model
-
+from decimal import Decimal
+from bson.decimal128 import Decimal128
 User = get_user_model()
 
 class AgenceSerializer(serializers.ModelSerializer):
@@ -323,39 +326,45 @@ class VehiculeSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
 class ReservationSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    vehicule = VehiculeSerializer(read_only=True)
-    user_id = serializers.CharField(write_only=True, required=False, allow_null=True)
+    user = serializers.SerializerMethodField(read_only=True)
+    vehicule_display = serializers.SerializerMethodField(read_only=True)
     vehicule_id = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = Reservation
         fields = [
-            'id', 'user_id', 'user', 'vehicule_id', 'vehicule', 'date_debut',
+            'id', 'vehicule_id', 'vehicule_display', 'user', 'date_debut',
             'date_fin', 'montant_total', 'statut', 'commentaires',
             'assurance_complete', 'conducteur_supplementaire', 'gps',
             'siege_enfant', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'user', 'vehicule', 'montant_total', 'statut']
-        extra_kwargs = {'user_id': {'required': False, 'allow_null': True}}
+        read_only_fields = [
+            'id', 'user', 'vehicule_display', 'montant_total',
+            'statut', 'created_at', 'updated_at'
+        ]
 
-    def validate_user_id(self, value):
-        if value:
-            try:
-                return User.objects.get(id=value)
-            except User.DoesNotExist:
-                raise serializers.ValidationError("L'utilisateur spécifié n'existe pas.")
-        return None
+    def get_user(self, obj):
+        from .serializers import UserSerializer
+        return UserSerializer(obj.user).data
+
+    def get_vehicule_display(self, obj):
+        from .serializers import VehiculeSerializer
+        return VehiculeSerializer(obj.vehicule).data
 
     def validate_vehicule_id(self, value):
         try:
             vehicle = Vehicule.objects.get(id=value)
             if vehicle.statut != 'disponible':
-                raise serializers.ValidationError("Le véhicule n'est pas disponible pour la réservation.")
+                raise serializers.ValidationError(
+                    "Le véhicule n'est pas disponible pour la réservation."
+                )
             return vehicle
         except Vehicule.DoesNotExist:
-            raise serializers.ValidationError("Le véhicule spécifié n'existe pas.")
+            raise serializers.ValidationError(
+                "Le véhicule spécifié n'existe pas."
+            )
 
     def validate(self, data):
         date_debut = data.get('date_debut')
@@ -363,35 +372,80 @@ class ReservationSerializer(serializers.ModelSerializer):
         vehicule = data.get('vehicule_id')
 
         if date_debut and date_fin and date_fin <= date_debut:
-            raise serializers.ValidationError("La date de fin doit être postérieure à la date de début.")
+            raise serializers.ValidationError(
+                "La date de fin doit être postérieure à la date de début."
+            )
 
         if vehicule and date_debut and date_fin:
-            overlapping_reservations = Reservation.objects.filter(
+            # Vérifier les chevauchements
+            overlapping = Reservation.objects.filter(
                 vehicule=vehicule,
                 statut__in=['confirmee', 'en_attente'],
                 date_debut__lt=date_fin,
                 date_fin__gt=date_debut
             )
-            if overlapping_reservations.exists():
-                raise serializers.ValidationError("Le véhicule est déjà réservé pour les dates spécifiées.")
+            
+            if self.instance:
+                overlapping = overlapping.exclude(id=self.instance.id)
+                
+            if overlapping.exists():
+                raise serializers.ValidationError(
+                    "Le véhicule est déjà réservé pour ces dates."
+                )
 
+            # ✅ Correction : Calcul du montant avec gestion Decimal128
             delta = (date_fin - date_debut).days or 1
-            montant_total = vehicule.prix_par_jour * delta
+            prix = self._get_vehicle_price_as_decimal(vehicule)
+            
+            montant_total = prix * Decimal(delta)
+
+            # Options supplémentaires
             if data.get('assurance_complete'):
-                montant_total += delta * 15
+                montant_total += delta * Decimal('15')
             if data.get('conducteur_supplementaire'):
-                montant_total += delta * 8
+                montant_total += delta * Decimal('8')
             if data.get('gps'):
-                montant_total += delta * 5
+                montant_total += delta * Decimal('5')
             if data.get('siege_enfant'):
-                montant_total += delta * 3
+                montant_total += delta * Decimal('3')
+
             data['montant_total'] = montant_total
             data['statut'] = 'en_attente'
 
         return data
 
+    def _get_vehicle_price_as_decimal(self, vehicule):
+        """✅ Méthode utilitaire pour obtenir le prix comme Decimal"""
+        prix = vehicule.prix_par_jour
+        
+        try:
+            if isinstance(prix, Decimal128):
+                return prix.to_decimal()
+            elif isinstance(prix, Decimal):
+                return prix
+            elif isinstance(prix, (int, float)):
+                return Decimal(str(prix))
+            elif isinstance(prix, str):
+                return Decimal(prix)
+            else:
+                # Tentative de conversion générique
+                return Decimal(str(prix))
+        except (TypeError, ValueError, decimal.InvalidOperation) as e:
+            logger.error(f"Erreur conversion prix véhicule {vehicule.id}: {e}")
+            raise serializers.ValidationError(
+                f"Prix du véhicule invalide: {prix}"
+            )
+
     def create(self, validated_data):
-        user = validated_data.pop('user_id', None)
         vehicule = validated_data.pop('vehicule_id')
-        reservation = Reservation.objects.create(user=user, vehicule=vehicule, **validated_data)
+        user = self.context['request'].user
+        
+        reservation = Reservation.objects.create(
+            vehicule=vehicule,
+            user=user,
+            **validated_data
+        )
         return reservation
+
+
+# ✅ Serializer pour Vehicule avec gestion Decimal128
