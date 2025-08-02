@@ -1,4 +1,3 @@
-# backend/views.py
 from datetime import timedelta
 import datetime
 from rest_framework.views import APIView
@@ -13,7 +12,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from django.db import transaction
 from django.utils.encoding import force_str
-from django.db.models import Sum, Count, Q, Avg
+from django.db.models import Sum, Count, Q, Avg, F
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 import logging
@@ -39,20 +38,20 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from urllib.parse import unquote
+from decimal import Decimal
+
 logger = logging.getLogger(__name__)
 
 class UpdateAgenceView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrAgency]
     authentication_classes = [JWTAuthentication]
-
+    
     def patch(self, request):
         user = request.user
         agence_id = request.data.get('agence_id')
-
         if not agence_id:
             logger.error(f"Utilisateur {user.email} a tenté de mettre à jour l'agence sans fournir agence_id")
             return Response({"error": "agence_id requis"}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
             agence = Agence.objects.get(id=agence_id)
             with transaction.atomic():
@@ -70,7 +69,7 @@ class UpdateAgenceView(APIView):
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-
+    
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -78,10 +77,10 @@ class LoginView(APIView):
                 'errors': serializer.errors,
                 'message': 'Données invalides'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+        
         email = serializer.validated_data.get('email').lower().strip()
         password = serializer.validated_data.get('mot_de_passe')
-
+        
         try:
             user = User.objects.get(email=email)
             if (hasattr(user, 'login_attempts') and 
@@ -95,13 +94,14 @@ class LoginView(APIView):
                     'blocked_until': (user.last_login_attempt + timedelta(minutes=1)).isoformat(),
                     'attempts_remaining': 0
                 }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
+            
             authenticated_user = authenticate(request, username=email, password=password)
             if authenticated_user:
                 if hasattr(user, 'login_attempts'):
                     user.login_attempts = 0
                     user.last_login_attempt = None
                     user.save()
+                
                 refresh = RefreshToken.for_user(user)
                 logger.info(f"Connexion réussie pour {email}")
                 return Response({
@@ -136,12 +136,13 @@ class LoginView(APIView):
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-
+    
     def post(self, request):
         try:
             refresh_token = request.data.get('refresh')
             if not refresh_token:
                 return Response({"error": "Refresh token requis"}, status=status.HTTP_400_BAD_REQUEST)
+            
             token = RefreshToken(refresh_token)
             token.blacklist()
             logger.info(f"Déconnexion réussie pour {request.user.email}")
@@ -156,7 +157,7 @@ class LogoutView(APIView):
 class SignUpView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-
+    
     def post(self, request):
         serializer = SignUpSerializer(data=request.data)
         if not serializer.is_valid():
@@ -164,7 +165,7 @@ class SignUpView(APIView):
                 'errors': serializer.errors,
                 'message': 'Données invalides'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+        
         try:
             with transaction.atomic():
                 user = serializer.save()
@@ -185,7 +186,7 @@ class SignUpView(APIView):
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-
+    
     def get(self, request):
         try:
             serializer = UserProfileSerializer(request.user)
@@ -195,7 +196,7 @@ class UserProfileView(APIView):
             return Response({
                 'error': 'Erreur interne du serveur'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
     def put(self, request):
         try:
             serializer = UserUpdateSerializer(request.user, data=request.data, partial=True)
@@ -217,40 +218,40 @@ class UserProfileView(APIView):
 class UserPhotoUploadView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-
+    
     def post(self, request):
         try:
             if 'photo' not in request.FILES:
                 return Response({
                     'error': 'Aucune photo fournie'
                 }, status=status.HTTP_400_BAD_REQUEST)
-
+            
             photo = request.FILES['photo']
             allowed_types = ['image/jpeg', 'image/png', 'image/gif']
             if photo.content_type not in allowed_types:
                 return Response({
                     'error': 'Type de fichier non autorisé. Utilisez JPEG, PNG ou GIF.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-
+            
             if photo.size > 5 * 1024 * 1024:
                 return Response({
                     'error': 'La photo ne doit pas dépasser 5MB'
                 }, status=status.HTTP_400_BAD_REQUEST)
-
+            
             upload_dir = os.path.join(settings.MEDIA_ROOT, 'profile_photos')
             os.makedirs(upload_dir, exist_ok=True)
             file_extension = photo.name.split('.')[-1]
             filename = f"{request.user.id}.{file_extension}"
             file_path = os.path.join(upload_dir, filename)
-
+            
             with open(file_path, 'wb') as f:
                 for chunk in photo.chunks():
                     f.write(chunk)
-
+            
             photo_url = f"{settings.MEDIA_URL}profile_photos/{filename}"
             request.user.photo_url = photo_url
             request.user.save()
-
+            
             logger.info(f"Photo uploadée pour l'utilisateur {request.user.email}")
             return Response({
                 'message': 'Photo uploadée avec succès',
@@ -265,16 +266,29 @@ class UserPhotoUploadView(APIView):
 class UserStatsView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-
+    
     def get(self, request):
         try:
             user = request.user
             reservations = Reservation.objects.filter(user_id=user.id)
-            total_depense = reservations.aggregate(total=Sum('montant_total'))['total'] or 0
-            if isinstance(total_depense, Decimal128):
-                total_depense = float(total_depense.to_decimal())
-            budget_journalier = float(user.budget_journalier.to_decimal()) if isinstance(user.budget_journalier, Decimal128) else float(user.budget_journalier or 0)
-
+            
+            # Gérer correctement Decimal128 pour le total des dépenses
+            total_depense = 0
+            for reservation in reservations:
+                if reservation.montant_total:
+                    if isinstance(reservation.montant_total, Decimal128):
+                        total_depense += float(reservation.montant_total.to_decimal())
+                    else:
+                        total_depense += float(reservation.montant_total or 0)
+            
+            # Gérer correctement Decimal128 pour le budget journalier
+            budget_journalier = 0
+            if user.budget_journalier:
+                if isinstance(user.budget_journalier, Decimal128):
+                    budget_journalier = float(user.budget_journalier.to_decimal())
+                else:
+                    budget_journalier = float(user.budget_journalier or 0)
+            
             stats = {
                 'total_reservations': reservations.count(),
                 'reservations_actives': reservations.filter(statut='confirmee').count(),
@@ -288,6 +302,7 @@ class UserStatsView(APIView):
                 'compte_actif': user.is_active,
                 'budget_journalier': budget_journalier,
             }
+            
             logger.info(f"Statistiques récupérées pour l'utilisateur {user.email}")
             return Response({
                 'stats': stats,
@@ -445,15 +460,15 @@ class AgenceViewSet(ModelViewSet):
     serializer_class = AgenceSerializer
     permission_classes = [IsAdminOrAgency]
     authentication_classes = [JWTAuthentication]
-
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
         user = self.request.user
-
+        
         if user.is_authenticated and user.role == 'agence' and user.agence:
             queryset = queryset.filter(id=user.agence.id)
-
+        
         if params.get('nom'):
             queryset = queryset.filter(nom__icontains=params.get('nom'))
         if params.get('search'):
@@ -464,9 +479,9 @@ class AgenceViewSet(ModelViewSet):
                 Q(ville__icontains=search_term) |
                 Q(code_postal__icontains=search_term)
             )
-
+        
         return queryset.order_by('-date_creation')
-
+    
     def perform_create(self, serializer):
         try:
             with transaction.atomic():
@@ -481,7 +496,7 @@ class AgenceViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la création d'agence: {str(e)}")
             raise
-
+    
     def perform_update(self, serializer):
         try:
             agence = serializer.save()
@@ -489,26 +504,57 @@ class AgenceViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour de l'agence: {str(e)}")
             raise
-
+    
     def perform_destroy(self, instance):
         try:
             if Vehicule.objects.filter(agence=instance).exists():
                 raise ValidationError("Impossible de supprimer l'agence : des véhicules y sont associés.")
+            
             if User.objects.filter(agence=instance).exists():
                 User.objects.filter(agence=instance).update(agence=None)
                 logger.info(f"Suppression des références d'agence pour les utilisateurs associés à {instance.nom}")
+            
             logger.info(f"Agence supprimée: {instance.nom} par {self.request.user.email}")
             instance.delete()
         except Exception as e:
             logger.error(f"Erreur lors de la suppression de l'agence: {str(e)}")
             raise
-
+    
     @action(detail=True, methods=['get'])
     def statistiques(self, request, pk=None):
         try:
             agence = get_object_or_404(Agence, id=pk)
             vehicles = Vehicule.objects.filter(agence=agence)
             reservations = Reservation.objects.filter(vehicule__in=vehicles)
+            
+            # Calculer le revenu total en gérant correctement Decimal128
+            revenus_total = 0.0
+            for reservation in reservations:
+                if reservation.montant_total:
+                    if isinstance(reservation.montant_total, Decimal128):
+                        revenus_total += float(reservation.montant_total.to_decimal())
+                    else:
+                        revenus_total += float(reservation.montant_total or 0)
+            
+            # Calculer le prix moyen en gérant correctement Decimal128
+            moyenne_prix_par_jour = 0.0
+            prix_values = vehicles.values_list('prix_par_jour', flat=True).exclude(prix_par_jour__isnull=True)
+            if prix_values:
+                total_prix = 0
+                count = 0
+                for prix in prix_values:
+                    try:
+                        if isinstance(prix, Decimal128):
+                            total_prix += float(prix.to_decimal())
+                        elif isinstance(prix, (int, float, Decimal)):
+                            total_prix += float(prix)
+                        count += 1
+                    except (TypeError, ValueError, AttributeError):
+                        continue
+                
+                if count > 0:
+                    moyenne_prix_par_jour = total_prix / count
+            
             stats = {
                 'total_vehicules': vehicles.count(),
                 'vehicules_disponibles': vehicles.filter(statut='disponible').count(),
@@ -519,9 +565,10 @@ class AgenceViewSet(ModelViewSet):
                 'reservations_actives': reservations.filter(statut='confirmee').count(),
                 'reservations_terminees': reservations.filter(statut='terminee').count(),
                 'reservations_annulees': reservations.filter(statut='annulee').count(),
-                'revenus_total': float(reservations.aggregate(total=Sum('montant_total'))['total'] or 0),
-                'moyenne_prix_par_jour': float(vehicles.aggregate(avg_price=Avg('prix_par_jour'))['avg_price'] or 0)
+                'revenus_total': revenus_total,
+                'moyenne_prix_par_jour': moyenne_prix_par_jour
             }
+            
             logger.info(f"Statistiques récupérées pour l'agence {agence.nom} par {request.user.email}")
             return Response({
                 'stats': stats,
@@ -542,19 +589,19 @@ class ReservationViewSet(ModelViewSet):
     serializer_class = ReservationSerializer
     permission_classes = [AllowAny]
     authentication_classes = [JWTAuthentication]
-
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
-
+        
         if not user.is_authenticated:
             return queryset.none()
-
+        
         if getattr(user, 'role', None) == 'client':
             queryset = queryset.filter(user=user)
         elif getattr(user, 'role', None) == 'agence' and getattr(user, 'agence', None):
             queryset = queryset.filter(vehicule__agence=user.agence)
-
+        
         params = self.request.query_params
         if params.get('statut'):
             queryset = queryset.filter(statut=params.get('statut'))
@@ -572,34 +619,30 @@ class ReservationViewSet(ModelViewSet):
                 queryset = queryset.filter(date_fin__lte=date_fin)
             except ValueError:
                 pass
-
+        
         return queryset.order_by('-created_at').select_related('user', 'vehicule__agence')
-
+    
     def perform_create(self, serializer):
-        """✅ Correction : Éviter la double sauvegarde du véhicule"""
+        """Éviter la double sauvegarde du véhicule"""
         user = self.request.user
         
         try:
             # Sauvegarder la réservation
             reservation = serializer.save()
             
-            # ✅ Correction : Mettre à jour le véhicule SANS appeler save()
+            # Mettre à jour le véhicule SANS appeler save()
             # car cela déclenche clean() qui cause l'erreur Decimal128
             vehicle = reservation.vehicule
             
             # Méthode 1 : Mise à jour directe en base
-            Vehicule.objects.filter(id=vehicle.id).update(statut='loue')
-            
-            # OU Méthode 2 : Mise à jour avec refresh
-            # vehicle.statut = 'loue'
-            # vehicle.save(update_fields=['statut'])
+            Vehicule.objects.filter(id=vehicle.id).update(statut='loué')
             
             logger.info(f"Réservation créée: ID {reservation.id} pour {user.email}")
             
         except Exception as e:
             logger.error(f"Erreur lors de la création de la réservation: {str(e)}")
             raise
-
+    
     def perform_update(self, serializer):
         try:
             reservation = serializer.save()
@@ -607,9 +650,9 @@ class ReservationViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour de la réservation: {str(e)}")
             raise
-
+    
     def perform_destroy(self, instance):
-        """✅ Correction similaire pour la suppression"""
+        """Correction similaire pour la suppression"""
         try:
             vehicle_id = instance.vehicule.id
             
@@ -623,36 +666,36 @@ class ReservationViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la suppression de la réservation: {str(e)}")
             raise
-
+    
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated, IsAdminOrAgency])
     def update_status(self, request, pk=None):
         try:
             reservation = get_object_or_404(Reservation, id=pk)
             new_status = request.data.get('statut')
             valid_statuses = ['en_attente', 'confirmee', 'terminee', 'annulee']
-
+            
             if new_status not in valid_statuses:
                 return Response({
                     'error': f"Statut invalide. Choisissez parmi: {', '.join(valid_statuses)}"
                 }, status=status.HTTP_400_BAD_REQUEST)
-
+            
             if (getattr(request.user, 'role', None) == 'agence' and
                     reservation.vehicule.agence != request.user.agence):
                 return Response({
                     'error': "Vous n'êtes pas autorisé à modifier cette réservation"
                 }, status=status.HTTP_403_FORBIDDEN)
-
+            
             # Mettre à jour le statut de la réservation
             reservation.statut = new_status
             reservation.save()
             
-            # ✅ Correction : Mise à jour du véhicule sans déclencher clean()
+            # Mettre à jour le véhicule sans déclencher clean()
             vehicle_id = reservation.vehicule.id
             if new_status in ['annulee', 'terminee']:
                 Vehicule.objects.filter(id=vehicle_id).update(statut='disponible')
             elif new_status == 'confirmee':
-                Vehicule.objects.filter(id=vehicle_id).update(statut='loue')
-
+                Vehicule.objects.filter(id=vehicle_id).update(statut='loué')
+            
             logger.info(f"Statut de la réservation {reservation.id} mis à jour à '{new_status}' par {request.user.email}")
             return Response({
                 'message': 'Statut de la réservation mis à jour',
@@ -663,13 +706,13 @@ class ReservationViewSet(ModelViewSet):
             return Response({
                 'error': 'Erreur lors de la mise à jour du statut'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminOrAgency])
     def stats(self, request):
         try:
             queryset = self.get_queryset()
             
-            # ✅ Corrigé : Calcul de la durée moyenne
+            # Corrigé : Calcul de la durée moyenne
             total_duration = 0
             count = 0
             for reservation in queryset:
@@ -680,13 +723,26 @@ class ReservationViewSet(ModelViewSet):
             
             average_duration = total_duration / count if count > 0 else 0
             
+            # Corrigé : Calcul du revenu total en gérant Decimal128
+            revenus_total = 0.0
+            montant_values = queryset.values_list('montant_total', flat=True).exclude(montant_total__isnull=True)
+            if montant_values:
+                for montant in montant_values:
+                    try:
+                        if isinstance(montant, Decimal128):
+                            revenus_total += float(montant.to_decimal())
+                        elif isinstance(montant, (int, float, Decimal)):
+                            revenus_total += float(montant)
+                    except (TypeError, ValueError, AttributeError):
+                        continue
+            
             stats = {
                 'total': queryset.count(),
                 'en_attente': queryset.filter(statut='en_attente').count(),
                 'confirmees': queryset.filter(statut='confirmee').count(),
                 'terminees': queryset.filter(statut='terminee').count(),
                 'annulees': queryset.filter(statut='annulee').count(),
-                'revenus_total': float(queryset.aggregate(total=Sum('montant_total'))['total'] or 0),
+                'revenus_total': revenus_total,
                 'moyenne_duree': float(average_duration)
             }
             
@@ -706,11 +762,11 @@ class UserViewSet(ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
     authentication_classes = [JWTAuthentication]
-
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
-
+        
         if params.get('role'):
             queryset = queryset.filter(role=params.get('role'))
         elif params.get('search'):
@@ -725,9 +781,9 @@ class UserViewSet(ModelViewSet):
             queryset = queryset.filter(is_active=is_active)
         if params.get('agence_id'):
             queryset = queryset.filter(agence_id=params.get('agence_id'))
-
+        
         return queryset.order_by('-date_joined')
-
+    
     def perform_create(self, serializer):
         try:
             user = serializer.save()
@@ -735,7 +791,7 @@ class UserViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
             raise
-
+    
     def perform_update(self, serializer):
         try:
             user = serializer.save()
@@ -743,30 +799,34 @@ class UserViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour de l'utilisateur: {str(e)}")
             raise
-
+    
     def perform_destroy(self, instance):
         try:
             if instance.id == self.request.user.id:
                 raise ValidationError("Vous ne pouvez pas supprimer votre propre compte.")
+            
             logger.info(f"Utilisateur supprimé: {instance.email} par {self.request.user.email}")
             instance.delete()
         except Exception as e:
             logger.error(f"Erreur lors de la suppression de l'utilisateur: {str(e)}")
             raise
-
+    
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated, IsAdminUser])
     def toggle_active(self, request, pk=None):
         try:
             user = get_object_or_404(User, id=pk)
+            
             if user.id == request.user.id:
                 return Response({
                     'error': 'Vous ne pouvez pas modifier votre propre statut actif'
                 }, status=status.HTTP_403_FORBIDDEN)
-
+            
             user.is_active = not user.is_active
             user.save()
+            
             status_text = 'activé' if user.is_active else 'désactivé'
             logger.info(f"Utilisateur {user.email} {status_text} par {request.user.email}")
+            
             return Response({
                 'message': f"Utilisateur {status_text} avec succès",
                 'user': UserSerializer(user).data
@@ -776,11 +836,12 @@ class UserViewSet(ModelViewSet):
             return Response({
                 'error': 'Erreur lors de la modification du statut'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
     @action(detail=False, methods=['get'])
     def stats(self, request):
         try:
             queryset = self.get_queryset()
+            
             stats = {
                 'total_users': queryset.count(),
                 'active_users': queryset.filter(is_active=True).count(),
@@ -790,6 +851,7 @@ class UserViewSet(ModelViewSet):
                     avg_days=Avg(timezone.now() - F('date_joined'))
                 )['avg_days'].days if queryset.exists() else 0
             }
+            
             logger.info(f"Statistiques des utilisateurs récupérées pour {request.user.email}")
             return Response({
                 'stats': stats,
@@ -804,7 +866,7 @@ class UserViewSet(ModelViewSet):
 class DemandForecastView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = [JSONWebTokenAuthentication]
-
+    
     def get(self, request):
         try:
             # Log the raw request for debugging
@@ -816,7 +878,7 @@ class DemandForecastView(APIView):
             date = force_str(unquote(request.query_params.get('date', '')))
             
             logger.info(f"Decoded params - Location: {location}, Carburant: {carburant}, Date: {date}")
-
+            
             # Validate required parameters
             if not date:
                 logger.error(f"Demand prediction failed: missing date for user {getattr(request.user, 'email', 'anonymous')}")
@@ -824,7 +886,7 @@ class DemandForecastView(APIView):
                     {"error": "Date requise (format: AAAA-MM-JJ)"}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
+            
             # Validate date format
             try:
                 parsed_date = datetime.datetime.strptime(date, '%Y-%m-%d')
@@ -834,7 +896,7 @@ class DemandForecastView(APIView):
                     {"error": "Format de date invalide. Utilisez AAAA-MM-JJ."}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
+            
             # Validate location and fuel type
             valid_locations = ['Tunis', 'Sfax', 'Sousse', 'Bizerte', 'Djerba']
             valid_fuels = ['essence', 'diesel', 'électrique', 'hybride']
@@ -852,7 +914,7 @@ class DemandForecastView(APIView):
                     {"error": f"Type de carburant invalide. Choisissez parmi: {', '.join(valid_fuels)}"}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
+            
             # Check user permissions for location access
             if hasattr(request.user, 'role') and request.user.role == 'agence':
                 if hasattr(request.user, 'agence') and request.user.agence:
@@ -862,7 +924,7 @@ class DemandForecastView(APIView):
                             {"error": "Accès limité à votre localisation d'agence"}, 
                             status=status.HTTP_403_FORBIDDEN
                         )
-
+            
             # Define holidays and special events for 2025
             holidays = [
                 "2025-01-01", "2025-01-14", "2025-03-20", "2025-04-09",
@@ -873,13 +935,13 @@ class DemandForecastView(APIView):
                 "2025-03-30", "2025-03-31", "2025-04-01",  # Eid al-Fitr
                 "2025-06-06", "2025-06-07", "2025-06-26"   # Eid al-Adha and related
             ]
-
+            
             # Create context for prediction
             is_holiday = 1 if date in holidays else 0
             is_family_event = 1 if date in family_events else 0
             is_rainy = 0  # Default value, could be enhanced with weather API
             taux_occupation = 0.5  # Default occupancy rate
-
+            
             # Check if CSV file exists
             csv_path = os.path.join(settings.BASE_DIR, 'data', 'demand_forecast_dataset_2025.csv')
             logger.info(f"Looking for CSV file at: {csv_path}")
@@ -890,7 +952,7 @@ class DemandForecastView(APIView):
                     {"error": "Données historiques non disponibles"}, 
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-
+            
             # Generate forecast for multiple periods (7 days)
             forecast_data = []
             base_date = parsed_date
@@ -924,7 +986,7 @@ class DemandForecastView(APIView):
                     "vehicle_type": carburant,
                     "location": location
                 })
-
+            
             # Check if we have any valid predictions
             if not forecast_data or all(item["demand"] == 0 for item in forecast_data):
                 logger.warning(f"No predictions available for {location} - {carburant}")
@@ -932,7 +994,7 @@ class DemandForecastView(APIView):
                     {"error": f"Aucune donnée disponible pour {location} - {carburant}"}, 
                     status=status.HTTP_404_NOT_FOUND
                 )
-
+            
             logger.info(f"Successful prediction for {location} - {carburant} starting {date}")
             
             total_predicted = sum(item["demand"] for item in forecast_data)
@@ -946,7 +1008,6 @@ class DemandForecastView(APIView):
                 "total_predicted": round(total_predicted, 2),
                 "average_daily": round(average_daily, 2)
             }, status=status.HTTP_200_OK)
-
         except Exception as e:
             user_email = getattr(request.user, 'email', 'anonymous') if hasattr(request, 'user') else 'anonymous'
             error_traceback = traceback.format_exc()
@@ -958,21 +1019,20 @@ class DemandForecastView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class RecommendationView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
-
+    
     def get(self, request):
         try:
             if not request.user.is_authenticated:
                 logger.error("User is not authenticated")
                 return Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
-
+            
             user_email = request.user.email
             user_id = str(request.user.id)
             logger.info(f"Processing recommendation request for user: {user_email} (ID: {user_id})")
-
+            
             try:
                 n_items = int(request.query_params.get('n_items', 5))
                 if n_items < 1 or n_items > 20:
@@ -983,14 +1043,14 @@ class RecommendationView(APIView):
             type_vehicule = request.query_params.get('type_vehicule', None)
             marque = request.query_params.get('marque', None)
             logger.info(f"Request parameters: n_items={n_items}, type_vehicule={type_vehicule}, marque={marque}")
-
+            
             csv_path = getattr(settings, 'DATASETS', {}).get('recommendation')
             if not csv_path:
                 csv_path = os.path.join(settings.BASE_DIR, 'data', 'recommendation_dataset_cars_2025.csv')
             
             if not os.path.exists(csv_path):
                 logger.warning(f"Recommendation dataset not found at: {csv_path}, proceeding with defaults")
-
+            
             try:
                 logger.info("Initializing recommendation engine...")
                 engine = RecommendationEngine()
@@ -998,7 +1058,7 @@ class RecommendationView(APIView):
             except Exception as engine_error:
                 logger.error(f"Failed to initialize recommendation engine: {str(engine_error)}")
                 return Response({"error": "Recommendation service temporarily unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
+            
             try:
                 def get_recommendations_safe():
                     try:
@@ -1031,24 +1091,26 @@ class RecommendationView(APIView):
                     "recommendations": [],
                     "error": "Could not generate personalized recommendations"
                 }, status=status.HTTP_200_OK)
-
+            
             if not recommendations:
                 logger.warning(f"No recommendations found for user {user_email}")
                 return Response({
                     "recommendations": [],
                     "message": "No recommendations available at this time. Please check vehicle availability or try different filters."
                 }, status=status.HTTP_200_OK)
-
+            
             recommendations_data = []
             for vehicle in recommendations:
                 try:
                     if not vehicle.get('id') or vehicle.get('marque') in ['unknown', 'aaaaaaaa', '', None]:
                         logger.warning(f"Skipping vehicle without valid id or marque: {vehicle}")
                         continue
+                    
                     eco_score = engine.calculate_eco_score(
                         vehicle.get("emissionsCO2", 120), 
                         vehicle.get("carburant", "essence")
                     )
+                    
                     vehicle_data = {
                         "id": str(vehicle.get("id", "")),
                         "marque": str(vehicle.get("marque", "Unknown")),
@@ -1059,6 +1121,7 @@ class RecommendationView(APIView):
                         "type_vehicule": str(vehicle.get("type_vehicule", "berline")),
                         "eco_score": float(eco_score) if eco_score is not None else 0.5
                     }
+                    
                     if vehicle_data["prix_par_jour"] > 0:
                         recommendations_data.append(vehicle_data)
                     else:
@@ -1066,8 +1129,9 @@ class RecommendationView(APIView):
                 except Exception as format_error:
                     logger.warning(f"Error formatting vehicle {vehicle.get('id', 'unknown')}: {str(format_error)}")
                     continue
-
+            
             logger.info(f"Successfully formatted {len(recommendations_data)} recommendations for {user_email}")
+            
             if not recommendations_data:
                 return Response({
                     "recommendations": [],

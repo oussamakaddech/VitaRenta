@@ -118,8 +118,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             return "L'année doit être valide";
         if (data.kilometrage && (isNaN(parseInt(data.kilometrage)) || parseInt(data.kilometrage) < 0))
             return "Le kilométrage doit être un nombre positif";
-        if (data.immatriculation && !/^[A-Z0-9-]{1,10}$/.test(data.immatriculation))
-            return "L'immatriculation doit être au format valide (ex: ABC-123-XYZ)";
+        
         if (data.date_derniere_maintenance && !isValidDate(data.date_derniere_maintenance))
             return "La date de dernière maintenance doit être valide";
         if (data.prochaine_maintenance && !isValidDate(data.prochaine_maintenance))

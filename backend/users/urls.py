@@ -39,3 +39,4 @@ urlpatterns = [
     # Router routes
     path('', include(router.urls)),
 ]
+

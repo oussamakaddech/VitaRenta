@@ -1,4 +1,3 @@
-# models.py
 from datetime import timedelta
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
@@ -201,7 +200,12 @@ class Vehicule(models.Model):
     annee = models.PositiveIntegerField(null=True, blank=True)
     kilometrage = models.PositiveIntegerField(null=True, blank=True)
     couleur = models.CharField(max_length=50, blank=True)
-    immatriculation = models.CharField(max_length=20, unique=True, blank=True)
+    immatriculation = models.CharField(
+    max_length=20,
+    null=True,
+    blank=True,
+    # unique=True   <- Supprime ou commente cette ligne
+)
     emissionsCO2 = models.IntegerField(
         null=True,
         blank=True,
@@ -244,16 +248,34 @@ class Vehicule(models.Model):
         super().clean()
         if self.consommationEnergie is not None:
             try:
-                self.consommationEnergie = float(self.consommationEnergie)
-            except (ValueError, TypeError):
+                # Convertir en Decimal si nécessaire
+                if not isinstance(self.consommationEnergie, Decimal):
+                    self.consommationEnergie = Decimal(str(self.consommationEnergie))
+            except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'consommationEnergie': 'La consommation doit être un nombre valide.'})
         if self.prix_par_jour is not None:
             try:
-                self.prix_par_jour = float(self.prix_par_jour)
-            except (ValueError, TypeError):
+                # Convertir en Decimal si nécessaire
+                if not isinstance(self.prix_par_jour, Decimal):
+                    self.prix_par_jour = Decimal(str(self.prix_par_jour))
+            except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'prix_par_jour': 'Le prix par jour doit être un nombre valide.'})
         if self.immatriculation:
             self.immatriculation = self.immatriculation.strip().upper()
+
+    def modifier(self, **kwargs):
+        """Méthode pour modifier un véhicule"""
+        for field, value in kwargs.items():
+            setattr(self, field, value)
+        self.save()
+        return self
+    
+    def mettre_en_maintenance(self):
+        """Méthode pour mettre un véhicule en maintenance"""
+        self.statut = 'maintenance'
+        self.date_derniere_maintenance = timezone.now().date()
+        self.save()
+        return self
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -261,6 +283,12 @@ class Vehicule(models.Model):
             self.marque = 'Marque inconnue'
         if not self.modele:
             self.modele = 'Modèle inconnu'
+            
+        # Générer une immatriculation temporaire seulement si c'est une nouvelle instance
+        if not self.immatriculation and not self.pk:
+            import uuid
+            self.immatriculation = f"TEMP-{uuid.uuid4().hex[:8].upper()}"
+            
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -323,6 +351,8 @@ class Reservation(models.Model):
 
     def save(self, *args, **kwargs):
         self.clean()
+        # Supprimer les lignes qui essaient d'accéder à des attributs de véhicule
+        # car ils n'existent pas dans le modèle Reservation
         super().save(*args, **kwargs)
 
     def __str__(self):
