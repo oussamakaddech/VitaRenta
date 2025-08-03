@@ -7,11 +7,12 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    LoginView, LogoutView, SignUpView, UserProfileView, UserStatsView,
+    LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
     UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView
 )
 
+# Router configuration
 router = DefaultRouter()
 router.register(r'vehicules', VehiculeViewSet, basename='vehicule')
 router.register(r'agences', AgenceViewSet, basename='agence')
@@ -21,22 +22,44 @@ router.register(r'users', UserViewSet, basename='user')
 urlpatterns = [
     # Authentication routes
     path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),  # Fixed typo
+    path('logout/', LogoutView.as_view(), name='logout'),
     path('inscription/', SignUpView.as_view(), name='signup'),
+    
     # JWT routes
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    
     # User-related routes
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('profile/photo/', UserPhotoUploadView.as_view(), name='user-photo-upload'),
     path('profile/stats/', UserStatsView.as_view(), name='user-stats'),
-    path('update_agence/', UpdateAgenceView.as_view(), name='update-agence'),
-    # Demand forecast and recommendations routes
-    path('demand-forecast/', DemandForecastView.as_view(), name='demand_forecast'),
+    path('update-agence/', UpdateAgenceView.as_view(), name='update-agence'),
+    
+    # Analytics routes
+    path('demand-forecast/', DemandForecastView.as_view(), name='demand-forecast'),
     path('recommendations/', RecommendationView.as_view(), name='recommendations'),
     
-    # Router routes
-    path('', include(router.urls)),
+    # API routes pour les stats (ajout pour corriger le problème des stats)
+    path('api/vehicules/stats/', VehiculeViewSet.as_view({'get': 'stats'}), name='vehicule-stats'),
+    path('api/reservations/stats/', ReservationViewSet.as_view({'get': 'stats'}), name='reservation-stats'),
+    path('api/users/stats/', UserViewSet.as_view({'get': 'stats'}), name='user-stats'),
+    # Ajouter ces routes dans la liste urlpatterns
+# Ajoutez ces routes dans la liste urlpatterns
+    path('password-reset-request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
+    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),  
+    # Router routes (doit être en dernier pour éviter les conflits)
+    path('api/', include(router.urls)),
+    path('', include(router.urls)),  # Maintien de la compatibilité
 ]
 
+# Configuration pour le développement
+try:
+    from django.conf import settings
+    if settings.DEBUG:
+        from django.conf.urls.static import static
+        # Servir les fichiers média en développement
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+        urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+except ImportError:
+    pass

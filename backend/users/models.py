@@ -80,6 +80,8 @@ class User(AbstractUser):
         default=Decimal('50.00'),
         validators=[MinValueValidator(Decimal('0'))]
     )
+    password_reset_token = models.CharField(max_length=100, null=True, blank=True)
+    password_reset_expiry = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['nom']
@@ -113,6 +115,12 @@ class User(AbstractUser):
         self.last_login_attempt = None
         self.save(update_fields=['login_attempts', 'last_login_attempt'])
 
+    def reset_password_token(self):
+        """Generate a new password reset token and set expiry."""
+        self.password_reset_token = uuid.uuid4().hex
+        self.password_reset_expiry = timezone.now() + timedelta(hours=1)
+        self.save(update_fields=['password_reset_token', 'password_reset_expiry'])
+
     def get_full_name(self):
         return self.nom or self.username
 
@@ -124,7 +132,8 @@ class User(AbstractUser):
             models.Index(fields=['email'], name='user_email_idx'),
             models.Index(fields=['username'], name='user_username_idx'),
             models.Index(fields=['date_joined'], name='user_date_joined_idx'),
-            models.Index(fields=['role'], name='user_role_idx')
+            models.Index(fields=['role'], name='user_role_idx'),
+            models.Index(fields=['password_reset_token'], name='user_reset_token_idx')
         ]
 
 class Agence(models.Model):
@@ -200,12 +209,7 @@ class Vehicule(models.Model):
     annee = models.PositiveIntegerField(null=True, blank=True)
     kilometrage = models.PositiveIntegerField(null=True, blank=True)
     couleur = models.CharField(max_length=50, blank=True)
-    immatriculation = models.CharField(
-    max_length=20,
-    null=True,
-    blank=True,
-    # unique=True   <- Supprime ou commente cette ligne
-)
+    immatriculation = models.CharField(max_length=20, null=True, blank=True)
     emissionsCO2 = models.IntegerField(
         null=True,
         blank=True,
@@ -248,14 +252,12 @@ class Vehicule(models.Model):
         super().clean()
         if self.consommationEnergie is not None:
             try:
-                # Convertir en Decimal si nécessaire
                 if not isinstance(self.consommationEnergie, Decimal):
                     self.consommationEnergie = Decimal(str(self.consommationEnergie))
             except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'consommationEnergie': 'La consommation doit être un nombre valide.'})
         if self.prix_par_jour is not None:
             try:
-                # Convertir en Decimal si nécessaire
                 if not isinstance(self.prix_par_jour, Decimal):
                     self.prix_par_jour = Decimal(str(self.prix_par_jour))
             except (ValueError, TypeError, InvalidOperation):
@@ -283,12 +285,8 @@ class Vehicule(models.Model):
             self.marque = 'Marque inconnue'
         if not self.modele:
             self.modele = 'Modèle inconnu'
-            
-        # Générer une immatriculation temporaire seulement si c'est une nouvelle instance
         if not self.immatriculation and not self.pk:
-            import uuid
             self.immatriculation = f"TEMP-{uuid.uuid4().hex[:8].upper()}"
-            
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -338,21 +336,17 @@ class Reservation(models.Model):
 
     def clean(self):
         super().clean()
-        
         if self.montant_total is not None:
             try:
                 if not isinstance(self.montant_total, Decimal):
-                    self.montant_total = Decimal(self.montant_total)
+                    self.montant_total = Decimal(str(self.montant_total))
             except (ValueError, TypeError, InvalidOperation):
                 raise ValidationError({'montant_total': 'Le montant total doit être un nombre valide.'})
-        
         if self.date_debut and self.date_fin and self.date_fin <= self.date_debut:
             raise ValidationError({'date_fin': 'La date de fin doit être postérieure à la date de début.'})
 
     def save(self, *args, **kwargs):
         self.clean()
-        # Supprimer les lignes qui essaient d'accéder à des attributs de véhicule
-        # car ils n'existent pas dans le modèle Reservation
         super().save(*args, **kwargs)
 
     def __str__(self):

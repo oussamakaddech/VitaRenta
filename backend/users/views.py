@@ -1,5 +1,6 @@
 from datetime import timedelta
 import datetime
+import secrets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -22,7 +23,7 @@ from django.conf import settings
 from rest_framework.decorators import action
 from .models import User, Vehicule, Agence, Reservation
 from .serializers import (
-    LoginSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
+    LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
     UserUpdateSerializer, VehiculeSerializer, AgenceSerializer, ReservationSerializer
 )
 from rest_framework.permissions import BasePermission
@@ -39,7 +40,19 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from urllib.parse import unquote
 from decimal import Decimal
-
+from bson.decimal128 import Decimal128
+from pymongo.errors import BulkWriteError  # Added for error handling
+import traceback
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from urllib.parse import unquote
+from decimal import Decimal
+from django.core.mail import send_mail
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+import secrets
+import base64
 logger = logging.getLogger(__name__)
 
 class UpdateAgenceView(APIView):
@@ -403,41 +416,54 @@ class VehiculeViewSet(ModelViewSet):
         try:
             queryset = self.get_queryset()
             logger.debug(f"Stats - Queryset size: {queryset.count()}")
-
+            
             # Compute individual stats with error handling
             total = queryset.count()
             logger.debug(f"Stats - Total vehicles: {total}")
-
+            
             disponibles = queryset.filter(statut='disponible').count()
             logger.debug(f"Stats - Disponibles: {disponibles}")
-
+            
             loues = queryset.filter(statut='loue').count()
             logger.debug(f"Stats - Loués: {loues}")
-
+            
             maintenance = queryset.filter(statut='maintenance').count()
             logger.debug(f"Stats - Maintenance: {maintenance}")
-
+            
             hors_service = queryset.filter(statut='hors_service').count()
             logger.debug(f"Stats - Hors service: {hors_service}")
-
+            
             # Compute par_carburant
             par_carburant_query = queryset.values('carburant').annotate(count=Count('id')).values_list('carburant', 'count')
             par_carburant = dict(par_carburant_query)
             logger.debug(f"Stats - Par carburant: {par_carburant}")
-
-            # Compute prix_moyen
-            avg_price = queryset.aggregate(avg_price=Avg('prix_par_jour'))['avg_price']
-            logger.debug(f"Stats - Raw avg_price: {avg_price}, type: {type(avg_price)}")
+            
+            # Compute prix_moyen - CORRECTION: Gérer correctement Decimal128
             prix_moyen = 0.0
-            if avg_price is not None:
-                if isinstance(avg_price, Decimal128):
-                    prix_moyen = float(avg_price.to_decimal())
-                elif isinstance(avg_price, (int, float)):
-                    prix_moyen = float(avg_price)
-                else:
-                    logger.warning(f"Stats - Unexpected avg_price type: {type(avg_price)}")
-                    prix_moyen = 0.0
-
+            try:
+                # Utiliser une approche différente pour éviter la conversion Decimal128
+                prix_values = queryset.values_list('prix_par_jour', flat=True).exclude(prix_par_jour__isnull=True)
+                if prix_values:
+                    total_prix = 0
+                    count = 0
+                    for prix in prix_values:
+                        try:
+                            if isinstance(prix, Decimal128):
+                                total_prix += float(prix.to_decimal())
+                            elif isinstance(prix, (int, float, Decimal)):
+                                total_prix += float(prix)
+                            count += 1
+                        except (TypeError, ValueError, AttributeError):
+                            continue
+                    
+                    if count > 0:
+                        prix_moyen = total_prix / count
+            except Exception as e:
+                logger.error(f"Erreur lors du calcul du prix moyen: {str(e)}")
+                prix_moyen = 0.0
+            
+            logger.debug(f"Stats - Prix moyen: {prix_moyen}")
+            
             stats = {
                 'total': total,
                 'disponibles': disponibles,
@@ -447,6 +473,7 @@ class VehiculeViewSet(ModelViewSet):
                 'par_carburant': par_carburant,
                 'prix_moyen': prix_moyen
             }
+            
             logger.info(f"Statistiques véhicules récupérées pour {request.user.email if request.user.is_authenticated else 'utilisateur anonyme'}")
             return Response(stats)
         except Exception as e:
@@ -837,32 +864,68 @@ class UserViewSet(ModelViewSet):
                 'error': 'Erreur lors de la modification du statut'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    
     @action(detail=False, methods=['get'])
     def stats(self, request):
         try:
             queryset = self.get_queryset()
             
-            stats = {
-                'total_users': queryset.count(),
-                'active_users': queryset.filter(is_active=True).count(),
-                'inactive_users': queryset.filter(is_active=False).count(),
-                'by_role': dict(queryset.values('role').annotate(count=Count('id')).values_list('role', 'count')),
-                'membre_depuis_moyen': queryset.aggregate(
-                    avg_days=Avg(timezone.now() - F('date_joined'))
-                )['avg_days'].days if queryset.exists() else 0
-            }
+            # Aggregate basic stats
+            stats = queryset.aggregate(
+                total_users=Count('id'),
+                active_users=Count('id', filter=Q(is_active=True)),
+                inactive_users=Count('id', filter=Q(is_active=False))
+            )
             
-            logger.info(f"Statistiques des utilisateurs récupérées pour {request.user.email}")
+            # Handle null values
+            for key in ['total_users', 'active_users', 'inactive_users']:
+                stats[key] = stats[key] or 0
+            
+            # Role distribution
+            try:
+                stats['by_role'] = dict(
+                    queryset.values('role')
+                    .annotate(count=Count('id'))
+                    .values_list('role', 'count')
+                )
+            except Exception as e:
+                logger.warning(f"Error calculating role distribution: {str(e)}")
+                stats['by_role'] = {}
+            
+            # Average membership duration
+            try:
+                avg_days = queryset.filter(date_joined__isnull=False).aggregate(
+                    avg_days=Avg(timezone.now() - F('date_joined'))
+                )['avg_days']
+                stats['membre_depuis_moyen'] = round(avg_days.days, 2) if avg_days else 0.0
+            except Exception as e:
+                logger.warning(f"Error calculating average membership duration: {str(e)}")
+                stats['membre_depuis_moyen'] = 0.0
+            
+            # Activity rate
+            stats['taux_activite'] = round((stats['active_users'] / stats['total_users'] * 100), 2) if stats['total_users'] > 0 else 0.0
+            
+            logger.info(f"User statistics retrieved for {request.user.email}")
             return Response({
                 'stats': stats,
-                'message': 'Statistiques récupérées avec succès'
+                'message': 'User statistics retrieved successfully',
+                'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_200_OK)
+            
         except Exception as e:
-            logger.error(f"Erreur lors de la récupération des statistiques des utilisateurs: {str(e)}")
+            logger.error(f"Error retrieving user statistics: {str(e)}", exc_info=True)
             return Response({
-                'error': 'Erreur lors de la récupération des statistiques'
+                'error': f'Error retrieving statistics: {str(e)}',
+                'stats': {
+                    'total_users': 0,
+                    'active_users': 0,
+                    'inactive_users': 0,
+                    'by_role': {},
+                    'membre_depuis_moyen': 0.0,
+                    'taux_activite': 0.0
+                },
+                'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class DemandForecastView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = [JSONWebTokenAuthentication]
@@ -1150,3 +1213,115 @@ class RecommendationView(APIView):
                 "recommendations": [],
                 "error": "An unexpected error occurred"
             }, status=status.HTTP_200_OK)
+        
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'errors': serializer.errors,
+                'message': 'Données invalides'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data.get('email')
+        try:
+            user = User.objects.get(email=email)
+            user.reset_password_token()
+            
+            # Créer le lien de réinitialisation
+            uid = urlsafe_base64_encode(force_bytes(user.id))
+            token = user.password_reset_token
+            reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+            
+            # Envoyer l'email
+            subject = "Réinitialisation de votre mot de passe"
+            message = f"""Bonjour {user.nom},
+
+Veuillez cliquer sur le lien suivant pour réinitialiser votre mot de passe:
+{reset_link}
+
+Ce lien expire dans 1 heure.
+
+Cordialement,
+L'équipe VitaRenta"""
+            
+            # Utiliser l'adresse email vérifiée de MailerSend
+            from_email = f"VitaRenta <{settings.DEFAULT_FROM_EMAIL}>"
+            
+            send_mail(
+                subject,
+                message,
+                from_email,
+                [user.email],
+                fail_silently=False,
+            )
+            
+            logger.info(f"Email de réinitialisation envoyé à {email}")
+            return Response({
+                'message': 'Email de réinitialisation envoyé avec succès'
+            }, status=status.HTTP_200_OK)
+            
+        except User.DoesNotExist:
+            logger.warning(f"Tentative de réinitialisation avec email inexistant: {email}")
+            return Response({
+                'message': 'Si cet email existe, un lien de réinitialisation a été envoyé'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Erreur lors de l'envoi de l'email de réinitialisation: {str(e)}")
+            return Response({
+                'error': 'Erreur lors de l\'envoi de l\'email'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'errors': serializer.errors,
+                'message': 'Données invalides'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        uid = serializer.validated_data.get('uid')
+        token = serializer.validated_data.get('token')
+        new_password = serializer.validated_data.get('new_password')
+        
+        try:
+            # Décoder l'UID pour obtenir l'ID utilisateur
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(id=user_id)
+            
+            # Vérifier le token et sa validité
+            if (user.password_reset_token != token or 
+                user.password_reset_expiry < timezone.now()):
+                return Response({
+                    'error': 'Token invalide ou expiré'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Mettre à jour le mot de passe
+            user.set_password(new_password)
+            user.password_reset_token = None
+            user.password_reset_expiry = None
+            user.save()
+            
+            logger.info(f"Mot de passe réinitialisé pour l'utilisateur {user.email}")
+            return Response({
+                'message': 'Mot de passe réinitialisé avec succès'
+            }, status=status.HTTP_200_OK)
+            
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({
+                'error': 'Lien de réinitialisation invalide'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Erreur lors de la réinitialisation du mot de passe: {str(e)}")
+            return Response({
+                'error': 'Erreur lors de la réinitialisation du mot de passe'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    

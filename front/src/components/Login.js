@@ -553,6 +553,16 @@ const Login = ({ setToken, setUser, onLogin }) => {
                                     ✨ Inscrivez-vous gratuitement
                                 </Link>
                             </p>
+                            <p>
+                                🔑 Mot de passe oublié ?{' '}
+                                <Link
+                                    to="/forgot-password"
+                                    className="forgot-password-link-desktop"
+                                    aria-label="Réinitialiser le mot de passe"
+                                >
+                                    Réinitialiser
+                                </Link>
+                            </p>
                         </div>
 
                         <div className="demo-section-desktop">

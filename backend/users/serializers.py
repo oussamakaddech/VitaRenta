@@ -486,3 +486,33 @@ class ReservationSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return reservation
+    
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    
+    def validate_email(self, value):
+        try:
+            User.objects.get(email=value.lower())
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Aucun utilisateur trouvé avec cet email.")
+        return value.lower()
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(write_only=True, min_length=8, required=True)
+    confirm_new_password = serializers.CharField(write_only=True, required=True)
+    
+    def validate_new_password(self, value):
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
+        return value
+    
+    def validate(self, data):
+        if data['new_password'] != data['confirm_new_password']:
+            raise serializers.ValidationError({
+                'confirm_new_password': 'Les mots de passe ne correspondent pas'
+            })
+        return data

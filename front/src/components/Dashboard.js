@@ -1,29 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import './Dashboard.css';
 
-// Enregistrement des composants Chart.js
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend, Filler);
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-// Hook pour les animations d'entrée avec support de prefers-reduced-motion
 const useAnimateOnMount = (delay = 0, animationsEnabled = true) => {
     const [isVisible, setIsVisible] = useState(false);
     
     useEffect(() => {
-        const reduceMotion = typeof window !== 'undefined' 
-            ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
-            : true;
-        
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!animationsEnabled || reduceMotion) {
             setIsVisible(true);
             return;
         }
-        
         const timer = setTimeout(() => setIsVisible(true), delay);
         return () => clearTimeout(timer);
     }, [delay, animationsEnabled]);
@@ -31,12 +26,10 @@ const useAnimateOnMount = (delay = 0, animationsEnabled = true) => {
     return isVisible;
 };
 
-// Composant pour les particules flottantes
+const SafeNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
 const FloatingParticles = ({ animationsEnabled }) => {
-    const reduceMotion = typeof window !== 'undefined' 
-        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
-        : true;
-    
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!animationsEnabled || reduceMotion) return null;
     
     const particles = Array.from({ length: 30 }, (_, i) => ({
@@ -64,12 +57,12 @@ const FloatingParticles = ({ animationsEnabled }) => {
     );
 };
 
-// Composant Sparkle pour effets visuels
+FloatingParticles.propTypes = {
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
 const Sparkle = ({ top, left, delay, animationsEnabled }) => {
-    const reduceMotion = typeof window !== 'undefined' 
-        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
-        : true;
-    
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!animationsEnabled || reduceMotion) return null;
     
     return (
@@ -84,27 +77,49 @@ const Sparkle = ({ top, left, delay, animationsEnabled }) => {
     );
 };
 
-// Composant pour barre de progression
-const ProgressBar = ({ percentage, color, label }) => (
-    <div className="progress-bar" role="progressbar" aria-valuenow={percentage} aria-valuemin="0" aria-valuemax="100" aria-label={label}>
-        <div
-            className="progress-fill"
-            style={{
-                width: `${Math.min(Math.max(percentage, 0), 100)}%`,
-                background: color,
-            }}
-        />
-    </div>
-);
+Sparkle.propTypes = {
+    top: PropTypes.number.isRequired,
+    left: PropTypes.number.isRequired,
+    delay: PropTypes.number.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
 
-// Composant pour graphique interactif avec Chart.js
+const ProgressBar = ({ percentage, color, label }) => {
+    const safePercentage = SafeNumber(percentage, 0);
+    const clampedPercentage = Math.min(Math.max(safePercentage, 0), 100);
+    
+    return (
+        <div className="progress-bar" role="progressbar" aria-valuenow={clampedPercentage} aria-valuemin="0" aria-valuemax="100" aria-label={label}>
+            <div
+                className="progress-fill"
+                style={{
+                    width: `${clampedPercentage}%`,
+                    background: color,
+                }}
+            />
+        </div>
+    );
+};
+
+ProgressBar.propTypes = {
+    percentage: PropTypes.number,
+    color: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+};
+
 const InteractiveChart = ({ data, label, color }) => {
+    const safeData = Array.isArray(data) ? data.map(d => SafeNumber(d, 0)) : [];
+    
+    if (safeData.length === 0) {
+        return <div className="chart-placeholder">Pas de données disponibles</div>;
+    }
+    
     const chartData = {
-        labels: data.map((_, index) => `Jour ${index + 1}`),
+        labels: safeData.map((_, index) => `Jour ${index + 1}`),
         datasets: [
             {
                 label,
-                data,
+                data: safeData,
                 borderColor: color,
                 backgroundColor: `${color}33`,
                 fill: true,
@@ -120,10 +135,7 @@ const InteractiveChart = ({ data, label, color }) => {
         plugins: {
             legend: {
                 position: 'top',
-                labels: {
-                    color: '#fff',
-                    font: { size: 14 },
-                },
+                labels: { color: '#fff', font: { size: 14 } },
             },
             tooltip: {
                 enabled: true,
@@ -139,14 +151,8 @@ const InteractiveChart = ({ data, label, color }) => {
             },
         },
         scales: {
-            x: {
-                ticks: { color: '#fff' },
-                grid: { display: false },
-            },
-            y: {
-                ticks: { color: '#fff' },
-                grid: { color: 'rgba(255, 255, 255, 0.2)' },
-            },
+            x: { ticks: { color: '#fff' }, grid: { display: false } },
+            y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255, 255, 255, 0.2)' } },
         },
         maintainAspectRatio: false,
     };
@@ -158,7 +164,12 @@ const InteractiveChart = ({ data, label, color }) => {
     );
 };
 
-// Composant carte statistique principale
+InteractiveChart.propTypes = {
+    data: PropTypes.array,
+    label: PropTypes.string.isRequired,
+    color: PropTypes.string.isRequired,
+};
+
 const StatCard = ({
     icon,
     number,
@@ -173,6 +184,9 @@ const StatCard = ({
     animationsEnabled,
 }) => {
     const isVisible = useAnimateOnMount(index * 150, animationsEnabled);
+    const safeNumber = SafeNumber(number, 0);
+    const safeTrendValue = SafeNumber(trendValue, 0);
+    const safeProgress = SafeNumber(progress, 0);
     
     const getTrendIcon = () => {
         if (trend === 'up') return '↗️';
@@ -211,23 +225,23 @@ const StatCard = ({
             </div>
             <div className="stat-content">
                 <div className="stat-number" id={`stat-card-${index}`}>
-                    {Number.isFinite(number) ? number : 0}
-                    {Number.isFinite(trendValue) && (
-                        <span style={{ fontSize: '1rem', opacity: 0.8 }} aria-label={`Tendance: ${trendValue}%`}>
-                            {trendValue > 0 ? '+' : ''}{trendValue.toFixed(1)}%
+                    {safeNumber}
+                    {safeTrendValue !== 0 && (
+                        <span style={{ fontSize: '1rem', opacity: 0.8 }} aria-label={`Tendance: ${safeTrendValue}%`}>
+                            {safeTrendValue > 0 ? '+' : ''}{safeTrendValue.toFixed(1)}%
                         </span>
                     )}
                 </div>
                 <div className="stat-label">{label}</div>
                 <div className="stat-description" id={`stat-desc-${index}`}>{description}</div>
-                {Number.isFinite(progress) && (
+                {safeProgress > 0 && (
                     <ProgressBar
-                        percentage={progress}
+                        percentage={safeProgress}
                         color="linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4))"
                         label={`Progression pour ${label}`}
                     />
                 )}
-                {chartData && chartData.length > 0 && (
+                {Array.isArray(chartData) && chartData.length > 0 && (
                     <InteractiveChart
                         data={chartData}
                         label={label}
@@ -239,9 +253,24 @@ const StatCard = ({
     );
 };
 
-// Composant métrique secondaire
+StatCard.propTypes = {
+    icon: PropTypes.element.isRequired,
+    number: PropTypes.number,
+    label: PropTypes.string.isRequired,
+    description: PropTypes.string.isRequired,
+    trend: PropTypes.string,
+    trendValue: PropTypes.number,
+    color: PropTypes.string.isRequired,
+    progress: PropTypes.number,
+    chartData: PropTypes.array,
+    index: PropTypes.number.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
 const MetricCard = ({ value, label, index, animationsEnabled }) => {
     const isVisible = useAnimateOnMount(index * 100, animationsEnabled);
+    const displayValue = value !== undefined && value !== null ? value : 'N/A';
+    
     return (
         <div
             className={`metric-card ${isVisible ? 'animate-in' : ''}`}
@@ -249,18 +278,24 @@ const MetricCard = ({ value, label, index, animationsEnabled }) => {
             aria-labelledby={`metric-card-${index}`}
         >
             <div className="metric-value" id={`metric-card-${index}`}>
-                {value !== undefined && value !== null ? value : 'N/A'}
+                {displayValue}
             </div>
             <div className="metric-label">{label}</div>
         </div>
     );
 };
 
-// Composant pour les alertes de maintenance
+MetricCard.propTypes = {
+    value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    label: PropTypes.string.isRequired,
+    index: PropTypes.number.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
 const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }) => {
     const isVisible = useAnimateOnMount(300, animationsEnabled);
     
-    if (!alerts || alerts.length === 0) {
+    if (!Array.isArray(alerts) || alerts.length === 0) {
         return null;
     }
     
@@ -268,25 +303,25 @@ const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }
         <div className={`maintenance-alerts ${isVisible ? 'animate-in' : ''}`}>
             <h2>Alertes de Maintenance</h2>
             <div className="alerts-container">
-                {alerts.map((alert, index) => (
+                {alerts.map((alert) => (
                     <div key={alert.id} className="alert-toast">
                         <div className="alert-content">
-                            <strong>{alert.vehicleName}</strong>
-                            <p>{alert.message}</p>
-                            <p>Prochaine maintenance: {alert.nextMaintenanceDate}</p>
+                            <strong>{alert.vehicleName || 'Véhicule inconnu'}</strong>
+                            <p>{alert.message || 'Maintenance requise'}</p>
+                            <p>Prochaine maintenance: {alert.nextMaintenanceDate || 'À définir'}</p>
                         </div>
                         <div className="alert-actions">
                             <button 
                                 className="send-email-button"
                                 onClick={() => onSendEmail(alert)}
-                                aria-label={`Envoyer un email pour ${alert.vehicleName}`}
+                                aria-label={`Envoyer un email pour ${alert.vehicleName || 'ce véhicule'}`}
                             >
                                 Envoyer un email
                             </button>
                             <button 
                                 className="dismiss-button"
                                 onClick={() => onDismiss(alert.id)}
-                                aria-label={`Ignorer l'alerte pour ${alert.vehicleName}`}
+                                aria-label={`Ignorer l'alerte pour ${alert.vehicleName || 'ce véhicule'}`}
                             >
                                 Ignorer
                             </button>
@@ -298,7 +333,18 @@ const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }
     );
 };
 
-// Composant pour la section des revenus
+MaintenanceAlerts.propTypes = {
+    alerts: PropTypes.arrayOf(PropTypes.shape({
+        id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+        vehicleName: PropTypes.string,
+        message: PropTypes.string,
+        nextMaintenanceDate: PropTypes.string,
+    })),
+    onDismiss: PropTypes.func.isRequired,
+    onSendEmail: PropTypes.func.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
 const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) => {
     const [selectedPeriod, setSelectedPeriod] = useState('month');
     const isVisible = useAnimateOnMount(500, animationsEnabled);
@@ -307,11 +353,15 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
         setSelectedPeriod(e.target.value);
     };
     
+    const safeRevenueData = revenueData || { total: 0, details: [] };
+    const safeTotal = SafeNumber(safeRevenueData.total, 0);
+    const safeDetails = Array.isArray(safeRevenueData.details) ? safeRevenueData.details : [];
+    
     return (
         <div className={`revenue-section ${isVisible ? 'animate-in' : ''}`}>
             <h2>Revenus</h2>
             <div>
-                <h3>Total: {revenueData.total?.toFixed(2)}€</h3>
+                <h3>Total: {safeTotal.toFixed(2)}€</h3>
                 <select value={selectedPeriod} onChange={handlePeriodChange} aria-label="Sélectionner la période pour les revenus">
                     <option value="day">Aujourd'hui</option>
                     <option value="week">Cette semaine</option>
@@ -330,14 +380,20 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
                     </tr>
                 </thead>
                 <tbody>
-                    {revenueData.details?.map((item, index) => (
-                        <tr key={index}>
-                            <td>{item.vehicleName}</td>
-                            <td>{item.agenceName}</td>
-                            <td>{item.days}</td>
-                            <td>{item.revenue?.toFixed(2)}€</td>
+                    {safeDetails.length > 0 ? (
+                        safeDetails.map((item, index) => (
+                            <tr key={index}>
+                                <td>{item.vehicleName || 'N/A'}</td>
+                                <td>{item.agenceName || 'N/A'}</td>
+                                <td>{SafeNumber(item.days, 0)}</td>
+                                <td>{SafeNumber(item.revenue, 0).toFixed(2)}€</td>
+                            </tr>
+                        ))
+                    ) : (
+                        <tr>
+                            <td colSpan="4" style={{ textAlign: 'center' }}>Aucune donnée disponible</td>
                         </tr>
-                    ))}
+                    )}
                 </tbody>
             </table>
             
@@ -354,7 +410,20 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
     );
 };
 
-// Composant principal Dashboard
+RevenueSection.propTypes = {
+    revenueData: PropTypes.shape({
+        total: PropTypes.number,
+        details: PropTypes.arrayOf(PropTypes.shape({
+            vehicleName: PropTypes.string,
+            agenceName: PropTypes.string,
+            days: PropTypes.number,
+            revenue: PropTypes.number,
+        })),
+    }),
+    onGenerateBilling: PropTypes.func.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
 const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled: true } }) => {
     const [stats, setStats] = useState({
         totalVehicles: 0,
@@ -442,36 +511,31 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         }
     };
     
-    // Chargement des alertes de maintenance
     const fetchMaintenanceAlerts = async (accessToken) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/vehicules/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params: { statut: 'maintenance' },
             });
-            
-            const alerts = response.data.map(vehicle => ({
-                id: vehicle.id,
-                vehicleName: `${vehicle.marque} ${vehicle.modele}`,
+            const alerts = (response.data || []).map(vehicle => ({
+                id: vehicle.id || Math.random(),
+                vehicleName: `${vehicle.marque || 'N/A'} ${vehicle.modele || 'N/A'}`,
                 message: 'Maintenance préventive nécessaire',
                 nextMaintenanceDate: vehicle.prochaine_maintenance || '2025-08-15',
             }));
-            
             setMaintenanceAlerts(alerts);
         } catch (error) {
             console.error('Erreur lors du chargement des alertes de maintenance:', error);
-            // Ne pas afficher d'erreur pour les alertes de maintenance car ce n'est pas critique
+            setMaintenanceAlerts([]);
         }
     };
     
-    // Chargement des données de revenus
     const fetchRevenueData = async (accessToken, period) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params: { period },
             });
-            
             const reservationsData = response.data.stats || {};
             
             const detailsResponse = await axios.get(`${API_BASE_URL}/api/reservations/`, {
@@ -479,33 +543,40 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 params: { period },
             });
             
-            const details = detailsResponse.data.map(reservation => ({
-                vehicleName: reservation.vehicule_display?.marque 
-                    ? `${reservation.vehicule_display.marque} ${reservation.vehicule_display.modele}` 
-                    : 'Véhicule inconnu',
-                agenceName: reservation.vehicule_display?.agence?.nom || 'Agence inconnue',
-                days: Math.ceil((new Date(reservation.date_fin) - new Date(reservation.date_debut)) / (1000 * 60 * 60 * 24)),
-                revenue: parseFloat(reservation.montant_total) || 0,
-            }));
+            const details = (detailsResponse.data || []).map(reservation => {
+                const startDate = new Date(reservation.date_debut);
+                const endDate = new Date(reservation.date_fin);
+                const days = isNaN(startDate) || isNaN(endDate) ? 0 : 
+                    Math.max(0, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
+                
+                return {
+                    vehicleName: reservation.vehicule_display?.marque 
+                        ? `${reservation.vehicule_display.marque} ${reservation.vehicule_display.modele}` 
+                        : 'Véhicule inconnu',
+                    agenceName: reservation.vehicule_display?.agence?.nom || 'Agence inconnue',
+                    days,
+                    revenue: SafeNumber(reservation.montant_total, 0),
+                };
+            });
             
             setRevenueData({
-                total: parseFloat(reservationsData.revenus_total) || 0,
+                total: SafeNumber(reservationsData.revenus_total, 0),
                 details,
             });
         } catch (error) {
             console.error('Erreur lors du chargement des données de revenus:', error);
-            // Ne pas afficher d'erreur pour les revenus car ce n'est pas critique
+            setRevenueData({ total: 0, details: [] });
         }
     };
     
-    // Chargement des statistiques et tendances
     const fetchStats = useCallback(async (retryCount = 0, maxRetries = 3) => {
         try {
             setLoading(true);
+            setError(null);
             let accessToken = token;
             const params = { period: filter.period };
             if (filter.agenceId) params.agence_id = filter.agenceId;
-            
+
             const defaultStats = {
                 total: 0,
                 disponibles: 0,
@@ -514,19 +585,20 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 hors_service: 0,
                 par_carburant: {},
                 prix_moyen: 0,
+                taux_utilisation: 0,
             };
-            
-            const defaultReservations = {
+
+            const defaultReservationStats = {
                 total: 0,
-                revenus_total: 0,
                 en_attente: 0,
                 confirmees: 0,
                 terminees: 0,
                 annulees: 0,
+                revenus_total: 0,
                 moyenne_duree: 0,
+                taux_succes: 0,
             };
-            
-            // Récupération des données des véhicules
+
             const vehiculesResponse = await axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params,
@@ -538,68 +610,54 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 }
                 return { data: defaultStats };
             });
-            
-            // Récupération des données des réservations
+
             const reservationsResponse = await axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params,
-            }).catch(async error => {
-                if (error.response?.status === 401 && retryCount < maxRetries) {
-                    accessToken = await refreshToken();
-                    if (!accessToken) return { data: defaultReservations };
-                    return fetchStats(retryCount + 1, maxRetries);
-                }
-                return { data: defaultReservations };
+            }).catch(error => {
+                return { data: { stats: defaultReservationStats } };
             });
-            
-            const vehiculesData = vehiculesResponse.data || defaultStats;
-            const reservationsData = reservationsResponse.data || defaultReservations;
-            
-            // Mise à jour des statistiques
+                         const vehiculesData = vehiculesResponse.data || defaultStats;
+
+            const reservationsData = reservationsResponse.data.stats || defaultReservationStats;
+
             setStats({
-                totalVehicles: Number.isFinite(vehiculesData.total) ? vehiculesData.total : 0,
-                disponibles: Number.isFinite(vehiculesData.disponibles) ? vehiculesData.disponibles : 0,
-                loues: Number.isFinite(vehiculesData.loues) ? vehiculesData.loues : 0,
-                maintenance: Number.isFinite(vehiculesData.maintenance) ? vehiculesData.maintenance : 0,
-                reservations: Number.isFinite(reservationsData.total) ? reservationsData.total : 0,
-                revenue: Number.isFinite(parseFloat(reservationsData.revenus_total)) ? parseFloat(reservationsData.revenus_total) : 0,
-                utilisation: vehiculesData.total > 0 ? Math.round((vehiculesData.loues / vehiculesData.total) * 100) : 0,
+                totalVehicles: SafeNumber(vehiculesData.total, 0),
+                disponibles: SafeNumber(vehiculesData.disponibles, 0),
+                loues: SafeNumber(vehiculesData.loues, 0),
+                maintenance: SafeNumber(vehiculesData.maintenance, 0),
+                reservations: SafeNumber(reservationsData.total, 0),
+                revenue: SafeNumber(reservationsData.revenus_total, 0),
+                utilisation: SafeNumber(vehiculesData.taux_utilisation, 0),
             });
-            
-            // Génération de données de tendance simulées
+
             const generateTrendData = (baseValue, variance = 0.2) => {
-                return Array(7).fill(0).map((_, i) => {
-                    const randomFactor = 1 + (Math.random() - 0.5) * variance;
-                    return Math.max(0, Math.round(baseValue * randomFactor));
-                });
+                const safeBaseValue = SafeNumber(baseValue, 10);
+                return Array(7).fill(0).map(() =>
+                    Math.max(0, Math.round(safeBaseValue * (1 + (Math.random() - 0.5) * variance)))
+                );
             };
-            
+
             setTrends({
-                vehiclesTrend: generateTrendData(vehiculesData.total || 10),
-                disponiblesTrend: generateTrendData(vehiculesData.disponibles || 5),
-                louesTrend: generateTrendData(vehiculesData.loues || 3),
-                maintenanceTrend: generateTrendData(vehiculesData.maintenance || 2),
-                revenueTrend: generateTrendData(reservationsData.revenus_total || 1000, 0.3),
-                utilizationTrend: generateTrendData(
-                    vehiculesData.total > 0 ? (vehiculesData.loues / vehiculesData.total) * 100 : 50, 0.1
-                ),
+                vehiclesTrend: generateTrendData(vehiculesData.total),
+                disponiblesTrend: generateTrendData(vehiculesData.disponibles),
+                louesTrend: generateTrendData(vehiculesData.loues),
+                maintenanceTrend: generateTrendData(vehiculesData.maintenance),
+                revenueTrend: generateTrendData(reservationsData.revenus_total, 0.3),
+                utilizationTrend: generateTrendData(vehiculesData.taux_utilisation, 0.1),
             });
-            
-            // Chargement des alertes de maintenance
-            await fetchMaintenanceAlerts(accessToken);
-            
-            // Chargement des données de revenus
-            await fetchRevenueData(accessToken, filter.period);
-            
-            // Chargement des agences si nécessaire
-            if (user.role === 'admin' && agences.length === 0) {
-                await fetchAgences(accessToken);
-            }
+
+            await Promise.all([
+                fetchMaintenanceAlerts(accessToken),
+                fetchRevenueData(accessToken, filter.period),
+                user.role === 'admin' && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
+            ]);
+
         } catch (error) {
             console.error('Erreur lors du chargement des statistiques:', error);
             const status = error.response?.status;
             let errorMessage = 'Impossible de charger les statistiques. Vérifiez votre connexion.';
-            
+
             if (status === 404) {
                 errorMessage = 'Données non disponibles pour les filtres sélectionnés.';
             } else if (status === 500) {
@@ -607,9 +665,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             } else if (status === 429) {
                 errorMessage = 'Trop de requêtes. Veuillez attendre un moment.';
             }
-            
+
             setError(errorMessage);
-            
+
             if (retryCount < maxRetries && status !== 401) {
                 setTimeout(() => fetchStats(retryCount + 1, maxRetries), Math.pow(2, retryCount) * 1000);
             }
@@ -622,7 +680,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         let intervalId;
         const startFetching = () => {
             fetchStats();
-            intervalId = setInterval(fetchStats, 300000); // 5 minutes
+            intervalId = setInterval(fetchStats, 300000);
         };
         
         if (document.visibilityState === 'visible') {
@@ -651,34 +709,28 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         };
     }, [fetchStats]);
     
-    // Gestion des filtres
     const handleFilterChange = (newFilter) => {
-        setFilter((prev) => ({ ...prev, ...newFilter }));
-        fetchStats();
+        setFilter(prev => ({ ...prev, ...newFilter }));
     };
     
-    // Gestion des alertes de maintenance
     const handleDismissAlert = (alertId) => {
         setMaintenanceAlerts(prev => prev.filter(alert => alert.id !== alertId));
     };
     
     const handleSendEmail = async (alert) => {
         try {
-            // Implémentation fictive pour envoyer un email
             await axios.post(`${API_BASE_URL}/api/send-email/`, { alert }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            alert('Email envoyé pour la maintenance de ' + alert.vehicleName);
+            alert('Email envoyé pour la maintenance de ' + (alert.vehicleName || 'ce véhicule'));
         } catch (error) {
             console.error('Erreur lors de l\'envoi de l\'email:', error);
             alert('Erreur lors de l\'envoi de l\'email.');
         }
     };
     
-    // Gestion de la génération de factures
     const handleGenerateBilling = async (period) => {
         try {
-            // Implémentation fictive pour générer une facture
             await axios.post(`${API_BASE_URL}/api/generate-billing/`, { period }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -689,7 +741,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         }
     };
     
-    // Composant de filtre
     const FilterControls = () => (
         <div className="filter-controls">
             <select
@@ -717,7 +768,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         </div>
     );
     
-    // Données pour les cartes statistiques
     const mainStats = [
         {
             icon: <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -772,8 +822,8 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     
     const secondaryMetrics = [
         { value: stats.reservations, label: 'Réservations' },
-        { value: `${stats.revenue.toFixed(2)}€`, label: 'Revenus' },
-        { value: `${stats.utilisation}%`, label: "Taux d'utilisation" },
+        { value: `${SafeNumber(stats.revenue, 0).toFixed(2)}€`, label: 'Revenus' },
+        { value: `${SafeNumber(stats.utilisation, 0)}%`, label: "Taux d'utilisation" },
         { value: '4.8⭐', label: 'Note moyenne' },
         { value: '24h', label: 'Délai moyen' },
         { value: '98%', label: 'Satisfaction client' },
@@ -864,6 +914,21 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             </div>
         </div>
     );
+};
+
+StatsDashboard.propTypes = {
+    token: PropTypes.string,
+    user: PropTypes.shape({
+        role: PropTypes.string,
+        email: PropTypes.string,
+        agence: PropTypes.shape({
+            id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+        }),
+    }),
+    onLogout: PropTypes.func.isRequired,
+    settings: PropTypes.shape({
+        animationsEnabled: PropTypes.bool,
+    }),
 };
 
 export default StatsDashboard;

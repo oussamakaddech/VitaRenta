@@ -14,12 +14,14 @@ import ProtectedRoute from './components/ProtectedRoute';
 import UserManagement from './components/UserManagement';
 import DemandForecast from './components/DemandForecast';
 import RecommendationResults from './components/RecommendationResults';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 
 function App() {
     const [token, setToken] = useState('');
     const [user, setUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-
+    
     useEffect(() => {
         const initializeApp = () => {
             try {
@@ -43,14 +45,14 @@ function App() {
                     }
                 }
             } catch (error) {
+                console.error('Erreur lors de l\'initialisation de l\'application:', error);
             } finally {
                 setIsLoading(false);
             }
         };
-
         initializeApp();
     }, []);
-
+    
     const updateUser = useCallback((userData) => {
         if (userData && ['client', 'agence', 'admin'].includes(userData.role)) {
             setUser(userData);
@@ -61,14 +63,14 @@ function App() {
             setUser(null);
         }
     }, []);
-
+    
     const handleLogout = useCallback(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setToken('');
         setUser(null);
     }, []);
-
+    
     const handleLogin = useCallback((newToken, userData) => {
         if (userData && ['client', 'agence', 'admin'].includes(userData.role)) {
             setToken(newToken);
@@ -79,7 +81,7 @@ function App() {
             console.warn('Login échoué: rôle invalide:', userData);
         }
     }, []);
-
+    
     if (isLoading) {
         return (
             <div className="loading-screen" role="status" aria-live="polite">
@@ -91,7 +93,7 @@ function App() {
             </div>
         );
     }
-
+    
     return (
         <Router>
             <div className="app">
@@ -107,6 +109,16 @@ function App() {
                             path="/login"
                             element={<Login setToken={setToken} setUser={updateUser} onLogin={handleLogin} />}
                         />
+                        {/* Routes pour la réinitialisation du mot de passe (accessibles sans authentification) */}
+                        <Route
+                            path="/forgot-password"
+                            element={<ForgotPassword />}
+                        />
+                        <Route
+    path="/reset-password"
+    element={<ResetPassword />}
+/>
+                        {/* Routes protégées */}
                         <Route
                             path="/profile"
                             element={
@@ -257,6 +269,7 @@ function App() {
                                     <Link to="/contact" aria-label="Contact">Contact</Link>
                                     <Link to="/faq" aria-label="FAQ">FAQ</Link>
                                     <Link to="/help" aria-label="Aide">Aide</Link>
+                                    <Link to="/forgot-password" aria-label="Mot de passe oublié">Mot de passe oublié</Link>
                                 </div>
                                 <div className="footer-section">
                                     <h4>Légal</h4>
