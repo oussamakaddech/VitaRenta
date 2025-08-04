@@ -1,5 +1,6 @@
 from datetime import timedelta
 import datetime
+import random
 import secrets
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -18,10 +19,12 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 import logging
 import os
+
+from generate_eco_score_dataset import FUEL_TYPES
 from .permissions import IsAdminOrAgency 
 from django.conf import settings
 from rest_framework.decorators import action
-from .models import User, Vehicule, Agence, Reservation
+from .models import EcoScore, IOTData, User, Vehicule, Agence, Reservation
 from .serializers import (
     LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
     UserUpdateSerializer, VehiculeSerializer, AgenceSerializer, ReservationSerializer
@@ -53,6 +56,25 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 import secrets
 import base64
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from tensorflow import keras
+Sequential = keras.models.Sequential
+load_model = keras.models.load_model
+from keras.layers import LSTM, Dense, Dropout 
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from datetime import timedelta
+import joblib
+import os
+from .models import IOTData, EcoScore, MaintenancePrediction
+from .serializers import IOTDataSerializer, EcoScoreSerializer, MaintenancePredictionSerializer
 logger = logging.getLogger(__name__)
 
 class UpdateAgenceView(APIView):
@@ -1325,3 +1347,332 @@ class PasswordResetConfirmView(APIView):
             return Response({
                 'error': 'Erreur lors de la réinitialisation du mot de passe'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
+        
+
+FUEL_TYPES = {
+    'essence': {
+        'base_co2': 120,  # gCO2/km
+        'conversion_factor': 9.7,  # kWh/100km équivalent
+        'weight_factor': 1.0,
+        'production_impact': 8  # gCO2/km équivalent production
+    },
+    'diesel': {
+        'base_co2': 100,
+        'conversion_factor': 10.2,
+        'weight_factor': 1.1,
+        'production_impact': 10
+    },
+    'électrique': {
+        'base_co2': 0,
+        'conversion_factor': 1.0,
+        'weight_factor': 0.8,
+        'production_impact': 50
+    },
+    'hybride': {
+        'base_co2': 90,
+        'conversion_factor': 9.7,
+        'weight_factor': 0.9,
+        'production_impact': 20
+    }
+}
+
+# views.py
+# views.py
+import traceback
+from django.conf import settings
+from django.utils import timezone
+from django.db import transaction
+from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+import logging
+
+logger = logging.getLogger(__name__)
+
+FUEL_TYPES = {
+    'essence': {'base_co2': 120, 'conversion_factor': 9.7, 'weight_factor': 1.0, 'production_impact': 8},
+    'diesel': {'base_co2': 100, 'conversion_factor': 10.2, 'weight_factor': 1.1, 'production_impact': 10},
+    'électrique': {'base_co2': 0, 'conversion_factor': 1.0, 'weight_factor': 0.8, 'production_impact': 50},
+    'hybride': {'base_co2': 90, 'conversion_factor': 9.7, 'weight_factor': 0.9, 'production_impact': 20}
+}
+
+# views.py
+class EcoScoreViewSet(viewsets.ModelViewSet):
+    queryset = EcoScore.objects.all()
+    serializer_class = EcoScoreSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['post'])
+    def calculate_eco_score(self, request):
+        """Calcule l'éco-score pour un véhicule donné"""
+        vehicle_id = request.data.get('vehicle_id')
+        
+        if not vehicle_id:
+            logger.error("ID de véhicule manquant dans la requête")
+            return Response({'error': 'vehicle_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Récupération du véhicule sans conversion UUID
+            vehicle = Vehicule.objects.get(id=vehicle_id)
+            logger.info(f"Véhicule trouvé: {vehicle_id}")
+            
+            # Récupération des données IoT les plus récentes
+            iot_data = IOTData.objects.filter(vehicle_id=vehicle_id).order_by('-timestamp').first()
+            if not iot_data:
+                logger.warning(f"Aucune donnée IoT trouvée pour le véhicule: {vehicle_id}")
+                return Response({'error': 'Aucune donnée IoT disponible'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Configuration du carburant
+            fuel_type = vehicle.carburant.lower() if vehicle.carburant else 'essence'
+            fuel_data = FUEL_TYPES.get(fuel_type, FUEL_TYPES['essence'])
+            logger.info(f"Type de carburant utilisé: {fuel_type}")
+            
+            # Récupération des valeurs avec gestion des None
+            co2_emissions = vehicle.emissionsCO2 if vehicle.emissionsCO2 is not None else fuel_data['base_co2']
+            fuel_consumption = iot_data.fuel_consumption if iot_data.fuel_consumption is not None else 0
+            
+            # Validation des données
+            if fuel_consumption < 0:
+                fuel_consumption = 0
+                logger.warning(f"Consommation de carburant négative pour le véhicule {vehicle_id}, mise à 0")
+            
+            # Calcul de l'éco-score
+            total_co2 = co2_emissions + fuel_data['production_impact']
+            energy_consumption = fuel_consumption * fuel_data['conversion_factor']
+            
+            # Score basé sur les émissions et la consommation
+            co2_impact = min(50, total_co2 * 0.4)
+            energy_impact = min(50, energy_consumption * 0.6)
+            eco_score = max(0, min(100, 100 - (co2_impact + energy_impact) * fuel_data['weight_factor']))
+            
+            # Utiliser une transaction pour garantir l'atomicité
+            with transaction.atomic():
+                # Supprimer tous les scores existants pour ce véhicule
+                deleted_count = EcoScore.objects.filter(vehicle_id=vehicle_id).delete()[0]
+                if deleted_count > 0:
+                    logger.info(f"Supprimé {deleted_count} éco-scores existants pour le véhicule {vehicle_id}")
+                
+                # Créer un nouveau score
+                eco_score_obj = EcoScore.objects.create(
+                    vehicle_id=vehicle_id,
+                    score=round(eco_score, 1),
+                    co2_emissions=total_co2,
+                    energy_consumption=round(energy_consumption, 2),
+                    last_updated=timezone.now()
+                )
+            
+            logger.info(f"Eco-score créé: {eco_score_obj.score} pour le véhicule: {vehicle_id}")
+            
+            # Préparer manuellement la réponse pour éviter les problèmes de sérialisation
+            response_data = {
+                'id': str(eco_score_obj.id),
+                'vehicle_id': str(eco_score_obj.vehicle.id),
+                'score': eco_score_obj.score,
+                'co2_emissions': eco_score_obj.co2_emissions,
+                'energy_consumption': eco_score_obj.energy_consumption,
+                'last_updated': eco_score_obj.last_updated.isoformat()
+            }
+            
+            return Response(response_data)
+            
+        except Vehicule.DoesNotExist:
+            logger.error(f"Véhicule non trouvé: {vehicle_id}")
+            return Response({'error': 'Véhicule non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"Erreur lors du calcul de l'éco-score pour le véhicule: {vehicle_id}")
+            error_data = {'error': str(e)}
+            if settings.DEBUG:
+                error_data['traceback'] = traceback.format_exc()
+            return Response(error_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def distribution(self, request):
+        """Retourne la distribution des scores éco"""
+        try:
+            scores = EcoScore.objects.values_list('score', flat=True)
+            if not scores:
+                logger.warning("Aucune donnée d'éco-score disponible")
+                return Response({'error': 'Aucune donnée disponible'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Distribution simplifiée
+            ranges = [
+                {'range': '0-20', 'count': len([s for s in scores if 0 <= s < 20])},
+                {'range': '20-40', 'count': len([s for s in scores if 20 <= s < 40])},
+                {'range': '40-60', 'count': len([s for s in scores if 40 <= s < 60])},
+                {'range': '60-80', 'count': len([s for s in scores if 60 <= s < 80])},
+                {'range': '80-100', 'count': len([s for s in scores if 80 <= s <= 100])}
+            ]
+            
+            logger.info("Distribution des éco-scores récupérée")
+            return Response(ranges)
+            
+        except Exception as e:
+            logger.exception("Erreur lors de la récupération de la distribution des éco-scores")
+            error_data = {'error': str(e)}
+            if settings.DEBUG:
+                error_data['traceback'] = traceback.format_exc()
+            return Response(error_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class IOTDataViewSet(viewsets.ModelViewSet):
+    """ViewSet simplifié pour les données IoT et maintenance prédictive"""
+    queryset = IOTData.objects.all()
+    serializer_class = IOTDataSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['post'])
+    def predict_maintenance(self, request):
+        """Prédiction de maintenance simplifiée"""
+        try:
+            vehicle_id = request.data.get('vehicle_id')
+            days_ahead = int(request.data.get('days_ahead', 30))
+            
+            if not vehicle_id:
+                return Response({'error': 'vehicle_id requis'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Vérification du véhicule
+            try:
+                vehicle = Vehicule.objects.get(id=vehicle_id)
+            except Vehicule.DoesNotExist:
+                return Response({'error': 'Véhicule non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Récupération des données IoT récentes
+            iot_data = IOTData.objects.filter(vehicle_id=vehicle_id).order_by('-timestamp')[:100]
+            
+            if len(iot_data) < 10:
+                return Response({'error': 'Pas assez de données pour la prédiction'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Calcul simplifié de prédiction basé sur les tendances
+            recent_temp = [data.temperature for data in iot_data[:10]]
+            recent_vibration = [data.vibration for data in iot_data[:10]]
+            recent_battery = [data.battery_health for data in iot_data[:10]]
+            
+            avg_temp = sum(recent_temp) / len(recent_temp)
+            avg_vibration = sum(recent_vibration) / len(recent_vibration)
+            avg_battery = sum(recent_battery) / len(recent_battery)
+            
+            # Détermination du type de panne et confiance
+            if avg_temp > 90:
+                failure_type = 'Surchauffe moteur'
+                confidence = min(1.0, (avg_temp - 70) / 50)
+                recommendation = 'Vérifiez le système de refroidissement'
+            elif avg_vibration > 3.0:
+                failure_type = 'Problème de vibration'
+                confidence = min(1.0, avg_vibration / 5.0)
+                recommendation = 'Contrôlez les supports moteur'
+            elif avg_battery < 50:
+                failure_type = 'Batterie faible'
+                confidence = min(1.0, (100 - avg_battery) / 100)
+                recommendation = 'Remplacez la batterie'
+            else:
+                failure_type = 'Maintenance préventive'
+                confidence = 0.3
+                recommendation = 'Effectuez un contrôle de routine'
+            
+            # Date prédite
+            predicted_date = timezone.now() + timedelta(days=days_ahead)
+            
+            # Sauvegarde de la prédiction
+            try:
+                MaintenancePrediction.objects.create(
+                    vehicle_id=vehicle_id,
+                    failure_type=failure_type,
+                    confidence=confidence,
+                    predicted_failure_date=predicted_date,
+                    recommendation=recommendation
+                )
+            except Exception:
+                pass  # Ignore les erreurs de sauvegarde
+            
+            return Response({
+                'vehicle_id': vehicle_id,
+                'failure_type': failure_type,
+                'confidence': round(confidence, 2),
+                'predicted_failure_date': predicted_date.isoformat(),
+                'recommendation': recommendation,
+                'data_points_used': len(iot_data)
+            })
+            
+        except Exception as e:
+            return Response({'error': f'Erreur: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'])
+    def generate_test_data(self, request):
+        """Génère des données IoT de test pour un véhicule"""
+        vehicle_id = request.data.get('vehicle_id')
+        days = int(request.data.get('days', 30))
+        
+        if not vehicle_id:
+            return Response({'error': 'vehicle_id requis'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Vérification du véhicule
+            vehicle = Vehicule.objects.get(id=vehicle_id)
+            
+            # Suppression des anciennes données
+            IOTData.objects.filter(vehicle_id=vehicle_id).delete()
+            
+            # Génération de nouvelles données
+            new_data = []
+            base_temp = 75
+            base_vibration = 1.5
+            base_consumption = 6.0
+            base_battery = 100
+            base_mileage = random.randint(10000, 50000)
+            
+            for day in range(days):
+                # Dégradation progressive
+                temp_factor = 1 + (day * 0.01)
+                vibration_factor = 1 + (day * 0.005)
+                battery_factor = 1 - (day * 0.01)
+                
+                for hour in range(0, 24, 2):  # Données toutes les 2 heures
+                    timestamp = timezone.now() - timedelta(days=days-day, hours=hour)
+                    
+                    temperature = base_temp * temp_factor + random.uniform(-5, 5)
+                    vibration = base_vibration * vibration_factor + random.uniform(-0.3, 0.3)
+                    fuel_consumption = base_consumption + random.uniform(-1, 1)
+                    battery_health = max(0, base_battery * battery_factor + random.uniform(-2, 2))
+                    mileage = base_mileage + (day * 50) + (hour * 2)
+                    engine_hours = day * 8 + hour
+                    
+                    new_data.append(IOTData(
+                        vehicle_id=vehicle_id,
+                        timestamp=timestamp,
+                        temperature=round(temperature, 2),
+                        vibration=round(max(0, vibration), 2),
+                        fuel_consumption=round(max(0, fuel_consumption), 2),
+                        mileage=round(mileage, 2),
+                        engine_hours=round(engine_hours, 2),
+                        battery_health=round(battery_health, 2)
+                    ))
+            
+            # Sauvegarde en lot
+            IOTData.objects.bulk_create(new_data)
+            
+            return Response({
+                'message': f'Données générées avec succès',
+                'vehicle_id': vehicle_id,
+                'days': days,
+                'data_points': len(new_data)
+            })
+            
+        except Vehicule.DoesNotExist:
+            return Response({'error': 'Véhicule non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': f'Erreur: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MaintenancePredictionViewSet(viewsets.ModelViewSet):
+    """ViewSet pour les prédictions de maintenance"""
+    queryset = MaintenancePrediction.objects.all()
+    serializer_class = MaintenancePredictionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        vehicle_id = self.request.query_params.get('vehicle_id')
+        if vehicle_id:
+            queryset = queryset.filter(vehicle_id=vehicle_id)
+        return queryset.order_by('-prediction_date')

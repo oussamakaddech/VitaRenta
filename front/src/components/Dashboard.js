@@ -6,10 +6,12 @@ import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale
 import { Line } from 'react-chartjs-2';
 import './Dashboard.css';
 
+// Enregistrement des composants Chart.js
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend, Filler);
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+// Hook pour les animations
 const useAnimateOnMount = (delay = 0, animationsEnabled = true) => {
     const [isVisible, setIsVisible] = useState(false);
     
@@ -26,8 +28,10 @@ const useAnimateOnMount = (delay = 0, animationsEnabled = true) => {
     return isVisible;
 };
 
+// Fonction utilitaire pour les nombres sécurisés
 const SafeNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
+// Composant pour les particules flottantes
 const FloatingParticles = ({ animationsEnabled }) => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!animationsEnabled || reduceMotion) return null;
@@ -61,6 +65,7 @@ FloatingParticles.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
 
+// Composant pour les étincelles
 const Sparkle = ({ top, left, delay, animationsEnabled }) => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!animationsEnabled || reduceMotion) return null;
@@ -84,6 +89,7 @@ Sparkle.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
 
+// Composant pour la barre de progression
 const ProgressBar = ({ percentage, color, label }) => {
     const safePercentage = SafeNumber(percentage, 0);
     const clampedPercentage = Math.min(Math.max(safePercentage, 0), 100);
@@ -107,6 +113,7 @@ ProgressBar.propTypes = {
     label: PropTypes.string.isRequired,
 };
 
+// Composant pour le graphique interactif
 const InteractiveChart = ({ data, label, color }) => {
     const safeData = Array.isArray(data) ? data.map(d => SafeNumber(d, 0)) : [];
     
@@ -170,6 +177,7 @@ InteractiveChart.propTypes = {
     color: PropTypes.string.isRequired,
 };
 
+// Composant pour les cartes de statistiques
 const StatCard = ({
     icon,
     number,
@@ -267,6 +275,7 @@ StatCard.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
 
+// Composant pour les cartes de métriques
 const MetricCard = ({ value, label, index, animationsEnabled }) => {
     const isVisible = useAnimateOnMount(index * 100, animationsEnabled);
     const displayValue = value !== undefined && value !== null ? value : 'N/A';
@@ -292,6 +301,7 @@ MetricCard.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
 
+// Composant pour les alertes de maintenance
 const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }) => {
     const isVisible = useAnimateOnMount(300, animationsEnabled);
     
@@ -345,6 +355,7 @@ MaintenanceAlerts.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
 
+// Composant pour la section des revenus
 const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) => {
     const [selectedPeriod, setSelectedPeriod] = useState('month');
     const isVisible = useAnimateOnMount(500, animationsEnabled);
@@ -424,6 +435,7 @@ RevenueSection.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
 
+// Composant principal du tableau de bord
 const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled: true } }) => {
     const [stats, setStats] = useState({
         totalVehicles: 0,
@@ -576,7 +588,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             let accessToken = token;
             const params = { period: filter.period };
             if (filter.agenceId) params.agence_id = filter.agenceId;
-
             const defaultStats = {
                 total: 0,
                 disponibles: 0,
@@ -587,7 +598,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 prix_moyen: 0,
                 taux_utilisation: 0,
             };
-
             const defaultReservationStats = {
                 total: 0,
                 en_attente: 0,
@@ -598,7 +608,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 moyenne_duree: 0,
                 taux_succes: 0,
             };
-
             const vehiculesResponse = await axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params,
@@ -610,17 +619,15 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 }
                 return { data: defaultStats };
             });
-
             const reservationsResponse = await axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params,
             }).catch(error => {
                 return { data: { stats: defaultReservationStats } };
             });
-                         const vehiculesData = vehiculesResponse.data || defaultStats;
-
+            
+            const vehiculesData = vehiculesResponse.data || defaultStats;
             const reservationsData = reservationsResponse.data.stats || defaultReservationStats;
-
             setStats({
                 totalVehicles: SafeNumber(vehiculesData.total, 0),
                 disponibles: SafeNumber(vehiculesData.disponibles, 0),
@@ -630,14 +637,12 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 revenue: SafeNumber(reservationsData.revenus_total, 0),
                 utilisation: SafeNumber(vehiculesData.taux_utilisation, 0),
             });
-
             const generateTrendData = (baseValue, variance = 0.2) => {
                 const safeBaseValue = SafeNumber(baseValue, 10);
                 return Array(7).fill(0).map(() =>
                     Math.max(0, Math.round(safeBaseValue * (1 + (Math.random() - 0.5) * variance)))
                 );
             };
-
             setTrends({
                 vehiclesTrend: generateTrendData(vehiculesData.total),
                 disponiblesTrend: generateTrendData(vehiculesData.disponibles),
@@ -646,18 +651,15 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 revenueTrend: generateTrendData(reservationsData.revenus_total, 0.3),
                 utilizationTrend: generateTrendData(vehiculesData.taux_utilisation, 0.1),
             });
-
             await Promise.all([
                 fetchMaintenanceAlerts(accessToken),
                 fetchRevenueData(accessToken, filter.period),
                 user.role === 'admin' && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
             ]);
-
         } catch (error) {
             console.error('Erreur lors du chargement des statistiques:', error);
             const status = error.response?.status;
             let errorMessage = 'Impossible de charger les statistiques. Vérifiez votre connexion.';
-
             if (status === 404) {
                 errorMessage = 'Données non disponibles pour les filtres sélectionnés.';
             } else if (status === 500) {
@@ -665,9 +667,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             } else if (status === 429) {
                 errorMessage = 'Trop de requêtes. Veuillez attendre un moment.';
             }
-
             setError(errorMessage);
-
             if (retryCount < maxRetries && status !== 401) {
                 setTimeout(() => fetchStats(retryCount + 1, maxRetries), Math.pow(2, retryCount) * 1000);
             }
@@ -719,7 +719,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     
     const handleSendEmail = async (alert) => {
         try {
-            await axios.post(`${API_BASE_URL}/api/send-email/`, { alert }, {
+            await axios.post(`${API_BASE_URL}/api/send-email/`, { 
+                alert,
+                vehicleId: alert.id 
+            }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             alert('Email envoyé pour la maintenance de ' + (alert.vehicleName || 'ce véhicule'));

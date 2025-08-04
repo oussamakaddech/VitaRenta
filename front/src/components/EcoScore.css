@@ -1,0 +1,123 @@
+.eco-score-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 2rem;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.eco-score-container h3 {
+    color: #333;
+    margin-bottom: 1.5rem;
+}
+
+.refresh-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.refresh-container button {
+    padding: 0.5rem 1rem;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.refresh-container button:hover {
+    background-color: #45a049;
+}
+
+.refresh-container button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.last-updated {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.score-display {
+    margin: 0 auto;
+}
+
+.score-circle {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+}
+
+.score-circle span {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.score-label {
+    color: #333;
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.charts-container {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.charts-container .card {
+    flex: 1;
+    min-width: 300px;
+}
+
+.details {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.card {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.card h4 {
+    color: #333;
+    margin-bottom: 0.5rem;
+}
+
+.card p {
+    color: #666;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .eco-score-container {
+        padding: 1rem;
+    }
+
+    .charts-container, .details {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .card {
+        width: 100%;
+    }
+}

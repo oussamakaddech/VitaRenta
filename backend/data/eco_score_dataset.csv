@@ -1,0 +1,11 @@
+vehicle_id,fuel_type,co2_emissions,energy_consumption,eco_score
+vehicle_1,hybride,62.29,44.3,53.7
+vehicle_2,essence,110.5,67.92,15.0
+vehicle_3,hybride,71.14,43.37,51.0
+vehicle_4,essence,128.16,68.36,7.7
+vehicle_5,électrique,0,15.92,92.4
+vehicle_6,essence,128.71,68.31,7.5
+vehicle_7,diesel,99.65,64.0,25.7
+vehicle_8,électrique,0,15.11,92.7
+vehicle_9,électrique,0,14.37,93.1
+vehicle_10,hybride,75.87,44.16,48.8

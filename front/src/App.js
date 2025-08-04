@@ -16,6 +16,9 @@ import DemandForecast from './components/DemandForecast';
 import RecommendationResults from './components/RecommendationResults';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
+// Importer les nouveaux composants
+import PredictiveMaintenance from './components/PredictiveMaintenance';
+import EcoScore from './components/EcoScore';
 
 function App() {
     const [token, setToken] = useState('');
@@ -97,7 +100,7 @@ function App() {
     return (
         <Router>
             <div className="app">
-                <Sidebar token={token} user={user} setToken={setToken} onLogout={handleLogout} />
+                <Sidebar token={token} user={user} onLogout={handleLogout} />
                 <main className="main-content">
                     <Routes>
                         <Route path="/" element={<Home token={token} user={user} />} />
@@ -115,9 +118,9 @@ function App() {
                             element={<ForgotPassword />}
                         />
                         <Route
-    path="/reset-password"
-    element={<ResetPassword />}
-/>
+                            path="/reset-password"
+                            element={<ResetPassword />}
+                        />
                         {/* Routes protégées */}
                         <Route
                             path="/profile"
@@ -143,6 +146,23 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
+                        {/* Routes pour les nouvelles fonctionnalités */}
+                        <Route
+                            path="/predictive-maintenance"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['agence', 'admin']}>
+                                    <PredictiveMaintenance token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/eco-score"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+                                    <EcoScore token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
                         <Route
                             path="/agent/vehicules"
                             element={
@@ -154,7 +174,7 @@ function App() {
                         <Route
                             path="/admin/users"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
                                     <UserManagement token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -162,7 +182,7 @@ function App() {
                         <Route
                             path="/admin/vehicules"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
                                     <AgentVehicleManager token={token} user={user} onLogout={handleLogout} isAdmin={true} />
                                 </ProtectedRoute>
                             }
@@ -170,7 +190,7 @@ function App() {
                         <Route
                             path="/admin/agences"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['agence', 'admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
                                     <AgencyManagement token={token} user={user} onLogout={handleLogout} isAdmin={user?.role === 'admin'} />
                                 </ProtectedRoute>
                             }
@@ -253,6 +273,7 @@ function App() {
                                     <Link to="/dashboard" aria-label="Tableau de bord">Tableau de bord</Link>
                                     <Link to="/profile" aria-label="Profil">Profil</Link>
                                     <Link to="/recommendations" aria-label="Recommandations">Recommandations</Link>
+                                    <Link to="/eco-score" aria-label="Score écologique">Score Écologique</Link>
                                 </div>
                                 {(user?.role === 'admin' || user?.role === 'agence') && (
                                     <div className="footer-section">
@@ -262,6 +283,8 @@ function App() {
                                         <Link to="/admin/vehicules" aria-label="Admin véhicules">Admin véhicules</Link>
                                         <Link to="/admin/users" aria-label="Admin utilisateurs">Admin utilisateurs</Link>
                                         <Link to="/demand-prediction" aria-label="Prédictions">Prédictions</Link>
+                                        {/* Ajout des liens pour les nouvelles fonctionnalités */}
+                                        <Link to="/predictive-maintenance" aria-label="Maintenance prédictive">Maintenance prédictive</Link>
                                     </div>
                                 )}
                                 <div className="footer-section">

@@ -62,6 +62,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.BearerTokenMiddleware",
+    
 ]
 
 if not os.getenv("DISABLE_RATE_LIMITING", "True") == "True":

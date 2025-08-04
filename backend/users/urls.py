@@ -1,4 +1,5 @@
 # backend/urls.py
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import (
@@ -7,9 +8,10 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
+    EcoScoreViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
-    UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView
+    UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView,
+    MaintenancePredictionViewSet
 )
 
 # Router configuration
@@ -18,13 +20,18 @@ router.register(r'vehicules', VehiculeViewSet, basename='vehicule')
 router.register(r'agences', AgenceViewSet, basename='agence')
 router.register(r'reservations', ReservationViewSet, basename='reservation')
 router.register(r'users', UserViewSet, basename='user')
+router.register(r'iot-data', IOTDataViewSet)
+router.register(r'eco-score', EcoScoreViewSet)
+router.register(r'maintenance-prediction', MaintenancePredictionViewSet)
 
 urlpatterns = [
     # Authentication routes
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('inscription/', SignUpView.as_view(), name='signup'),
-    
+        path('api/iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='iot-data-generate-test-data'),
+    path('update-agence/', UpdateAgenceView.as_view(), name='update-agence'),
+
     # JWT routes
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -44,10 +51,20 @@ urlpatterns = [
     path('api/vehicules/stats/', VehiculeViewSet.as_view({'get': 'stats'}), name='vehicule-stats'),
     path('api/reservations/stats/', ReservationViewSet.as_view({'get': 'stats'}), name='reservation-stats'),
     path('api/users/stats/', UserViewSet.as_view({'get': 'stats'}), name='user-stats'),
-    # Ajouter ces routes dans la liste urlpatterns
-# Ajoutez ces routes dans la liste urlpatterns
+    
+    # Routes pour les données IoT
+    path('api/iot-data/check_data_status/', IOTDataViewSet.as_view({'get': 'check_data_status'}), name='iot-data-check-status'),
+    path('api/iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='iot-data-generate-test-data'),
+    path('api/iot-data/test_prediction_request/', IOTDataViewSet.as_view({'post': 'test_prediction_request'}), name='iot-data-test-prediction'),
+    
+    # Routes pour l'éco-score
+    path('api/eco-score/calculate_eco_score/', EcoScoreViewSet.as_view({'post': 'calculate_eco_score'}), name='eco-score-calculate'),
+    path('api/eco-score/distribution/', EcoScoreViewSet.as_view({'get': 'distribution'}), name='eco-score-distribution'),
+    
+    # Routes pour la réinitialisation du mot de passe
     path('password-reset-request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),  
+    
     # Router routes (doit être en dernier pour éviter les conflits)
     path('api/', include(router.urls)),
     path('', include(router.urls)),  # Maintien de la compatibilité

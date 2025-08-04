@@ -5,7 +5,7 @@ from venv import logger
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import User, Vehicule, Agence, Reservation
+from .models import EcoScore, IOTData, MaintenancePrediction, User, Vehicule, Agence, Reservation
 import re
 from django.utils import timezone
 from datetime import datetime
@@ -516,3 +516,23 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
                 'confirm_new_password': 'Les mots de passe ne correspondent pas'
             })
         return data
+    
+# serializers.py
+class EcoScoreSerializer(serializers.ModelSerializer):
+    # Convertir l'ID en chaîne pour éviter les problèmes de sérialisation
+    id = serializers.CharField(read_only=True)
+    vehicle_id = serializers.CharField(source='vehicle.id', read_only=True)
+    
+    class Meta:
+        model = EcoScore
+        fields = ['id', 'vehicle_id', 'score', 'co2_emissions', 'energy_consumption', 'last_updated']
+
+class IOTDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IOTData
+        fields = ['id', 'vehicle', 'timestamp', 'temperature', 'vibration', 'fuel_consumption', 'mileage', 'engine_hours', 'battery_health']
+
+class MaintenancePredictionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaintenancePrediction
+        fields = '__all__'

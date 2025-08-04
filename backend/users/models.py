@@ -5,6 +5,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator
 from django.core.exceptions import ValidationError
 import uuid
 import re
@@ -360,3 +361,54 @@ class Reservation(models.Model):
             models.Index(fields=['created_at'], name='reservation_created_at_idx'),
             models.Index(fields=['vehicule'], name='reservation_vehicule_idx')
         ]
+
+
+class IOTData(models.Model):
+    vehicle = models.ForeignKey(Vehicule, on_delete=models.CASCADE, related_name='iot_data')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    temperature = models.FloatField()
+    vibration = models.FloatField()
+    fuel_consumption = models.FloatField()
+    mileage = models.FloatField()
+    engine_hours = models.FloatField()
+    battery_health = models.FloatField()
+
+    def __str__(self):
+        return f"IOTData for {self.vehicle} at {self.timestamp}"
+
+# models.py
+class EcoScore(models.Model):
+    vehicle = models.OneToOneField(Vehicule, on_delete=models.CASCADE, related_name='eco_score')
+    score = models.FloatField()
+    co2_emissions = models.FloatField()
+    energy_consumption = models.FloatField()
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['vehicle'], name='unique_vehicle_eco_score')
+        ]
+    
+    def clean(self):
+        # Vérifier s'il existe déjà un score pour ce véhicule
+        existing = EcoScore.objects.filter(vehicle_id=self.vehicle_id)
+        if self.pk:
+            existing = existing.exclude(pk=self.pk)
+        
+        if existing.exists():
+            raise ValidationError("Un éco-score existe déjà pour ce véhicule")
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"EcoScore {self.score} for {self.vehicle}"
+
+class MaintenancePrediction(models.Model):
+    vehicle = models.ForeignKey('Vehicule', on_delete=models.CASCADE, related_name='maintenance_predictions')
+    prediction_date = models.DateTimeField(auto_now_add=True)
+    predicted_failure_date = models.DateTimeField()
+    confidence = models.FloatField()
+    failure_type = models.CharField(max_length=100)
+    recommendation = models.TextField()
