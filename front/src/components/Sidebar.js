@@ -196,15 +196,7 @@ const Sidebar = ({ token, user, onLogout }) => {
                                                     <i className="fas fa-calculator"></i>
                                                     Calcul du Score
                                                 </Link>
-                                                <Link
-                                                    to="/eco-score/distribution"
-                                                    className={`sidebar-link submenu-item ${isActive('/eco-score/distribution') ? 'sidebar-link-active' : ''}`}
-                                                    onClick={handleLinkClick}
-                                                    aria-label="Distribution des scores"
-                                                >
-                                                    <i className="fas fa-chart-pie"></i>
-                                                    Distribution des Scores
-                                                </Link>
+                                               
                                             </div>
                                         )}
                                     </div>
@@ -222,15 +214,7 @@ const Sidebar = ({ token, user, onLogout }) => {
                                         <i className="fas fa-cog"></i>
                                         Gérer Agences
                                     </Link>
-                                    <Link
-                                        to="/admin/users"
-                                        className={`sidebar-link ${isActive('/admin/users') ? 'sidebar-link-active' : ''}`}
-                                        onClick={handleLinkClick}
-                                        aria-label="Gestion des utilisateurs"
-                                    >
-                                        <i className="fas fa-users"></i>
-                                        Gérer Utilisateurs
-                                    </Link>
+                                   
                                 </>
                             )}
                         </>

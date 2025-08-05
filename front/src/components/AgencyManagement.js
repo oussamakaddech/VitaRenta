@@ -15,6 +15,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [agencies, setAgencies] = useState([]);
+    const [allAgencies, setAllAgencies] = useState([]); // Pour la modal d'assignation
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
@@ -44,7 +45,6 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     });
 
     const isActive = useCallback((path) => location.pathname === path, [location.pathname]);
-
     const handleLogout = useCallback(() => {
         onLogout();
         setIsSidebarOpen(false);
@@ -54,7 +54,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         if (!data.nom || data.nom.trim().length < 2) return "Le nom de l'agence doit contenir au moins 2 caractères";
         if (!data.adresse || data.adresse.trim().length < 5) return "L'adresse doit contenir au moins 5 caractères";
         if (!data.ville || data.ville.trim().length < 2) return "La ville doit contenir au moins 2 caractères";
-        if (!data.code_postal || !/^\d{4,}$/.test(data.code_postal)) return "Le code postal doit être valide (au moins 4 chiffres)";
+        if (!data.code_postal || !/^\d{4}$/.test(data.code_postal)) return "Le code postal doit être composé de 4 chiffres";
         if (!data.pays || data.pays.trim().length < 2) return "Le pays est requis";
         if (!data.telephone || !/^\+?[\d\s\-()]{10,}$/.test(data.telephone)) return "Le numéro de téléphone n'est pas valide (au moins 10 chiffres)";
         if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return "L'email n'est pas valide";
@@ -70,15 +70,21 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             if (searchTerm.trim()) params.append('search', searchTerm.trim());
             params.append('page', currentPageAgencies);
             params.append('page_size', itemsPerPage);
-
             const response = await axios.get(`${API_BASE_URL}/api/agences/?${params}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
-
-            const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
+            
+            const data = Array.isArray(response.data.results) ? response.data.results : 
+                        Array.isArray(response.data) ? response.data : [];
+            
             setAgencies(data);
-            setTotalPagesAgencies(response.data.total_pages || Math.ceil(data.length / itemsPerPage));
+            
+            // Calcul du nombre total de pages
+            const totalPages = response.data.total_pages || 
+                             (response.data.count ? Math.ceil(response.data.count / itemsPerPage) : 1);
+            setTotalPagesAgencies(totalPages);
+            
             if (data.length > 0) {
                 setTimeout(() => setAnimateCards(true), 100);
             } else {
@@ -87,18 +93,37 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             updateStats(data);
         } catch (err) {
             console.error('Erreur lors du chargement des agences:', err);
-            const errorMsg =
-                err.response?.status === 403
-                    ? 'Accès refusé. Vous n\'avez pas les permissions nécessaires pour accéder à cette ressource.'
-                    : err.response?.status === 404
-                    ? 'Aucune agence trouvée.'
-                    : err.response?.data?.message || 'Impossible de charger les agences. Vérifiez votre connexion ou le token.';
+            const errorMsg = err.response?.status === 403
+                ? 'Accès refusé. Vous n\'avez pas les permissions nécessaires pour accéder à cette ressource.'
+                : err.response?.status === 404
+                ? 'Aucune agence trouvée.'
+                : err.response?.data?.message || 'Impossible de charger les agences. Vérifiez votre connexion ou le token.';
             setError(errorMsg);
             setAgencies([]);
         } finally {
             setLoading(false);
         }
     }, [token, searchTerm, currentPageAgencies, itemsPerPage]);
+
+    // Récupérer toutes les agences pour la modal d'assignation
+    const fetchAllAgencies = useCallback(async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/agences/`, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 10000
+            });
+            const data = Array.isArray(response.data.results) ? response.data.results : 
+                        Array.isArray(response.data) ? response.data : [];
+            setAllAgencies(data);
+        } catch (err) {
+            console.error('Erreur lors du chargement de toutes les agences:', err);
+        }
+    }, [token]);
+
+    useEffect(() => {
+        fetchAgencies();
+        fetchAllAgencies(); // Charger toutes les agences pour l'assignation
+    }, [fetchAgencies, fetchAllAgencies]);
 
     const updateStats = useCallback((agenciesData) => {
         const now = new Date();
@@ -130,6 +155,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             resetForm();
             setModalState({ type: null, data: null });
             fetchAgencies();
+            fetchAllAgencies(); // Mettre à jour la liste complète
             if (user && !user.agence && user.role === 'agence') {
                 await assignAgencyToUser(response.data.id);
             }
@@ -139,7 +165,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    }, [formData, token, user, fetchAgencies]);
+    }, [formData, token, user, fetchAgencies, fetchAllAgencies]);
 
     const updateAgency = useCallback(async () => {
         const validationError = validateAgencyData(formData);
@@ -158,13 +184,14 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             resetForm();
             setModalState({ type: null, data: null });
             fetchAgencies();
+            fetchAllAgencies(); // Mettre à jour la liste complète
         } catch (err) {
             console.error('Erreur lors de la mise à jour:', err);
             setError(err.response?.data?.message || "Erreur lors de la mise à jour de l'agence. Vérifiez vos permissions.");
         } finally {
             setLoading(false);
         }
-    }, [formData, selectedAgency, token, fetchAgencies]);
+    }, [formData, selectedAgency, token, fetchAgencies, fetchAllAgencies]);
 
     const deleteAgency = useCallback(async (agencyId) => {
         if (!window.confirm('Voulez-vous vraiment supprimer cette agence ? Cette action est irréversible.')) {
@@ -179,13 +206,14 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             });
             setSuccess('Agence supprimée avec succès !');
             fetchAgencies();
+            fetchAllAgencies(); // Mettre à jour la liste complète
         } catch (err) {
             console.error('Erreur lors de la suppression:', err);
             setError(err.response?.data?.message || "Erreur lors de la suppression de l'agence. Vérifiez s'il y a des véhicules ou utilisateurs associés.");
         } finally {
             setLoading(false);
         }
-    }, [token, fetchAgencies]);
+    }, [token, fetchAgencies, fetchAllAgencies]);
 
     const assignAgencyToUser = useCallback(async (agencyId) => {
         if (loading) return;
@@ -210,7 +238,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             setLoading(false);
             setModalState({ type: null, data: null });
         }
-    }, [token, fetchAgencies]);
+    }, [token, fetchAgencies, loading]);
 
     const resetForm = useCallback(() => {
         setFormData({
@@ -260,12 +288,12 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     }, [resetForm]);
 
     const openAssignModal = useCallback(() => {
-        if (agencies.length === 0) {
+        if (allAgencies.length === 0) {
             setError('Aucune agence disponible. Créez une agence d\'abord.');
             return;
         }
         setModalState({ type: 'assign', data: null });
-    }, [agencies.length]);
+    }, [allAgencies.length]);
 
     const closeModal = useCallback(() => {
         setModalState({ type: null, data: null });
@@ -303,10 +331,6 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     }, [closeModal]);
 
     useEffect(() => {
-        fetchAgencies();
-    }, [fetchAgencies]);
-
-    useEffect(() => {
         if (error) {
             const timer = setTimeout(() => setError(null), 8000);
             return () => clearTimeout(timer);
@@ -327,45 +351,24 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         }
     }, [modalState.type, handleKeyDown]);
 
-    const filteredAgencies = useMemo(() => {
-        return agencies.filter(agency => {
-            if (!agency) return false;
-            const nom = (agency.nom || '').toLowerCase();
-            const ville = (agency.ville || '').toLowerCase();
-            const codePostal = (agency.code_postal || '').toLowerCase();
-            const pays = (agency.pays || '').toLowerCase();
-            const search = searchTerm.toLowerCase();
-            return nom.includes(search) || ville.includes(search) || codePostal.includes(search) || pays.includes(search);
-        });
-    }, [agencies, searchTerm]);
-
-    const currentAgencies = useMemo(() => {
-        const indexOfLastAgency = currentPageAgencies * itemsPerPage;
-        const indexOfFirstAgency = indexOfLastAgency - itemsPerPage;
-        return filteredAgencies.slice(indexOfFirstAgency, indexOfLastAgency);
-    }, [filteredAgencies, currentPageAgencies, itemsPerPage]);
-
-    const particles = useMemo(() => {
-        const particlesArray = [];
-        for (let i = 0; i < 20; i++) {
-            particlesArray.push(
-                <div
-                    key={i}
-                    className="particle"
-                    style={{
-                        left: `${Math.random() * 100}%`,
-                        animationDelay: `${Math.random() * 10}s`,
-                        animationDuration: `${10 + Math.random() * 5}s`,
-                        width: `${2 + Math.random() * 4}px`,
-                        height: `${2 + Math.random() * 4}px`,
-                    }}
-                />
-            );
-        }
-        return particlesArray;
-    }, []);
-
     const canManageAllAgencies = user.role === 'admin' || user.role === 'agence';
+
+    // Génération des particules animées
+    const particles = useMemo(() => {
+        return Array.from({ length: 20 }).map((_, i) => (
+            <div
+                key={i}
+                className="particle"
+                style={{
+                    left: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 10}s`,
+                    animationDuration: `${10 + Math.random() * 5}s`,
+                    width: `${2 + Math.random() * 4}px`,
+                    height: `${2 + Math.random() * 4}px`,
+                }}
+            />
+        ));
+    }, []);
 
     return (
         <div className="agency-manager-container">
@@ -388,6 +391,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             {canManageAllAgencies ? 'Gérez les agences de votre réseau' : 'Gérez votre agence'}
                         </p>
                     </div>
+                    
+                    {/* Messages d'erreur et de succès */}
                     {error && (
                         <div className="error-container" role="alert" aria-live="assertive">
                             <i className="fas fa-exclamation-triangle"></i>
@@ -414,6 +419,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             </button>
                         </div>
                     )}
+                    
+                    {/* Statistiques pour les administrateurs */}
                     {canManageAllAgencies && (
                         <div className="stats-grid">
                             <div className={`stat-card ${animateCards ? 'animate-in' : ''}`}>
@@ -448,6 +455,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             </div>
                         </div>
                     )}
+                    
+                    {/* Section "Mon Agence" */}
                     {user.agence ? (
                         <div className="user-agency-section">
                             <div className="user-agency-card">
@@ -482,7 +491,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                         <button
                                             onClick={openAssignModal}
                                             className="assign-agency-btn"
-                                            disabled={agencies.length === 0}
+                                            disabled={allAgencies.length === 0}
                                             aria-label="Assigner une agence à mon compte"
                                         >
                                             Assigner une agence
@@ -494,6 +503,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             </div>
                         </div>
                     )}
+                    
+                    {/* Contrôles pour les administrateurs */}
                     {canManageAllAgencies && (
                         <div className="controls-section">
                             <div className="controls-header">
@@ -524,6 +535,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             </div>
                         </div>
                     )}
+                    
+                    {/* Actions rapides */}
                     <div className="quick-actions">
                         <h3 className="quick-actions-title">
                             <i className="fas fa-bolt"></i> Actions Rapides
@@ -562,7 +575,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                     <button
                                         onClick={openAssignModal}
                                         className="quick-action-card"
-                                        disabled={loading || agencies.length === 0}
+                                        disabled={loading || allAgencies.length === 0}
                                         aria-label="Assigner une agence à mon compte"
                                     >
                                         <div className="quick-action-icon">
@@ -577,6 +590,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             )}
                         </div>
                     </div>
+                    
+                    {/* Liste des agences */}
                     <div className="agencies-section">
                         <div className="agencies-header">
                             <h3 className="agencies-title">
@@ -588,7 +603,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                 <div className="loading-spinner"></div>
                                 <p>Chargement...</p>
                             </div>
-                        ) : filteredAgencies.length === 0 ? (
+                        ) : agencies.length === 0 ? (
                             <div className="empty-state">
                                 <i className="fas fa-inbox empty-icon" aria-hidden="true"></i>
                                 <h4>Aucune agence trouvée</h4>
@@ -596,7 +611,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                     {canManageAllAgencies
                                         ? searchTerm
                                             ? "Aucune agence ne correspond à vos critères de recherche."
-                                            : "Aucune agence n’a été chargée. Créez une nouvelle agence pour commencer."
+                                            : "Aucune agence n'a été chargée. Créez une nouvelle agence pour commencer."
                                         : "Aucune agence associée à votre compte."}
                                 </p>
                                 {canManageAllAgencies && !searchTerm && (
@@ -612,7 +627,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                         ) : (
                             <>
                                 <div className="agencies-grid">
-                                    {currentAgencies.map((agency, index) => (
+                                    {agencies.map((agency, index) => (
                                         <div
                                             key={agency.id}
                                             className={`agency-card ${animateCards ? 'animate-in' : ''}`}
@@ -720,6 +735,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                     </div>
                 </div>
             </div>
+            
+            {/* Modals */}
             {modalState.type === 'create' && canManageAllAgencies ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -1141,7 +1158,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                     aria-required="true"
                                 >
                                     <option value="">-- Choisir une agence --</option>
-                                    {filteredAgencies.map(agency => (
+                                    {allAgencies.map(agency => (
                                         <option key={agency.id} value={agency.id}>{agency.nom || 'N/A'} ({agency.ville || 'N/A'})</option>
                                     ))}
                                 </select>

@@ -10,29 +10,31 @@ from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 from django.utils.encoding import force_str
 from urllib.parse import unquote
 import traceback
+import random
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
-def ensemble_predict_demand(csv_path, location='Tunis', carburant='électrique', context=None):
+
+def ensemble_predict_demand(csv_path, location='Tunis', carburant='électrique', context=None, date=None):
     """
-    Simplified ensemble prediction without external dependencies
-    Returns a basic prediction based on historical patterns and context
+    Improved ensemble prediction that takes date into account
+    Returns a prediction based on historical patterns, context and date
     """
     try:
         # Basic validation
         if not os.path.exists(csv_path):
             logger.warning(f"CSV file not found: {csv_path}")
-            return generate_fallback_prediction(location, carburant, context)
+            return generate_fallback_prediction(location, carburant, context, date)
         
         # Try to read and process the CSV
         try:
             df = pd.read_csv(csv_path)
         except Exception as e:
             logger.error(f"Error reading CSV: {str(e)}")
-            return generate_fallback_prediction(location, carburant, context)
+            return generate_fallback_prediction(location, carburant, context, date)
         
         # Filter data for specific location and fuel type
         if 'localisation' in df.columns and 'carburant_vehicule' in df.columns:
@@ -42,31 +44,62 @@ def ensemble_predict_demand(csv_path, location='Tunis', carburant='électrique',
             ]
         else:
             logger.warning("Required columns not found in CSV")
-            return generate_fallback_prediction(location, carburant, context)
+            return generate_fallback_prediction(location, carburant, context, date)
         
         # Calculate base prediction from historical data
         if not filtered_df.empty and 'nombre_réservations' in filtered_df.columns:
-            base_demand = filtered_df['nombre_réservations'].mean()
+            # Add day of week analysis if date column exists
+            if 'date' in filtered_df.columns and date:
+                try:
+                    filtered_df['date'] = pd.to_datetime(filtered_df['date'])
+                    filtered_df['day_of_week'] = filtered_df['date'].dt.dayofweek
+                    filtered_df['month'] = filtered_df['date'].dt.month
+                    
+                    # Parse the target date
+                    target_date = pd.to_datetime(date)
+                    target_day = target_date.dayofweek
+                    target_month = target_date.month
+                    
+                    # Get historical average for this day of week and month
+                    day_month_df = filtered_df[
+                        (filtered_df['day_of_week'] == target_day) & 
+                        (filtered_df['month'] == target_month)
+                    ]
+                    
+                    if not day_month_df.empty:
+                        base_demand = day_month_df['nombre_réservations'].mean()
+                    else:
+                        # Fallback to day of week average
+                        day_df = filtered_df[filtered_df['day_of_week'] == target_day]
+                        if not day_df.empty:
+                            base_demand = day_df['nombre_réservations'].mean()
+                        else:
+                            base_demand = filtered_df['nombre_réservations'].mean()
+                except Exception as e:
+                    logger.error(f"Error processing date data: {str(e)}")
+                    base_demand = filtered_df['nombre_réservations'].mean()
+            else:
+                base_demand = filtered_df['nombre_réservations'].mean()
         else:
-            base_demand = get_default_demand(location, carburant)
+            base_demand = get_default_demand(location, carburant, date)
         
         # Apply context multipliers
-        final_prediction = apply_context_multipliers(base_demand, context)
+        final_prediction = apply_context_multipliers(base_demand, context, date)
         
-        logger.info(f"Prediction for {location} - {carburant}: {final_prediction}")
+        logger.info(f"Prediction for {location} - {carburant} on {date}: {final_prediction}")
         return max(0.0, float(final_prediction))
         
     except Exception as e:
         logger.error(f"Error in ensemble_predict_demand: {str(e)}")
-        return generate_fallback_prediction(location, carburant, context)
+        return generate_fallback_prediction(location, carburant, context, date)
 
-def generate_fallback_prediction(location, carburant, context):
+def generate_fallback_prediction(location, carburant, context, date):
     """Generate fallback prediction when data is unavailable"""
-    base_demand = get_default_demand(location, carburant)
-    return apply_context_multipliers(base_demand, context)
+    base_demand = get_default_demand(location, carburant, date)
+    return apply_context_multipliers(base_demand, context, date)
 
-def get_default_demand(location, carburant):
-    """Get default demand values based on location and fuel type"""
+def get_default_demand(location, carburant, date=None):
+    """Get default demand values based on location, fuel type and date"""
     location_multipliers = {
         'Tunis': 1.2,
         'Sfax': 1.0,
@@ -82,21 +115,65 @@ def get_default_demand(location, carburant):
         'diesel': 0.8
     }
     
+    # Day of week multipliers
+    day_multipliers = {
+        0: 0.8,  # Monday
+        1: 0.9,  # Tuesday
+        2: 0.95, # Wednesday
+        3: 1.0,  # Thursday
+        4: 1.2,  # Friday
+        5: 1.4,  # Saturday
+        6: 1.3   # Sunday
+    }
+    
+    # Seasonal multipliers
+    seasonal_multipliers = {
+        1: 0.8,   # January - Low season
+        2: 0.8,   # February
+        3: 0.9,   # March
+        4: 1.0,   # April
+        5: 1.1,   # May
+        6: 1.3,   # June - Start of high season
+        7: 1.5,   # July - Peak season
+        8: 1.5,   # August - Peak season
+        9: 1.2,   # September
+        10: 1.0,  # October
+        11: 0.9,  # November
+        12: 0.8   # December
+    }
+    
     base_demand = 15.0  # Base daily reservations
     location_mult = location_multipliers.get(location, 1.0)
     fuel_mult = fuel_multipliers.get(carburant, 1.0)
     
-    return base_demand * location_mult * fuel_mult
+    # Apply date-based multipliers if date is provided
+    date_mult = 1.0
+    if date:
+        try:
+            target_date = pd.to_datetime(date)
+            day_mult = day_multipliers.get(target_date.dayofweek, 1.0)
+            month_mult = seasonal_multipliers.get(target_date.month, 1.0)
+            date_mult = day_mult * month_mult
+        except Exception as e:
+            logger.error(f"Error processing date: {str(e)}")
+            date_mult = 1.0
+    
+    return base_demand * location_mult * fuel_mult * date_mult
 
-def apply_context_multipliers(base_demand, context):
+def apply_context_multipliers(base_demand, context, date=None):
     """Apply context-based multipliers to base demand"""
-    if not context or len(context) < 3:
+    if not context or len(context) < 4:
         return base_demand
     
     try:
-        is_family_event, is_holiday, taux_occupation = context[:3]
+        # Context order: [is_rainy, is_family_event, is_holiday, taux_occupation]
+        is_rainy, is_family_event, is_holiday, taux_occupation = context[:4]
         
         multiplier = 1.0
+        
+        # Weather impact
+        if is_rainy:
+            multiplier *= 0.8  # Rain reduces demand
         
         # Family events typically increase demand
         if is_family_event:
@@ -109,6 +186,10 @@ def apply_context_multipliers(base_demand, context):
         # Occupancy rate affects demand
         occupancy_multiplier = 0.7 + (taux_occupation * 0.6)  # Range: 0.7 to 1.3
         multiplier *= occupancy_multiplier
+        
+        # Add some randomness to avoid identical values
+        random_factor = 0.95 + random.random() * 0.1  # Range: 0.95 to 1.05
+        multiplier *= random_factor
         
         return base_demand * multiplier
         

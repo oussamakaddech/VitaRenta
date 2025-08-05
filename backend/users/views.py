@@ -1021,12 +1021,6 @@ class DemandForecastView(APIView):
                 "2025-06-06", "2025-06-07", "2025-06-26"   # Eid al-Adha and related
             ]
             
-            # Create context for prediction
-            is_holiday = 1 if date in holidays else 0
-            is_family_event = 1 if date in family_events else 0
-            is_rainy = 0  # Default value, could be enhanced with weather API
-            taux_occupation = 0.5  # Default occupancy rate
-            
             # Check if CSV file exists
             csv_path = os.path.join(settings.BASE_DIR, 'data', 'demand_forecast_dataset_2025.csv')
             logger.info(f"Looking for CSV file at: {csv_path}")
@@ -1052,11 +1046,22 @@ class DemandForecastView(APIView):
                 current_is_holiday = 1 if current_date_str in holidays else 0
                 current_is_family_event = 1 if current_date_str in family_events else 0
                 
+                # Get weather data for this date (simplified)
+                is_rainy = 0  # Default value, could be enhanced with weather API
+                taux_occupation = 0.5  # Default occupancy rate
+                
+                # Create context array
                 context = [is_rainy, current_is_family_event, current_is_holiday, taux_occupation]
                 
-                # Get prediction
+                # Get prediction for this specific date
                 try:
-                    predicted_demand = ensemble_predict_demand(csv_path, location, carburant, context)
+                    predicted_demand = ensemble_predict_demand(
+                        csv_path, 
+                        location, 
+                        carburant, 
+                        context, 
+                        current_date_str
+                    )
                     logger.info(f"Prediction for {current_date_str}: {predicted_demand}")
                 except Exception as pred_error:
                     logger.error(f"Error in ensemble_predict_demand: {str(pred_error)}")
