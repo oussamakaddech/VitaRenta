@@ -1530,14 +1530,16 @@ class EcoScoreViewSet(viewsets.ModelViewSet):
 
 
 class IOTDataViewSet(viewsets.ModelViewSet):
-    """ViewSet simplifié pour les données IoT et maintenance prédictive"""
+    """ViewSet pour les données IoT et maintenance prédictive"""
     queryset = IOTData.objects.all()
     serializer_class = IOTDataSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     @action(detail=False, methods=['post'])
     def predict_maintenance(self, request):
-        """Prédiction de maintenance simplifiée"""
+        """
+        Prédiction de maintenance basée sur les données réelles du véhicule
+        """
         try:
             vehicle_id = request.data.get('vehicle_id')
             days_ahead = int(request.data.get('days_ahead', 30))
@@ -1551,14 +1553,14 @@ class IOTDataViewSet(viewsets.ModelViewSet):
             except Vehicule.DoesNotExist:
                 return Response({'error': 'Véhicule non trouvé'}, status=status.HTTP_404_NOT_FOUND)
             
-            # Récupération des données IoT récentes
+            # Récupération des données IoT récentes spécifiques à ce véhicule
             iot_data = IOTData.objects.filter(vehicle_id=vehicle_id).order_by('-timestamp')[:100]
             
             if len(iot_data) < 10:
                 return Response({'error': 'Pas assez de données pour la prédiction'}, 
-                              status=status.HTTP_400_BAD_REQUEST)
+                                  status=status.HTTP_400_BAD_REQUEST)
             
-            # Calcul simplifié de prédiction basé sur les tendances
+            # Calcul des tendances spécifiques au véhicule
             recent_temp = [data.temperature for data in iot_data[:10]]
             recent_vibration = [data.vibration for data in iot_data[:10]]
             recent_battery = [data.battery_health for data in iot_data[:10]]
@@ -1567,26 +1569,74 @@ class IOTDataViewSet(viewsets.ModelViewSet):
             avg_vibration = sum(recent_vibration) / len(recent_vibration)
             avg_battery = sum(recent_battery) / len(recent_battery)
             
-            # Détermination du type de panne et confiance
-            if avg_temp > 90:
+            # Calcul des tendances (comparaison entre données récentes et plus anciennes)
+            older_temp = [data.temperature for data in iot_data[10:20]]
+            older_vibration = [data.vibration for data in iot_data[10:20]]
+            older_battery = [data.battery_health for data in iot_data[10:20]]
+            
+            avg_older_temp = sum(older_temp) / len(older_temp) if older_temp else avg_temp
+            avg_older_vibration = sum(older_vibration) / len(older_vibration) if older_vibration else avg_vibration
+            avg_older_battery = sum(older_battery) / len(older_battery) if older_battery else avg_battery
+            
+            # Calcul des tendances (pourcentage de changement)
+            temp_trend = (avg_temp - avg_older_temp) / avg_older_temp if avg_older_temp != 0 else 0
+            vibration_trend = (avg_vibration - avg_older_vibration) / avg_older_vibration if avg_older_vibration != 0 else 0
+            battery_trend = (avg_battery - avg_older_battery) / avg_older_battery if avg_older_battery != 0 else 0
+            
+            # Seuils personnalisés en fonction du type de véhicule
+            if vehicle.carburant == 'électrique':
+                temp_threshold = 80  # Les véhicules électriques ont des seuils de température plus bas
+                vibration_threshold = 1.5
+                battery_threshold = 70
+            elif vehicle.carburant == 'diesel':
+                temp_threshold = 95  # Les diesels peuvent supporter des températures plus élevées
+                vibration_threshold = 2.5
+                battery_threshold = 60
+            else:  # essence ou hybride
+                temp_threshold = 90
+                vibration_threshold = 2.0
+                battery_threshold = 65
+            
+            # Calculer un score de risque pour chaque paramètre
+            temp_risk = max(0, (avg_temp - temp_threshold) / temp_threshold) if avg_temp > temp_threshold else 0
+            vibration_risk = max(0, (avg_vibration - vibration_threshold) / vibration_threshold) if avg_vibration > vibration_threshold else 0
+            battery_risk = max(0, (battery_threshold - avg_battery) / battery_threshold) if avg_battery < battery_threshold else 0
+            
+            # Pondérer les risques en fonction des tendances
+            if temp_trend > 0.1:
+                temp_risk *= (1 + temp_trend)
+            if vibration_trend > 0.15:
+                vibration_risk *= (1 + vibration_trend)
+            if battery_trend < -0.05:
+                battery_risk *= (1 - battery_trend)
+            
+            # Déterminer le type de panne en fonction du risque le plus élevé
+            if temp_risk > vibration_risk and temp_risk > battery_risk:
                 failure_type = 'Surchauffe moteur'
-                confidence = min(1.0, (avg_temp - 70) / 50)
-                recommendation = 'Vérifiez le système de refroidissement'
-            elif avg_vibration > 3.0:
+                confidence = min(1.0, temp_risk)
+                recommendation = f'Vérifiez le système de refroidissement. Température actuelle: {avg_temp:.1f}°C (seuil: {temp_threshold}°C)'
+            elif vibration_risk > battery_risk:
                 failure_type = 'Problème de vibration'
-                confidence = min(1.0, avg_vibration / 5.0)
-                recommendation = 'Contrôlez les supports moteur'
-            elif avg_battery < 50:
+                confidence = min(1.0, vibration_risk)
+                recommendation = f'Contrôlez les supports moteur et l\'équilibrage des roues. Vibration actuelle: {avg_vibration:.2f} m/s² (seuil: {vibration_threshold} m/s²)'
+            elif battery_risk > 0:
                 failure_type = 'Batterie faible'
-                confidence = min(1.0, (100 - avg_battery) / 100)
-                recommendation = 'Remplacez la batterie'
+                confidence = min(1.0, battery_risk)
+                recommendation = f'Testez la batterie et envisagez son remplacement. Niveau actuel: {avg_battery:.1f}% (seuil: {battery_threshold}%)'
             else:
                 failure_type = 'Maintenance préventive'
-                confidence = 0.3
+                confidence = 0.2
                 recommendation = 'Effectuez un contrôle de routine'
             
-            # Date prédite
-            predicted_date = timezone.now() + timedelta(days=days_ahead)
+            # Date prédite en fonction de la confiance et des jours à venir
+            if confidence > 0.7:
+                predicted_days = days_ahead * 0.5  # Proche si le risque est élevé
+            elif confidence > 0.4:
+                predicted_days = days_ahead * 0.8
+            else:
+                predicted_days = days_ahead * 1.2  # Plus loin si le risque est faible
+                
+            predicted_date = timezone.now() + timedelta(days=int(predicted_days))
             
             # Sauvegarde de la prédiction
             try:
@@ -1598,7 +1648,7 @@ class IOTDataViewSet(viewsets.ModelViewSet):
                     recommendation=recommendation
                 )
             except Exception:
-                pass  # Ignore les erreurs de sauvegarde
+                pass  # Ignorer les erreurs de sauvegarde
             
             return Response({
                 'vehicle_id': vehicle_id,
@@ -1606,7 +1656,27 @@ class IOTDataViewSet(viewsets.ModelViewSet):
                 'confidence': round(confidence, 2),
                 'predicted_failure_date': predicted_date.isoformat(),
                 'recommendation': recommendation,
-                'data_points_used': len(iot_data)
+                'data_points_used': len(iot_data),
+                'trends': {
+                    'temperature': {
+                        'current': round(avg_temp, 2),
+                        'trend': round(temp_trend, 4),
+                        'threshold': temp_threshold,
+                        'risk': round(temp_risk, 2)
+                    },
+                    'vibration': {
+                        'current': round(avg_vibration, 2),
+                        'trend': round(vibration_trend, 4),
+                        'threshold': vibration_threshold,
+                        'risk': round(vibration_risk, 2)
+                    },
+                    'battery': {
+                        'current': round(avg_battery, 2),
+                        'trend': round(battery_trend, 4),
+                        'threshold': battery_threshold,
+                        'risk': round(battery_risk, 2)
+                    }
+                }
             })
             
         except Exception as e:
@@ -1614,7 +1684,7 @@ class IOTDataViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def generate_test_data(self, request):
-        """Génère des données IoT de test pour un véhicule"""
+        """Génère des données IoT de test pour un véhicule avec des variations spécifiques"""
         vehicle_id = request.data.get('vehicle_id')
         days = int(request.data.get('days', 30))
         
@@ -1628,27 +1698,82 @@ class IOTDataViewSet(viewsets.ModelViewSet):
             # Suppression des anciennes données
             IOTData.objects.filter(vehicle_id=vehicle_id).delete()
             
-            # Génération de nouvelles données
+            # Génération de nouvelles données avec variations spécifiques au véhicule
             new_data = []
-            base_temp = 75
-            base_vibration = 1.5
-            base_consumption = 6.0
-            base_battery = 100
+            
+            # Paramètres de base en fonction du type de véhicule
+            if vehicle.carburant == 'électrique':
+                base_temp = 65  # Les véhicules électriques ont tendance à moins chauffer
+                base_vibration = 1.2  # Moins de vibration
+                base_consumption = 0  # Pas de consommation de carburant
+                base_battery = 100
+            elif vehicle.carburant == 'diesel':
+                base_temp = 85  # Les diesels chauffent plus
+                base_vibration = 2.0  # Plus de vibration
+                base_consumption = 7.0
+                base_battery = 95
+            else:  # essence ou hybride
+                base_temp = 75
+                base_vibration = 1.5
+                base_consumption = 6.0
+                base_battery = 98
+            
             base_mileage = random.randint(10000, 50000)
+            
+            # Choisir un scénario de panne aléatoire pour ce véhicule
+            scenarios = ['temp', 'vibration', 'battery', 'none']
+            chosen_scenario = random.choice(scenarios)
+            
+            # Facteurs de dégradation en fonction du scénario
+            if chosen_scenario == 'temp':
+                temp_degradation_rate = random.uniform(0.01, 0.03)  # Dégradation rapide de la température
+                vibration_degradation_rate = random.uniform(0.002, 0.01)
+                battery_degradation_rate = random.uniform(0.001, 0.003)
+            elif chosen_scenario == 'vibration':
+                temp_degradation_rate = random.uniform(0.003, 0.01)
+                vibration_degradation_rate = random.uniform(0.01, 0.02)  # Dégradation rapide de la vibration
+                battery_degradation_rate = random.uniform(0.001, 0.003)
+            elif chosen_scenario == 'battery':
+                temp_degradation_rate = random.uniform(0.003, 0.01)
+                vibration_degradation_rate = random.uniform(0.002, 0.01)
+                battery_degradation_rate = random.uniform(0.005, 0.01)  # Dégradation rapide de la batterie
+            else:  # aucun scénario particulier
+                temp_degradation_rate = random.uniform(0.002, 0.008)
+                vibration_degradation_rate = random.uniform(0.002, 0.008)
+                battery_degradation_rate = random.uniform(0.001, 0.004)
             
             for day in range(days):
                 # Dégradation progressive
-                temp_factor = 1 + (day * 0.01)
-                vibration_factor = 1 + (day * 0.005)
-                battery_factor = 1 - (day * 0.01)
+                temp_factor = 1 + (day * temp_degradation_rate)
+                vibration_factor = 1 + (day * vibration_degradation_rate)
+                battery_factor = 1 - (day * battery_degradation_rate)
                 
                 for hour in range(0, 24, 2):  # Données toutes les 2 heures
                     timestamp = timezone.now() - timedelta(days=days-day, hours=hour)
                     
-                    temperature = base_temp * temp_factor + random.uniform(-5, 5)
-                    vibration = base_vibration * vibration_factor + random.uniform(-0.3, 0.3)
-                    fuel_consumption = base_consumption + random.uniform(-1, 1)
-                    battery_health = max(0, base_battery * battery_factor + random.uniform(-2, 2))
+                    # Ajouter des variations aléatoires plus importantes pour le scénario choisi
+                    if chosen_scenario == 'temp':
+                        temp_noise = random.uniform(-2, 8)  # Plus de variation pour la température
+                        vibration_noise = random.uniform(-0.3, 0.3)
+                        battery_noise = random.uniform(-2, 2)
+                    elif chosen_scenario == 'vibration':
+                        temp_noise = random.uniform(-3, 3)
+                        vibration_noise = random.uniform(-0.2, 0.8)  # Plus de variation pour la vibration
+                        battery_noise = random.uniform(-2, 2)
+                    elif chosen_scenario == 'battery':
+                        temp_noise = random.uniform(-3, 3)
+                        vibration_noise = random.uniform(-0.3, 0.3)
+                        battery_noise = random.uniform(-4, 1)  # Plus de variation pour la batterie (négative)
+                    else:
+                        temp_noise = random.uniform(-3, 3)
+                        vibration_noise = random.uniform(-0.3, 0.3)
+                        battery_noise = random.uniform(-2, 2)
+                    
+                    # Calcul des valeurs avec dégradation et variations
+                    temperature = (base_temp * temp_factor) + temp_noise
+                    vibration = (base_vibration * vibration_factor) + vibration_noise
+                    fuel_consumption = max(0, (base_consumption + random.uniform(-1, 1)))
+                    battery_health = max(0, min(100, (base_battery * battery_factor) + battery_noise))
                     mileage = base_mileage + (day * 50) + (hour * 2)
                     engine_hours = day * 8 + hour
                     
@@ -1657,7 +1782,7 @@ class IOTDataViewSet(viewsets.ModelViewSet):
                         timestamp=timestamp,
                         temperature=round(temperature, 2),
                         vibration=round(max(0, vibration), 2),
-                        fuel_consumption=round(max(0, fuel_consumption), 2),
+                        fuel_consumption=round(fuel_consumption, 2),
                         mileage=round(mileage, 2),
                         engine_hours=round(engine_hours, 2),
                         battery_health=round(battery_health, 2)
@@ -1670,13 +1795,16 @@ class IOTDataViewSet(viewsets.ModelViewSet):
                 'message': f'Données générées avec succès',
                 'vehicle_id': vehicle_id,
                 'days': days,
-                'data_points': len(new_data)
+                'data_points': len(new_data),
+                'vehicle_type': vehicle.carburant,
+                'scenario': chosen_scenario
             })
             
         except Vehicule.DoesNotExist:
             return Response({'error': 'Véhicule non trouvé'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': f'Erreur: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class MaintenancePredictionViewSet(viewsets.ModelViewSet):

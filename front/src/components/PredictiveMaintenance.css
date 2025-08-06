@@ -1,3 +1,4 @@
+/* PredictiveMaintenance.css */
 .maintenance-container {
     max-width: 1000px;
     margin: 0 auto;
@@ -20,6 +21,7 @@
     margin-bottom: 2rem;
     flex-wrap: wrap;
 }
+
 body, .maintenance-container, .card, .data-status, .vehicle-selector {
     color: #111 !important;
 }
@@ -152,9 +154,9 @@ body, .maintenance-container, .card, .data-status, .vehicle-selector {
         align-items: center;
     }
 }
-/* PredictiveMaintenance.css */
-.generate-data-button {
-    padding: 8px 16px;
+
+.generate-button {
+    padding: 0.5rem 1rem;
     background-color: #ff9800;
     color: white;
     border: none;
@@ -163,93 +165,18 @@ body, .maintenance-container, .card, .data-status, .vehicle-selector {
     transition: background-color 0.2s;
 }
 
-.generate-data-button:hover {
+.generate-button:hover {
     background-color: #f57c00;
 }
 
-.generate-data-button:disabled {
+.generate-button:disabled {
     background-color: #cccccc;
     cursor: not-allowed;
 }
 
-.data-status {
-    margin: 15px 0;
-    padding: 15px;
-    background-color: #f5f5f5;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.data-status h4 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    color: #333;
-}
-
-.data-status p {
-    margin: 5px 0;
-    color: #666;
-}
-
-/* VehicleSelector.css */
-.vehicle-selector {
-    margin-bottom: 20px;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.vehicle-selector label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-    color: #333;
-}
-
-.vehicle-select-dropdown {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
-    background-color: white;
-}
-
-.vehicle-select-dropdown:focus {
-    outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-}
-
-.vehicle-selector-loading,
-.vehicle-selector-error,
-.vehicle-selector-empty {
-    padding: 15px;
-    text-align: center;
-    border-radius: 4px;
-    margin-bottom: 20px;
-}
-
-.vehicle-selector-loading {
-    background-color: #e3f2fd;
-    color: #1976d2;
-}
-
-.vehicle-selector-error {
-    background-color: #ffebee;
-    color: #d32f2f;
-}
-
-.vehicle-selector-empty {
-    background-color: #fff8e1;
-    color: #ff8f00;
-}
-
-.retry-button {
-    margin-top: 10px;
-    padding: 8px 16px;
-    background-color: #1976d2;
+.predict-button {
+    padding: 0.5rem 1rem;
+    background-color: #2196F3;
     color: white;
     border: none;
     border-radius: 4px;
@@ -257,6 +184,223 @@ body, .maintenance-container, .card, .data-status, .vehicle-selector {
     transition: background-color 0.2s;
 }
 
-.retry-button:hover {
-    background-color: #1565c0;
+.predict-button:hover {
+    background-color: #0b7dda;
+}
+
+.predict-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.error-message {
+    background-color: #ffebee;
+    color: #d32f2f;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.error-message button {
+    background: none;
+    border: none;
+    color: #d32f2f;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.no-vehicle-selected {
+    background-color: #fff8e1;
+    color: #ff8f00;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.prediction-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.prediction-card {
+    background-color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.prediction-card h4 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+    font-size: 1rem;
+}
+
+.prediction-card p {
+    margin: 0;
+    color: #555;
+}
+
+.failure-type {
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #d32f2f;
+}
+
+.predicted-date {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #1976d2;
+}
+
+.confidence-display {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.confidence-text {
+    font-weight: bold;
+    align-self: flex-end;
+}
+
+.priority-level {
+    font-weight: bold;
+    margin-top: 0.5rem;
+}
+
+.recommendation {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.recommendation p {
+    flex-grow: 1;
+}
+
+.trends-section {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.trends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.trend-item {
+    background-color: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.trend-item h5 {
+    margin: 0 0 10px 0;
+    color: #555;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.trend-value {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 5px 0;
+    color: #333;
+}
+
+.trend-threshold {
+    font-size: 12px;
+    color: #666;
+    margin: 5px 0;
+}
+
+.trend-indicator {
+    font-size: 14px;
+    margin: 5px 0;
+    font-weight: bold;
+}
+
+.trend-indicator.positive {
+    color: #f44336; /* Rouge pour les tendances croissantes (mauvaises) */
+}
+
+.trend-indicator.negative {
+    color: #4caf50; /* Vert pour les tendances décroissantes (bonnes) */
+}
+
+.risk-meter {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.risk-label {
+    font-size: 12px;
+    margin-right: 5px;
+    color: #555;
+}
+
+.risk-bar {
+    flex-grow: 1;
+    height: 8px;
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.risk-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.risk-value {
+    font-size: 12px;
+    margin-left: 5px;
+    font-weight: bold;
+    color: #333;
+}
+
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #3498db;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.chart-section {
+    background-color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-top: 1rem;
+}
+
+.chart-section h4 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #333;
 }

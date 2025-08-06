@@ -29,7 +29,7 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('inscription/', SignUpView.as_view(), name='signup'),
-        path('api/iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='iot-data-generate-test-data'),
+    path('iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='generate_test_data'),
     path('update-agence/', UpdateAgenceView.as_view(), name='update-agence'),
     path('assign_user_to_agency/', AssignUserToAgencyView.as_view(), name='assign_user_to_agence'),
 
