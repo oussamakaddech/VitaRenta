@@ -811,7 +811,17 @@ class UserViewSet(ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
     authentication_classes = [JWTAuthentication]
-    
+    @action(detail=False, methods=['get'])
+    def agency_users_without_agency(self, request):
+        """Récupère les utilisateurs de rôle 'agence' sans agence assignée"""
+        try:
+            users = User.objects.filter(role='agence', agence__isnull=True)
+            serializer = self.get_serializer(users, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({
+                'error': f"Erreur lors de la récupération des utilisateurs: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
@@ -1681,3 +1691,47 @@ class MaintenancePredictionViewSet(viewsets.ModelViewSet):
         if vehicle_id:
             queryset = queryset.filter(vehicle_id=vehicle_id)
         return queryset.order_by('-prediction_date')
+    
+
+
+
+class AssignUserToAgencyView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def post(self, request):
+        return self._assign_user(request)
+    
+    def patch(self, request):
+        return self._assign_user(request)
+    
+    def _assign_user(self, request):
+        try:
+            user_id = request.data.get('user_id')
+            agence_id = request.data.get('agence_id')
+            
+            if not user_id or not agence_id:
+                return Response({
+                    'error': 'user_id et agence_id sont requis'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = get_object_or_404(User, id=user_id)
+            agence = get_object_or_404(Agence, id=agence_id)
+            
+            if user.role != 'agence':
+                return Response({
+                    'error': "L'utilisateur doit avoir le rôle 'agence'"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            user.agence = agence
+            user.save()
+            
+            return Response({
+                'message': f"Utilisateur {user.email} affecté à l'agence {agence.nom} avec succès",
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f"Erreur lors de l'affectation: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 

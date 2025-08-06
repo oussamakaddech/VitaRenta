@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    EcoScoreViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
+    AssignUserToAgencyView, EcoScoreViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
     UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView,
     MaintenancePredictionViewSet
@@ -31,6 +31,7 @@ urlpatterns = [
     path('inscription/', SignUpView.as_view(), name='signup'),
         path('api/iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='iot-data-generate-test-data'),
     path('update-agence/', UpdateAgenceView.as_view(), name='update-agence'),
+    path('assign_user_to_agency/', AssignUserToAgencyView.as_view(), name='assign_user_to_agence'),
 
     # JWT routes
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

@@ -11,11 +11,11 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     if (!token || !user) {
         return <Navigate to="/login" replace />;
     }
-
+    
     const location = useLocation();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [agencies, setAgencies] = useState([]);
-    const [allAgencies, setAllAgencies] = useState([]); // Pour la modal d'assignation
+    const [agencyUsers, setAgencyUsers] = useState([]); // Utilisateurs de rôle "agence" sans agence
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
@@ -45,11 +45,12 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     });
 
     const isActive = useCallback((path) => location.pathname === path, [location.pathname]);
+    
     const handleLogout = useCallback(() => {
         onLogout();
         setIsSidebarOpen(false);
     }, [onLogout]);
-
+    
     const validateAgencyData = useCallback((data) => {
         if (!data.nom || data.nom.trim().length < 2) return "Le nom de l'agence doit contenir au moins 2 caractères";
         if (!data.adresse || data.adresse.trim().length < 5) return "L'adresse doit contenir au moins 5 caractères";
@@ -62,6 +63,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         return '';
     }, []);
 
+    // Récupérer les agences
     const fetchAgencies = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -70,6 +72,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             if (searchTerm.trim()) params.append('search', searchTerm.trim());
             params.append('page', currentPageAgencies);
             params.append('page_size', itemsPerPage);
+            
             const response = await axios.get(`${API_BASE_URL}/api/agences/?${params}`, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
@@ -105,25 +108,27 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         }
     }, [token, searchTerm, currentPageAgencies, itemsPerPage]);
 
-    // Récupérer toutes les agences pour la modal d'assignation
-    const fetchAllAgencies = useCallback(async () => {
+    // Récupérer les utilisateurs de rôle "agence" sans agence
+    const fetchAgencyUsers = useCallback(async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/agences/`, {
+            const response = await axios.get(`${API_BASE_URL}/api/users/?role=agence&no_agence=true`, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
             const data = Array.isArray(response.data.results) ? response.data.results : 
                         Array.isArray(response.data) ? response.data : [];
-            setAllAgencies(data);
+            setAgencyUsers(data);
         } catch (err) {
-            console.error('Erreur lors du chargement de toutes les agences:', err);
+            console.error('Erreur lors du chargement des utilisateurs agence:', err);
         }
     }, [token]);
 
     useEffect(() => {
         fetchAgencies();
-        fetchAllAgencies(); // Charger toutes les agences pour l'assignation
-    }, [fetchAgencies, fetchAllAgencies]);
+        if (isAdmin) {
+            fetchAgencyUsers(); // Charger les utilisateurs pour l'assignation
+        }
+    }, [fetchAgencies, fetchAgencyUsers, isAdmin]);
 
     const updateStats = useCallback((agenciesData) => {
         const now = new Date();
@@ -155,9 +160,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             resetForm();
             setModalState({ type: null, data: null });
             fetchAgencies();
-            fetchAllAgencies(); // Mettre à jour la liste complète
-            if (user && !user.agence && user.role === 'agence') {
-                await assignAgencyToUser(response.data.id);
+            if (isAdmin) {
+                fetchAgencyUsers(); // Mettre à jour la liste des utilisateurs
             }
         } catch (err) {
             console.error('Erreur lors de la création:', err);
@@ -165,7 +169,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    }, [formData, token, user, fetchAgencies, fetchAllAgencies]);
+    }, [formData, token, fetchAgencies, fetchAgencyUsers, isAdmin]);
 
     const updateAgency = useCallback(async () => {
         const validationError = validateAgencyData(formData);
@@ -184,14 +188,13 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             resetForm();
             setModalState({ type: null, data: null });
             fetchAgencies();
-            fetchAllAgencies(); // Mettre à jour la liste complète
         } catch (err) {
             console.error('Erreur lors de la mise à jour:', err);
             setError(err.response?.data?.message || "Erreur lors de la mise à jour de l'agence. Vérifiez vos permissions.");
         } finally {
             setLoading(false);
         }
-    }, [formData, selectedAgency, token, fetchAgencies, fetchAllAgencies]);
+    }, [formData, selectedAgency, token, fetchAgencies]);
 
     const deleteAgency = useCallback(async (agencyId) => {
         if (!window.confirm('Voulez-vous vraiment supprimer cette agence ? Cette action est irréversible.')) {
@@ -206,39 +209,47 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             });
             setSuccess('Agence supprimée avec succès !');
             fetchAgencies();
-            fetchAllAgencies(); // Mettre à jour la liste complète
         } catch (err) {
             console.error('Erreur lors de la suppression:', err);
             setError(err.response?.data?.message || "Erreur lors de la suppression de l'agence. Vérifiez s'il y a des véhicules ou utilisateurs associés.");
         } finally {
             setLoading(false);
         }
-    }, [token, fetchAgencies, fetchAllAgencies]);
+    }, [token, fetchAgencies]);
 
-    const assignAgencyToUser = useCallback(async (agencyId) => {
-        if (loading) return;
-        if (!token) {
-            setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
-            setModalState({ type: null, data: null });
-            return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            await axios.patch(`${API_BASE_URL}/api/update_agence/`, { agence_id: agencyId }, {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
-            });
-            setSuccess('Agence assignée avec succès ! Veuillez vous reconnecter.');
-            fetchAgencies();
-        } catch (err) {
-            console.error('Erreur lors de l\'assignation:', err);
-            setError(err.response?.data?.message || "Erreur lors de l'assignation de l'agence.");
-        } finally {
-            setLoading(false);
-            setModalState({ type: null, data: null });
-        }
-    }, [token, fetchAgencies, loading]);
+    // Affecter un utilisateur de rôle "agence" à une agence
+    // AgencyManagement.js
+const assignUserToAgency = useCallback(async (userId, agencyId) => {
+    if (loading) return;
+    if (!token) {
+        setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
+        setModalState({ type: null, data: null });
+        return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+        const response = await axios.patch(`${API_BASE_URL}/api/assign_user_to_agency/`, { 
+            user_id: userId, 
+            agence_id: agencyId 
+        }, {
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 10000
+        });
+        setSuccess('Utilisateur affecté avec succès !');
+        fetchAgencies();
+        fetchAgencyUsers();
+        setModalState({ type: null, data: null });
+    } catch (err) {
+        console.error('Erreur lors de l\'affectation:', err);
+        setError(err.response?.data?.error || "Erreur lors de l'affectation de l'utilisateur.");
+    } finally {
+        setLoading(false);
+    }
+}, [token, fetchAgencies, fetchAgencyUsers, loading]);
 
     const resetForm = useCallback(() => {
         setFormData({
@@ -287,13 +298,14 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         setModalState({ type: 'create', data: null });
     }, [resetForm]);
 
-    const openAssignModal = useCallback(() => {
-        if (allAgencies.length === 0) {
-            setError('Aucune agence disponible. Créez une agence d\'abord.');
+    // Ouvrir la modal pour affecter un utilisateur à une agence
+    const openAssignUserModal = useCallback((agency) => {
+        if (agencyUsers.length === 0) {
+            setError('Aucun utilisateur de rôle "agence" disponible sans agence assignée.');
             return;
         }
-        setModalState({ type: 'assign', data: null });
-    }, [allAgencies.length]);
+        setModalState({ type: 'assign_user', data: agency });
+    }, [agencyUsers.length]);
 
     const closeModal = useCallback(() => {
         setModalState({ type: null, data: null });
@@ -314,15 +326,19 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         }
     }, [isEditMode, createAgency, updateAgency]);
 
-    const handleAssignSubmit = useCallback(async (e) => {
+    // Gérer la soumission du formulaire d'affectation d'utilisateur
+    const handleAssignUserSubmit = useCallback(async (e) => {
         e.preventDefault();
-        const agencyId = e.target.agency_id.value;
-        if (!agencyId) {
-            setError('Veuillez sélectionner une agence.');
+        const userId = e.target.user_id.value;
+        const agencyId = modalState.data.id;
+        
+        if (!userId) {
+            setError('Veuillez sélectionner un utilisateur.');
             return;
         }
-        await assignAgencyToUser(agencyId);
-    }, [assignAgencyToUser]);
+        
+        await assignUserToAgency(userId, agencyId);
+    }, [assignUserToAgency, modalState.data]);
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Escape') {
@@ -456,50 +472,33 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                         </div>
                     )}
                     
-                    {/* Section "Mon Agence" */}
-                    {user.agence ? (
+                    {/* Section "Mon Agence" - uniquement pour les utilisateurs de rôle "agence" */}
+                    {user.role === 'agence' && (
                         <div className="user-agency-section">
                             <div className="user-agency-card">
                                 <h3 className="user-agency-title">
                                     <i className="fas fa-user-tie"></i> Mon Agence
                                 </h3>
-                                <div className="user-agency-info">
-                                    <div className="user-agency-name">
-                                        <i className="fas fa-building"></i> <strong>{user.agence.nom || 'N/A'}</strong>
+                                {user.agence ? (
+                                    <div className="user-agency-info">
+                                        <div className="user-agency-name">
+                                            <i className="fas fa-building"></i> <strong>{user.agence.nom || 'N/A'}</strong>
+                                        </div>
+                                        <div className="user-agency-location">
+                                            <i className="fas fa-map-marker-alt"></i> {user.agence.ville || 'N/A'}, {user.agence.pays || 'N/A'}
+                                        </div>
+                                        <div className="user-agency-contact">
+                                            <i className="fas fa-envelope"></i> {user.agence.email || 'N/A'}
+                                        </div>
+                                        <div className="user-agency-phone">
+                                            <i className="fas fa-phone"></i> {user.agence.telephone || 'N/A'}
+                                        </div>
                                     </div>
-                                    <div className="user-agency-location">
-                                        <i className="fas fa-map-marker-alt"></i> {user.agence.ville || 'N/A'}, {user.agence.pays || 'N/A'}
-                                    </div>
-                                    <div className="user-agency-contact">
-                                        <i className="fas fa-envelope"></i> {user.agence.email || 'N/A'}
-                                    </div>
-                                    <div className="user-agency-phone">
-                                        <i className="fas fa-phone"></i> {user.agence.telephone || 'N/A'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="user-agency-section">
-                            <div className="user-agency-card">
-                                <h3 className="user-agency-title">
-                                    <i className="fas fa-user-tie"></i> Mon Agence
-                                </h3>
-                                <p>
-                                    Aucune agence associée.{' '}
-                                    {canManageAllAgencies ? (
-                                        <button
-                                            onClick={openAssignModal}
-                                            className="assign-agency-btn"
-                                            disabled={allAgencies.length === 0}
-                                            aria-label="Assigner une agence à mon compte"
-                                        >
-                                            Assigner une agence
-                                        </button>
-                                    ) : (
-                                        <span>Veuillez contacter un administrateur pour associer une agence.</span>
-                                    )}
-                                </p>
+                                ) : (
+                                    <p>
+                                        Aucune agence associée. Veuillez contacter un administrateur pour vous assigner une agence.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     )}
@@ -573,17 +572,17 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                         </div>
                                     </button>
                                     <button
-                                        onClick={openAssignModal}
+                                        onClick={() => fetchAgencyUsers()}
                                         className="quick-action-card"
-                                        disabled={loading || allAgencies.length === 0}
-                                        aria-label="Assigner une agence à mon compte"
+                                        disabled={loading}
+                                        aria-label="Actualiser la liste des utilisateurs"
                                     >
                                         <div className="quick-action-icon">
-                                            <i className="fas fa-user-plus"></i>
+                                            <i className="fas fa-users"></i>
                                         </div>
                                         <div className="quick-action-content">
-                                            <div className="quick-action-title">Assigner</div>
-                                            <div className="quick-action-description">Associer une agence à mon compte</div>
+                                            <div className="quick-action-title">Utilisateurs</div>
+                                            <div className="quick-action-description">Actualiser la liste des utilisateurs sans agence</div>
                                         </div>
                                     </button>
                                 </>
@@ -691,10 +690,11 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                                                 <i className="fas fa-trash"></i>
                                                             </button>
                                                             <button
-                                                                onClick={() => assignAgencyToUser(agency.id)}
+                                                                onClick={() => openAssignUserModal(agency)}
                                                                 className="action-btn assign-btn"
-                                                                title="Assigner à mon compte"
-                                                                aria-label={`Assigner l'agence ${agency.nom || 'inconnue'} à mon compte`}
+                                                                title="Affecter un utilisateur"
+                                                                aria-label={`Affecter un utilisateur à l'agence ${agency.nom || 'inconnue'}`}
+                                                                disabled={agencyUsers.length === 0}
                                                             >
                                                                 <i className="fas fa-user-plus"></i>
                                                             </button>
@@ -1114,11 +1114,12 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                             {canManageAllAgencies && (
                                 <button
                                     type="button"
-                                    onClick={() => assignAgencyToUser(modalState.data.id)}
+                                    onClick={() => openAssignUserModal(modalState.data)}
                                     className="submit-btn"
-                                    aria-label={`Assigner l'agence ${modalState.data.nom || 'inconnue'} à mon compte`}
+                                    disabled={agencyUsers.length === 0}
+                                    aria-label={`Affecter un utilisateur à l'agence ${modalState.data.nom || 'inconnue'}`}
                                 >
-                                    <i className="fas fa-user-plus"></i> Assigner à mon compte
+                                    <i className="fas fa-user-plus"></i> Affecter un utilisateur
                                 </button>
                             )}
                             <button
@@ -1132,12 +1133,12 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                         </div>
                     </div>
                 </div>
-            ) : modalState.type === 'assign' && canManageAllAgencies ? (
+            ) : modalState.type === 'assign_user' && canManageAllAgencies ? (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 id="modal-title">
-                                <i className="fas fa-user-plus"></i> Assigner une Agence
+                                <i className="fas fa-user-plus"></i> Affecter un utilisateur à l'agence
                             </h2>
                             <button
                                 onClick={closeModal}
@@ -1147,19 +1148,25 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
-                        <form onSubmit={handleAssignSubmit} className="agency-form" aria-labelledby="modal-title">
+                        <div className="agency-assign-info">
+                            <p><strong>Agence:</strong> {modalState.data.nom || 'N/A'}</p>
+                            <p><strong>ID:</strong> {modalState.data.id}</p>
+                        </div>
+                        <form onSubmit={handleAssignUserSubmit} className="agency-form" aria-labelledby="modal-title">
                             <div className="form-group">
-                                <label htmlFor="agency_id">Sélectionner une agence <span aria-hidden="true">*</span></label>
+                                <label htmlFor="user_id">Sélectionner un utilisateur <span aria-hidden="true">*</span></label>
                                 <select
-                                    id="agency_id"
-                                    name="agency_id"
+                                    id="user_id"
+                                    name="user_id"
                                     className="form-input"
                                     required
                                     aria-required="true"
                                 >
-                                    <option value="">-- Choisir une agence --</option>
-                                    {allAgencies.map(agency => (
-                                        <option key={agency.id} value={agency.id}>{agency.nom || 'N/A'} ({agency.ville || 'N/A'})</option>
+                                    <option value="">-- Choisir un utilisateur --</option>
+                                    {agencyUsers.map(user => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.nom || 'N/A'} ({user.email || 'N/A'})
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -1174,7 +1181,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                     type="button"
                                     onClick={closeModal}
                                     className="cancel-btn"
-                                    aria-label="Annuler l'assignation"
+                                    aria-label="Annuler l'affectation"
                                 >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
@@ -1182,10 +1189,10 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                     type="submit"
                                     className="submit-btn"
                                     disabled={loading}
-                                    aria-label="Assigner l'agence sélectionnée"
+                                    aria-label="Affecter l'utilisateur sélectionné"
                                 >
                                     <i className={`fas fa-${loading ? 'spinner fa-spin' : 'user-plus'}`}></i>
-                                    {loading ? 'Traitement...' : 'Assigner'}
+                                    {loading ? 'Traitement...' : 'Affecter'}
                                 </button>
                             </div>
                         </form>
