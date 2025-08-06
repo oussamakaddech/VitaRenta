@@ -16,6 +16,8 @@ import DemandForecast from './components/DemandForecast';
 import RecommendationResults from './components/RecommendationResults';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
+import FeedbackSystem from './components/FeedbackSystem';
+
 // Importer les nouveaux composants
 import PredictiveMaintenance from './components/PredictiveMaintenance';
 import EcoScore from './components/EcoScore';
@@ -211,6 +213,16 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
+<Route
+    path="/feedback"
+    element={
+        <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+            {user ? <FeedbackSystem token={token} user={user} onLogout={handleLogout} /> : <div>Chargement...</div>}
+        </ProtectedRoute>
+    }
+/>
+
+
                         <Route
                             path="/unauthorized"
                             element={
@@ -274,6 +286,8 @@ function App() {
                                     <Link to="/profile" aria-label="Profil">Profil</Link>
                                     <Link to="/recommendations" aria-label="Recommandations">Recommandations</Link>
                                     <Link to="/eco-score" aria-label="Score écologique">Score Écologique</Link>
+                                    <Link to="/feedback" aria-label="Feedback et avis">Feedback</Link>
+
                                 </div>
                                 {(user?.role === 'admin' || user?.role === 'agence') && (
                                     <div className="footer-section">

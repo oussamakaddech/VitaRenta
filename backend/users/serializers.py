@@ -536,3 +536,26 @@ class MaintenancePredictionSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenancePrediction
         fields = '__all__'
+
+from rest_framework import serializers
+from .models import Feedback
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    
+    class Meta:
+        model = Feedback
+        fields = ['_id', 'user', 'user_email', 'rating', 'comment', 'created_at']
+        read_only_fields = ['user', 'created_at']
+    
+    def to_representation(self, instance):
+        """Conversion personnalisée pour gérer les ObjectId"""
+        representation = super().to_representation(instance)
+        # Convertir les ObjectId en chaînes de caractères
+        if representation.get('_id'):
+            representation['id'] = str(representation['_id'])
+            # Garder aussi _id pour la compatibilité
+            representation['_id'] = str(representation['_id'])
+        if representation.get('user'):
+            representation['user'] = str(representation['user'])
+        return representation

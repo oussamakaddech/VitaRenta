@@ -24,9 +24,9 @@ from generate_eco_score_dataset import FUEL_TYPES
 from .permissions import IsAdminOrAgency 
 from django.conf import settings
 from rest_framework.decorators import action
-from .models import EcoScore, IOTData, User, Vehicule, Agence, Reservation
+from .models import  EcoScore, Feedback, IOTData, User, Vehicule, Agence, Reservation
 from .serializers import (
-    LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
+     FeedbackSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
     UserUpdateSerializer, VehiculeSerializer, AgenceSerializer, ReservationSerializer
 )
 from rest_framework.permissions import BasePermission
@@ -1863,3 +1863,150 @@ class AssignUserToAgencyView(APIView):
             return Response({
                 'error': f"Erreur lors de l'affectation: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        
+
+
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Avg, Count
+from django.http import Http404
+from .models import Feedback
+from .serializers import FeedbackSerializer
+import traceback
+from bson import ObjectId
+
+from bson.objectid import ObjectId
+from bson.errors import InvalidId
+
+class FeedbackViewSet(viewsets.ModelViewSet):
+    queryset = Feedback.objects.all().order_by('-created_at')
+    serializer_class = FeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Statistiques de feedback"""
+        try:
+            stats = Feedback.objects.aggregate(
+                average_rating=Avg('rating'),
+                total_count=Count('_id')
+            )
+            return Response({
+                'average_rating': stats.get('average_rating', 0) or 0,
+                'total_count': stats.get('total_count', 0) or 0
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def distribution(self, request):
+        """Retourne la distribution des notes pour les graphiques"""
+        try:
+            feedbacks = Feedback.objects.all()
+            
+            # Calculer la distribution des notes
+            distribution = {}
+            for rating in [1, 2, 3, 4, 5]:
+                count = feedbacks.filter(rating=rating).count()
+                distribution[str(rating)] = count
+            
+            return Response(distribution)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_queryset(self):
+        """Personnaliser la requête pour supporter le filtrage et le tri"""
+        queryset = super().get_queryset()
+        
+        # Ne pas filtrer par utilisateur pour les actions de modification/suppression
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return queryset
+        
+        # Si l'utilisateur est un client, ne montrer que ses feedbacks pour les autres actions
+        if self.request.user.role == 'client':
+            queryset = queryset.filter(user=self.request.user)
+        
+        # Filtrage par note
+        rating_filter = self.request.query_params.get('rating')
+        if rating_filter and rating_filter != 'all':
+            try:
+                rating_filter = int(rating_filter)
+                queryset = queryset.filter(rating=rating_filter)
+            except ValueError:
+                pass
+        
+        # Tri
+        sort_by = self.request.query_params.get('sort_by', 'newest')
+        if sort_by == 'oldest':
+            queryset = queryset.order_by('created_at')
+        elif sort_by == 'highest':
+            queryset = queryset.order_by('-rating', '-created_at')
+        elif sort_by == 'lowest':
+            queryset = queryset.order_by('rating', 'created_at')
+        else:  # newest par défaut
+            queryset = queryset.order_by('-created_at')
+        
+        return queryset
+    
+    def get_object(self):
+        """
+        Récupère l'objet en utilisant l'ObjectId correctement
+        """
+        pk = self.kwargs.get('pk')
+        print(f"Recherche du feedback avec pk: {pk}")
+        
+        if not pk:
+            raise Http404("Aucun ID fourni")
+        
+        try:
+            # Vérifier que l'ID est un ObjectId valide
+            obj_id = ObjectId(pk)
+        except (InvalidId, TypeError):
+            raise Http404("ID invalide")
+        
+        # Pour les actions de modification/suppression, utiliser le queryset sans filtrage utilisateur
+        if self.action in ['update', 'partial_update', 'destroy']:
+            queryset = Feedback.objects.all()
+        else:
+            queryset = self.filter_queryset(self.get_queryset())
+        
+        try:
+            obj = queryset.get(_id=obj_id)
+            print(f"Feedback trouvé: {obj}")
+            return obj
+        except Feedback.DoesNotExist:
+            print(f"Feedback non trouvé avec l'ID: {pk}")
+            print("Queryset utilisé:", queryset.query)
+            print("Nombre de feedbacks dans le queryset:", queryset.count())
+            raise Http404(f"Aucun feedback trouvé avec l'ID {pk}")
+    
+    def destroy(self, request, *args, **kwargs):
+        """Suppression d'un feedback avec vérification des permissions"""
+        try:
+            instance = self.get_object()
+            
+            # Vérifier les permissions
+            if instance.user != self.request.user and self.request.user.role != 'admin':
+                return Response(
+                    {'error': 'Vous n\'êtes pas autorisé à supprimer ce feedback'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Supprimer le feedback
+            instance.delete()
+            print("Feedback supprimé avec succès")
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except Http404 as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"Erreur lors de la suppression du feedback: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

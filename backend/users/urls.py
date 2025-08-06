@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    AssignUserToAgencyView, EcoScoreViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
+    AssignUserToAgencyView,  EcoScoreViewSet, FeedbackViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
     UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView,
     MaintenancePredictionViewSet
@@ -23,6 +23,7 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'iot-data', IOTDataViewSet)
 router.register(r'eco-score', EcoScoreViewSet)
 router.register(r'maintenance-prediction', MaintenancePredictionViewSet)
+router.register(r'feedback', FeedbackViewSet)
 
 urlpatterns = [
     # Authentication routes

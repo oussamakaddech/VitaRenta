@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
@@ -36,12 +36,14 @@ const FloatingParticles = ({ animationsEnabled }) => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!animationsEnabled || reduceMotion) return null;
     
-    const particles = Array.from({ length: 30 }, (_, i) => ({
-        id: i,
-        delay: Math.random() * 15,
-        left: Math.random() * 100,
-        size: Math.random() * 3 + 2,
-    }));
+    const particles = useMemo(() => 
+        Array.from({ length: 30 }, (_, i) => ({
+            id: i,
+            delay: Math.random() * 15,
+            left: Math.random() * 100,
+            size: Math.random() * 3 + 2,
+        }))
+    , []);
     
     return (
         <div className="floating-particles">
@@ -91,15 +93,17 @@ Sparkle.propTypes = {
 
 // Composant pour la barre de progression
 const ProgressBar = ({ percentage, color, label }) => {
-    const safePercentage = SafeNumber(percentage, 0);
-    const clampedPercentage = Math.min(Math.max(safePercentage, 0), 100);
+    const safePercentage = useMemo(() => {
+        const value = SafeNumber(percentage, 0);
+        return Math.min(Math.max(value, 0), 100);
+    }, [percentage]);
     
     return (
-        <div className="progress-bar" role="progressbar" aria-valuenow={clampedPercentage} aria-valuemin="0" aria-valuemax="100" aria-label={label}>
+        <div className="progress-bar" role="progressbar" aria-valuenow={safePercentage} aria-valuemin="0" aria-valuemax="100" aria-label={label}>
             <div
                 className="progress-fill"
                 style={{
-                    width: `${clampedPercentage}%`,
+                    width: `${safePercentage}%`,
                     background: color,
                 }}
             />
@@ -115,13 +119,15 @@ ProgressBar.propTypes = {
 
 // Composant pour le graphique interactif
 const InteractiveChart = ({ data, label, color }) => {
-    const safeData = Array.isArray(data) ? data.map(d => SafeNumber(d, 0)) : [];
+    const safeData = useMemo(() => 
+        Array.isArray(data) ? data.map(d => SafeNumber(d, 0)) : []
+    , [data]);
     
     if (safeData.length === 0) {
         return <div className="chart-placeholder">Pas de données disponibles</div>;
     }
     
-    const chartData = {
+    const chartData = useMemo(() => ({
         labels: safeData.map((_, index) => `Jour ${index + 1}`),
         datasets: [
             {
@@ -135,9 +141,9 @@ const InteractiveChart = ({ data, label, color }) => {
                 pointHoverRadius: 6,
             },
         ],
-    };
+    }), [safeData, label, color]);
     
-    const options = {
+    const options = useMemo(() => ({
         responsive: true,
         plugins: {
             legend: {
@@ -162,7 +168,7 @@ const InteractiveChart = ({ data, label, color }) => {
             y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255, 255, 255, 0.2)' } },
         },
         maintainAspectRatio: false,
-    };
+    }), [label]);
     
     return (
         <div className="chart-container" style={{ height: '150px' }} role="region" aria-label={`Graphique des tendances pour ${label}`}>
@@ -192,28 +198,30 @@ const StatCard = ({
     animationsEnabled,
 }) => {
     const isVisible = useAnimateOnMount(index * 150, animationsEnabled);
-    const safeNumber = SafeNumber(number, 0);
-    const safeTrendValue = SafeNumber(trendValue, 0);
-    const safeProgress = SafeNumber(progress, 0);
+    const safeNumber = useMemo(() => SafeNumber(number, 0), [number]);
+    const safeTrendValue = useMemo(() => SafeNumber(trendValue, 0), [trendValue]);
+    const safeProgress = useMemo(() => SafeNumber(progress, 0), [progress]);
     
-    const getTrendIcon = () => {
+    const getTrendIcon = useCallback(() => {
         if (trend === 'up') return '↗️';
         if (trend === 'down') return '↘️';
         return '→';
-    };
+    }, [trend]);
     
-    const getTrendClass = () => {
+    const getTrendClass = useCallback(() => {
         if (trend === 'up') return 'trend-up';
         if (trend === 'down') return 'trend-down';
         return 'trend-stable';
-    };
+    }, [trend]);
     
-    const sparkles = Array.from({ length: 5 }, (_, i) => ({
-        id: i,
-        top: Math.random() * 100,
-        left: Math.random() * 100,
-        delay: Math.random() * 3,
-    }));
+    const sparkles = useMemo(() => 
+        Array.from({ length: 5 }, (_, i) => ({
+            id: i,
+            top: Math.random() * 100,
+            left: Math.random() * 100,
+            delay: Math.random() * 3,
+        }))
+    , []);
     
     return (
         <div
@@ -278,7 +286,9 @@ StatCard.propTypes = {
 // Composant pour les cartes de métriques
 const MetricCard = ({ value, label, index, animationsEnabled }) => {
     const isVisible = useAnimateOnMount(index * 100, animationsEnabled);
-    const displayValue = value !== undefined && value !== null ? value : 'N/A';
+    const displayValue = useMemo(() => 
+        value !== undefined && value !== null ? value : 'N/A'
+    , [value]);
     
     return (
         <div
@@ -305,7 +315,11 @@ MetricCard.propTypes = {
 const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }) => {
     const isVisible = useAnimateOnMount(300, animationsEnabled);
     
-    if (!Array.isArray(alerts) || alerts.length === 0) {
+    const safeAlerts = useMemo(() => 
+        Array.isArray(alerts) ? alerts : []
+    , [alerts]);
+    
+    if (safeAlerts.length === 0) {
         return null;
     }
     
@@ -313,7 +327,7 @@ const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }
         <div className={`maintenance-alerts ${isVisible ? 'animate-in' : ''}`}>
             <h2>Alertes de Maintenance</h2>
             <div className="alerts-container">
-                {alerts.map((alert) => (
+                {safeAlerts.map((alert) => (
                     <div key={alert.id} className="alert-toast">
                         <div className="alert-content">
                             <strong>{alert.vehicleName || 'Véhicule inconnu'}</strong>
@@ -360,13 +374,15 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
     const [selectedPeriod, setSelectedPeriod] = useState('month');
     const isVisible = useAnimateOnMount(500, animationsEnabled);
     
-    const handlePeriodChange = (e) => {
+    const handlePeriodChange = useCallback((e) => {
         setSelectedPeriod(e.target.value);
-    };
+    }, []);
     
-    const safeRevenueData = revenueData || { total: 0, details: [] };
-    const safeTotal = SafeNumber(safeRevenueData.total, 0);
-    const safeDetails = Array.isArray(safeRevenueData.details) ? safeRevenueData.details : [];
+    const safeRevenueData = useMemo(() => revenueData || { total: 0, details: [] }, [revenueData]);
+    const safeTotal = useMemo(() => SafeNumber(safeRevenueData.total, 0), [safeRevenueData.total]);
+    const safeDetails = useMemo(() => 
+        Array.isArray(safeRevenueData.details) ? safeRevenueData.details : []
+    , [safeRevenueData.details]);
     
     return (
         <div className={`revenue-section ${isVisible ? 'animate-in' : ''}`}>
@@ -467,6 +483,18 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         agenceId: user?.role === 'agence' ? user?.agence?.id : null 
     });
     
+    // Utiliser des refs pour éviter les dépendances changeantes
+    const filterRef = useRef(filter);
+    const tokenRef = useRef(token);
+    const userRef = useRef(user);
+    
+    // Mettre à jour les refs quand les valeurs changent
+    useEffect(() => {
+        filterRef.current = filter;
+        tokenRef.current = token;
+        userRef.current = user;
+    }, [filter, token, user]);
+    
     // Vérification de l'authentification et du rôle
     if (!token || !user) {
         return <Navigate to="/login" replace />;
@@ -477,7 +505,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     }
     
     // Fonction pour rafraîchir le token
-    const refreshToken = async () => {
+    const refreshToken = useCallback(async () => {
         try {
             const refreshToken = localStorage.getItem('refresh_token');
             if (!refreshToken) throw new Error('No refresh token available');
@@ -492,10 +520,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             onLogout();
             return null;
         }
-    };
+    }, [onLogout]);
     
     // Calcul des tendances dynamiques
-    const calculateTrend = (data) => {
+    const calculateTrend = useCallback((data) => {
         if (!Array.isArray(data) || data.length < 2 || data.some(val => !Number.isFinite(val))) {
             return { trend: 'stable', trendValue: 0 };
         }
@@ -508,10 +536,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             trend: Number.isFinite(change) && change > 0 ? 'up' : change < 0 ? 'down' : 'stable',
             trendValue: Number.isFinite(change) ? Math.round(change * 10) / 10 : 0,
         };
-    };
+    }, []);
     
     // Chargement des agences pour le filtre
-    const fetchAgences = async (accessToken) => {
+    const fetchAgences = useCallback(async (accessToken) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/agences/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -521,9 +549,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             console.error('Erreur lors du chargement des agences:', error);
             setError('Impossible de charger la liste des agences.');
         }
-    };
+    }, []);
     
-    const fetchMaintenanceAlerts = async (accessToken) => {
+    const fetchMaintenanceAlerts = useCallback(async (accessToken) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/vehicules/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -540,9 +568,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             console.error('Erreur lors du chargement des alertes de maintenance:', error);
             setMaintenanceAlerts([]);
         }
-    };
+    }, []);
     
-    const fetchRevenueData = async (accessToken, period) => {
+    const fetchRevenueData = useCallback(async (accessToken, period) => {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -579,15 +607,15 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             console.error('Erreur lors du chargement des données de revenus:', error);
             setRevenueData({ total: 0, details: [] });
         }
-    };
+    }, []);
     
     const fetchStats = useCallback(async (retryCount = 0, maxRetries = 3) => {
         try {
             setLoading(true);
             setError(null);
-            let accessToken = token;
-            const params = { period: filter.period };
-            if (filter.agenceId) params.agence_id = filter.agenceId;
+            let accessToken = tokenRef.current;
+            const params = { period: filterRef.current.period };
+            if (filterRef.current.agenceId) params.agence_id = filterRef.current.agenceId;
             const defaultStats = {
                 total: 0,
                 disponibles: 0,
@@ -653,8 +681,8 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             });
             await Promise.all([
                 fetchMaintenanceAlerts(accessToken),
-                fetchRevenueData(accessToken, filter.period),
-                user.role === 'admin' && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
+                fetchRevenueData(accessToken, filterRef.current.period),
+                userRef.current?.role === 'admin' && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
             ]);
         } catch (error) {
             console.error('Erreur lors du chargement des statistiques:', error);
@@ -674,13 +702,13 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         } finally {
             setLoading(false);
         }
-    }, [token, user, onLogout, filter, agences.length]);
+    }, [refreshToken, fetchAgences, fetchMaintenanceAlerts, fetchRevenueData, agences.length]);
     
     useEffect(() => {
         let intervalId;
         const startFetching = () => {
             fetchStats();
-            intervalId = setInterval(fetchStats, 300000);
+            intervalId = setInterval(fetchStats, 300000); // 5 minutes
         };
         
         if (document.visibilityState === 'visible') {
@@ -709,15 +737,15 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         };
     }, [fetchStats]);
     
-    const handleFilterChange = (newFilter) => {
+    const handleFilterChange = useCallback((newFilter) => {
         setFilter(prev => ({ ...prev, ...newFilter }));
-    };
+    }, []);
     
-    const handleDismissAlert = (alertId) => {
+    const handleDismissAlert = useCallback((alertId) => {
         setMaintenanceAlerts(prev => prev.filter(alert => alert.id !== alertId));
-    };
+    }, []);
     
-    const handleSendEmail = async (alert) => {
+    const handleSendEmail = useCallback(async (alert) => {
         try {
             await axios.post(`${API_BASE_URL}/api/send-email/`, { 
                 alert,
@@ -730,9 +758,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             console.error('Erreur lors de l\'envoi de l\'email:', error);
             alert('Erreur lors de l\'envoi de l\'email.');
         }
-    };
+    }, [token]);
     
-    const handleGenerateBilling = async (period) => {
+    const handleGenerateBilling = useCallback(async (period) => {
         try {
             await axios.post(`${API_BASE_URL}/api/generate-billing/`, { period }, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -742,9 +770,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             console.error('Erreur lors de la génération de la facture:', error);
             alert('Erreur lors de la génération de la facture.');
         }
-    };
+    }, [token]);
     
-    const FilterControls = () => (
+    const FilterControls = useMemo(() => (
         <div className="filter-controls">
             <select
                 value={filter.period}
@@ -769,9 +797,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 </select>
             )}
         </div>
-    );
+    ), [filter, user.role, agences, handleFilterChange]);
     
-    const mainStats = [
+    const mainStats = useMemo(() => [
         {
             icon: <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h10v8H6a4 4 0 0 1-4-4V8z" />
@@ -821,16 +849,16 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             progress: stats.totalVehicles > 0 ? (stats.maintenance / stats.totalVehicles) * 100 : 0,
             chartData: trends.maintenanceTrend,
         },
-    ];
+    ], [stats, trends, calculateTrend]);
     
-    const secondaryMetrics = [
+    const secondaryMetrics = useMemo(() => [
         { value: stats.reservations, label: 'Réservations' },
         { value: `${SafeNumber(stats.revenue, 0).toFixed(2)}€`, label: 'Revenus' },
         { value: `${SafeNumber(stats.utilisation, 0)}%`, label: "Taux d'utilisation" },
         { value: '4.8⭐', label: 'Note moyenne' },
         { value: '24h', label: 'Délai moyen' },
         { value: '98%', label: 'Satisfaction client' },
-    ];
+    ], [stats]);
     
     if (loading) {
         return (
@@ -877,7 +905,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                     <p className="dashboard-subtitle">
                         Tableau de bord moderne et interactif - Mise à jour en temps réel
                     </p>
-                    <FilterControls />
+                    {FilterControls}
                 </header>
                 
                 <div className="stats-grid">

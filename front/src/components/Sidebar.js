@@ -202,7 +202,36 @@ const Sidebar = ({ token, user, onLogout }) => {
                                     </div>
                                 </>
                             )}
-                            
+{user?.role === 'client' && (
+    <>
+        <Link
+            to="/feedback"
+            className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
+            onClick={handleLinkClick}
+            aria-label="Feedback et avis"
+        >
+            <i className="fas fa-comment-dots"></i>
+            Feedback
+        </Link>
+    
+    </>
+)}
+
+{(user?.role === 'agence' || user?.role === 'admin') && (
+    <>
+        <Link
+            to="/feedback"
+            className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
+            onClick={handleLinkClick}
+            aria-label="Feedback et avis"
+        >
+            <i className="fas fa-comment-dots"></i>
+            Feedback
+        </Link>
+        
+        
+    </>
+)}
                             {isAdminOrAgence && (
                                 <>
                                     <Link
