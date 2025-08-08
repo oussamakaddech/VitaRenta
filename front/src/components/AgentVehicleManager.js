@@ -14,6 +14,66 @@ const StatutVehicule = {
     HORS_SERVICE: 'hors_service'
 };
 
+// Composant ImageFallback réutilisable et amélioré
+const ImageFallback = ({ src, alt, marque = '', modele = '', className = '' }) => {
+    const [imgSrc, setImgSrc] = useState(src);
+    const [isLoading, setIsLoading] = useState(true);
+    const [imgKey, setImgKey] = useState(0);
+    const [isDataUri, setIsDataUri] = useState(src.startsWith('data:'));
+
+    // SVG de fallback en base64
+    const svgFallback = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyMCIgdmlld0JveD0iMCAwIDQwMCAyMjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50IiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6IzQzNjFlZTtzdG9wLW9wYWNpdHk6MSIgLz4KPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2YzN2M5O3N0b3Atb3BhY2l0eToxIiAvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjIwIiBmaWxsPSJ1cmwoI2dyYWRpZW50KSIvPgo8cGF0aCBkPSJNODAgMTYwTDEzMCAxMjBMMTgwIDE2MEwyMzAgMTIwTDI4MCAxNjBMMzMwIDEyMEwzODAgMTYwVjE4MEgzMDBWMjAwSDEwMFYxODBIMTBWMTYwWiIgZmlsbD0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjIpIi8+CjxwYXRoIGQ9Ik04MCAxNjBMMTMwIDEyMEwxODAgMTYwTDIzMCAxMjBMMjgwIDE2MEwzMzAgMTIwTDM4MCAxNjBWMTgwSDMwMFYyMDBIMTBWMTgwSDEwVjE2MFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjcpIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iMzUwIiBjeT0iNjAiIHI9IjMwIiBmaWxsPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMSkiLz4KPGNpcmNsZSBjeD0iNTAiIGN5PSI0MCIgcj0iMjAiIGZpbGw9InJnYmEoMjU1LCAyNTUsIDI1NSwgMC4xKSIvPgo8Y2lyY2xlIGN4PSIxNTAiIGN5PSI3MCIgcj0iMjUiIGZpbGw9InJnYmEoMjU1LCAyNTUsIDI1NSwgMC4xKSIvPgo8dGV4dCB4PSIyMDAiIHk9IjExMCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjgpIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7QpNC10LzQtdC90LXQvdC40Y8KPC90ZXh0Pgo8dGV4dCB4PSIyMDAiIHk9IjE0MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuNikiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKIkOKAjOKIkOKAjeKIkOKAjOKIkOKAjeKIkOKAjeKIkOKAjOKIkOKAjOKIkOKAjOKIkOKAjOKIkOKAjTwvdGV4dD4KPHBhdGggZD0iTTgwIDQwTDEwMCAyMEwxMjAgNDBNMTgwIDQwTDIwMCAyMEwyMjAgNDBNMjgwIDQwTDMwMCAyMEwzMjAgNDBNMzgwIDQwTDQwMCAyMEw0MjAgNDAiIHN0cm9rZT0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjMpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+';
+
+    // Générer une URL de fallback pour les voitures
+    const getCarImageUrl = useCallback(() => {
+        if (marque && modele) {
+            return `https://source.unsplash.com/400x220/?${encodeURIComponent(`${marque} ${modele} car`)}&auto=format&fit=crop&w=400&h=220`;
+        }
+        return `https://source.unsplash.com/400x220/?car&auto=format&fit=crop&w=400&h=220`;
+    }, [marque, modele]);
+
+    const handleError = useCallback((e) => {
+        if (isDataUri) {
+            e.target.onerror = null; // Prevent infinite error loop
+            return;
+        }
+        setImgSrc(svgFallback);
+        setIsDataUri(true);
+        console.debug(`Image failed for ${marque} ${modele}, using SVG fallback`);
+    }, [marque, modele, svgFallback, isDataUri]);
+
+    const handleLoad = useCallback(() => {
+        setIsLoading(false);
+    }, []);
+
+    // Effet pour forcer le rechargement si la source change
+    useEffect(() => {
+        setImgSrc(src);
+        setIsLoading(true);
+        setIsDataUri(src.startsWith('data:'));
+        setImgKey(prev => prev + 1);
+    }, [src]);
+
+    return (
+        <div className={`image-container ${className}`}>
+            {isLoading && (
+                <div className="image-loading-placeholder">
+                    <div className="image-loading-spinner"></div>
+                </div>
+            )}
+            <img
+                key={imgKey}
+                src={imgSrc}
+                alt={alt}
+                onError={handleError}
+                onLoad={handleLoad}
+                className={`vehicle-image ${isLoading ? 'loading' : ''}`}
+                loading="lazy"
+            />
+        </div>
+    );
+};
+
 const VehicleManager = ({ token, user, onLogout }) => {
     const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
@@ -30,7 +90,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [vehicleToDelete, setVehicleToDelete] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
     const [formData, setFormData] = useState({
         marque: '',
         modele: '',
@@ -52,6 +111,17 @@ const VehicleManager = ({ token, user, onLogout }) => {
         image: null,
         agence_id: user?.role === 'agence' && user?.agence?.id ? user.agence.id : ''
     });
+
+    // Fonction pour obtenir l'URL de l'image avec fallback
+    const getImageUrl = useCallback((imagePath, marque = '', modele = '') => {
+        if (!imagePath) {
+            return `https://source.unsplash.com/400x220/?${encodeURIComponent(`${marque} ${modele} car`)}&auto=format&fit=crop&w=400&h=220`;
+        }
+        if (imagePath.startsWith('http')) {
+            return imagePath;
+        }
+        return `${API_BASE_URL}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+    }, []);
 
     const calculerScoreEcologique = (vehicle) => {
         if (!vehicle.emissionsCO2 || !vehicle.consommationEnergie) return 0;
@@ -77,7 +147,19 @@ const VehicleManager = ({ token, user, onLogout }) => {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
-            const data = Array.isArray(response.data.results) ? response.data.results : Array.isArray(response.data) ? response.data : [];
+
+            const data = Array.isArray(response.data.results) 
+                ? response.data.results.map(vehicle => ({
+                    ...vehicle,
+                    image: getImageUrl(vehicle.image, vehicle.marque, vehicle.modele)
+                }))
+                : Array.isArray(response.data)
+                ? response.data.map(vehicle => ({
+                    ...vehicle,
+                    image: getImageUrl(vehicle.image, vehicle.marque, vehicle.modele)
+                }))
+                : [];
+
             setVehicles(data);
         } catch (err) {
             console.error('Fetch vehicles error:', err.response || err);
@@ -99,7 +181,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
         } finally {
             setLoading(false);
         }
-    }, [token, user, navigate, onLogout]);
+    }, [token, user, navigate, onLogout, getImageUrl]);
 
     const validateVehicleData = (data) => {
         if (!data.marque || data.marque.trim().length < 1) return "La marque est requise";
@@ -118,7 +200,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
             return "L'année doit être valide";
         if (data.kilometrage && (isNaN(parseInt(data.kilometrage)) || parseInt(data.kilometrage) < 0))
             return "Le kilométrage doit être un nombre positif";
-        
         if (data.date_derniere_maintenance && !isValidDate(data.date_derniere_maintenance))
             return "La date de dernière maintenance doit être valide";
         if (data.prochaine_maintenance && !isValidDate(data.prochaine_maintenance))
@@ -408,6 +489,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const indexOfLastVehicle = currentPage * itemsPerPage;
     const indexOfFirstVehicle = indexOfLastVehicle - itemsPerPage;
     const currentVehicles = filteredVehicles.slice(indexOfFirstVehicle, indexOfLastVehicle);
+
     const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage);
 
     const stats = useMemo(() => {
@@ -476,7 +558,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
     return (
         <div className="vehicle-manager-container">
             <div className="floating-particles">{generateParticles()}</div>
-
             <Sidebar
                 token={token}
                 user={user}
@@ -485,7 +566,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                 isOpen={isSidebarOpen}
                 setIsOpen={setIsSidebarOpen}
             />
-
             <div className="stats-dashboard">
                 <div className="dashboard-header">
                     <h1 className="dashboard-title">
@@ -493,7 +573,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                     </h1>
                     <p className="dashboard-subtitle">Gérez les véhicules de la flotte</p>
                 </div>
-
                 <div className="stats-grid">
                     <div className="stat-card">
                         <div className="stat-icon icon-vehicles"><i className="fas fa-car"></i></div>
@@ -524,7 +603,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 </div>
-
                 {error && (
                     <div className="error-container" role="alert" aria-live="assertive">
                         <i className="fas fa-exclamation-triangle"></i>
@@ -534,7 +612,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </button>
                     </div>
                 )}
-
                 {success && (
                     <div className="success-alert" role="status" aria-live="polite">
                         <i className="fas fa-check-circle"></i>
@@ -544,7 +621,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </button>
                     </div>
                 )}
-
                 <div className="controls-section">
                     <div className="controls-header">
                         <h3 className="controls-title">
@@ -566,7 +642,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         <i className="fas fa-search search-icon"></i>
                     </div>
                 </div>
-
                 {loading ? (
                     <div className="loading-container">
                         <div className="loading-spinner"></div>
@@ -595,6 +670,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                 <table className="vehicles-table">
                                     <thead>
                                         <tr>
+                                            <th>Image</th>
                                             <th>Marque</th>
                                             <th>Modèle</th>
                                             <th>Prix</th>
@@ -606,6 +682,15 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                     <tbody>
                                         {currentVehicles.map((vehicle) => (
                                             <tr key={vehicle.id} className="vehicle-row">
+                                                <td className="vehicle-image-cell">
+                                                    <ImageFallback 
+                                                        src={getImageUrl(vehicle.image, vehicle.marque, vehicle.modele)} 
+                                                        alt={`${vehicle.marque} ${vehicle.modele}`}
+                                                        marque={vehicle.marque}
+                                                        modele={vehicle.modele}
+                                                        className="vehicle-thumbnail"
+                                                    />
+                                                </td>
                                                 <td>{vehicle.marque}</td>
                                                 <td>{vehicle.modele}</td>
                                                 <td className="vehicle-price">{vehicle.prix_par_jour} €</td>
@@ -686,7 +771,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         )}
                     </>
                 )}
-
                 {showModal && (
                     <div className="modal-overlay" onClick={closeModal}>
                         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -975,7 +1059,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 )}
-
                 {showDetailsModal && selectedVehicle && (
                     <div className="modal-overlay" onClick={closeModal}>
                         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -989,30 +1072,95 @@ const VehicleManager = ({ token, user, onLogout }) => {
                             </div>
                             <div className="vehicle-details">
                                 <h3>{selectedVehicle.marque} {selectedVehicle.modele}</h3>
-                                <p><strong>ID:</strong> {selectedVehicle.id}</p>
-                                <p><strong>Carburant:</strong> {selectedVehicle.carburant}</p>
-                                <p><strong>Transmission:</strong> {selectedVehicle.transmission}</p>
-                                <p><strong>Nombre de places:</strong> {selectedVehicle.nombre_places || 'Non spécifié'}</p>
-                                <p><strong>Année:</strong> {selectedVehicle.annee || 'Non spécifié'}</p>
-                                <p><strong>Kilométrage:</strong> {selectedVehicle.kilometrage ? `${selectedVehicle.kilometrage} km` : 'Non spécifié'}</p>
-                                <p><strong>Couleur:</strong> {selectedVehicle.couleur || 'Non spécifié'}</p>
-                                <p><strong>Immatriculation:</strong> {selectedVehicle.immatriculation || 'Non spécifié'}</p>
-                                <p><strong>Émissions CO2:</strong> {selectedVehicle.emissionsCO2 ? `${selectedVehicle.emissionsCO2} g/km` : 'Non spécifié'}</p>
-                                <p><strong>Consommation:</strong> {selectedVehicle.consommationEnergie ? `${selectedVehicle.consommationEnergie} L/100km` : 'Non spécifié'}</p>
-                                <p><strong>Prix par jour:</strong> {selectedVehicle.prix_par_jour ? `${selectedVehicle.prix_par_jour} €` : 'Non spécifié'}</p>
-                                <p><strong>Localisation:</strong> {selectedVehicle.localisation || 'Non spécifié'}</p>
-                                <p><strong>Description:</strong> {selectedVehicle.description || 'Aucune description'}</p>
-                                <p><strong>Statut:</strong> <span className={`status-badge status-${selectedVehicle.statut}`}>{selectedVehicle.statut}</span></p>
-                                <p><strong>Dernière maintenance:</strong> {selectedVehicle.date_derniere_maintenance || 'Non spécifié'}</p>
-                                <p><strong>Prochaine maintenance:</strong> {selectedVehicle.prochaine_maintenance || 'Non spécifié'}</p>
-                                <p><strong>Agence ID:</strong> {selectedVehicle.agence_id || 'Non spécifié'}</p>
-                                {selectedVehicle.image && (
-                                    <div className="vehicle-image-preview">
-                                        <img src={selectedVehicle.image} alt={`${selectedVehicle.marque} ${selectedVehicle.modele}`} />
+                                <div className="vehicle-detail-image-container">
+                                    <ImageFallback 
+                                        src={getImageUrl(selectedVehicle.image, selectedVehicle.marque, selectedVehicle.modele)} 
+                                        alt={`${selectedVehicle.marque} ${selectedVehicle.modele}`}
+                                        marque={selectedVehicle.marque}
+                                        modele={selectedVehicle.modele}
+                                        className="vehicle-detail-image"
+                                    />
+                                </div>
+                                <div className="vehicle-details-grid">
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">ID:</span>
+                                        <span className="detail-value">{selectedVehicle.id}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Carburant:</span>
+                                        <span className="detail-value">{selectedVehicle.carburant}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Transmission:</span>
+                                        <span className="detail-value">{selectedVehicle.transmission}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Nombre de places:</span>
+                                        <span className="detail-value">{selectedVehicle.nombre_places || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Année:</span>
+                                        <span className="detail-value">{selectedVehicle.annee || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Kilométrage:</span>
+                                        <span className="detail-value">{selectedVehicle.kilometrage ? `${selectedVehicle.kilometrage} km` : 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Couleur:</span>
+                                        <span className="detail-value">{selectedVehicle.couleur || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Immatriculation:</span>
+                                        <span className="detail-value">{selectedVehicle.immatriculation || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Émissions CO2:</span>
+                                        <span className="detail-value">{selectedVehicle.emissionsCO2 ? `${selectedVehicle.emissionsCO2} g/km` : 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Consommation:</span>
+                                        <span className="detail-value">{selectedVehicle.consommationEnergie ? `${selectedVehicle.consommationEnergie} L/100km` : 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Prix par jour:</span>
+                                        <span className="detail-value">{selectedVehicle.prix_par_jour ? `${selectedVehicle.prix_par_jour} €` : 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Localisation:</span>
+                                        <span className="detail-value">{selectedVehicle.localisation || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Statut:</span>
+                                        <span className={`status-badge status-${selectedVehicle.statut}`}>{selectedVehicle.statut}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Dernière maintenance:</span>
+                                        <span className="detail-value">{selectedVehicle.date_derniere_maintenance || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Prochaine maintenance:</span>
+                                        <span className="detail-value">{selectedVehicle.prochaine_maintenance || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Agence ID:</span>
+                                        <span className="detail-value">{selectedVehicle.agence_id || 'Non spécifié'}</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Score écologique:</span>
+                                        <span className="detail-value eco-score">{calculerScoreEcologique(selectedVehicle).toFixed(1)}/100</span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
+                                        <span className="detail-label">Disponibilité:</span>
+                                        <span className="detail-value">{verifierDisponibilite(selectedVehicle) ? 'Disponible' : 'Non disponible'}</span>
+                                    </div>
+                                </div>
+                                {selectedVehicle.description && (
+                                    <div className="vehicle-description-section">
+                                        <h4>Description</h4>
+                                        <p>{selectedVehicle.description}</p>
                                     </div>
                                 )}
-                                <p><strong>Score écologique:</strong> <span className="eco-score">{calculerScoreEcologique(selectedVehicle).toFixed(1)}/100</span></p>
-                                <p><strong>Disponibilité:</strong> {verifierDisponibilite(selectedVehicle) ? 'Disponible' : 'Non disponible'}</p>
                             </div>
                             <div className="form-actions">
                                 <button onClick={closeModal} className="btn-secondary" aria-label="Fermer la modale">
@@ -1029,7 +1177,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 )}
-
                 {showDeleteConfirmModal && vehicleToDelete && (
                     <div className="modal-overlay" onClick={closeModal}>
                         <div className="modal-content modal-confirm" onClick={(e) => e.stopPropagation()}>

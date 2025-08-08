@@ -6,6 +6,21 @@ import './VehiculeList.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+// Images statiques de voitures
+const CAR_IMAGES = {
+  toyota: 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  peugeot: 'https://images.unsplash.com/photo-1600501667514-3c0b0a0c7d5c?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  renault: 'https://images.unsplash.com/photo-1580273916550-e4bd757e8f4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  volkswagen: 'https://images.unsplash.com/photo-1554224712-d8560f709cbe?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  bmw: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  mercedes: 'https://images.unsplash.com/photo-1618843479313-40f1970e3868?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  audi: 'https://images.unsplash.com/photo-1616788494707-75d33d9e4e4a?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  tesla: 'https://images.unsplash.com/photo-1560915479-3c9ca575e3b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  nissan: 'https://images.unsplash.com/photo-1609521005188-233b5c464c6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  ford: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  default: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
+};
+
 const VehiculeList = ({ token, user, onLogout }) => {
     const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
@@ -43,7 +58,29 @@ const VehiculeList = ({ token, user, onLogout }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [vehiclesPerPage] = useState(12);
     const [showVehicleDetails, setShowVehicleDetails] = useState(null);
-
+    const [retryCount, setRetryCount] = useState(0);
+    
+    // Fonction pour obtenir l'URL de l'image statique
+    const getStaticCarImage = useCallback((marque = '', modele = '', vehicleId = null) => {
+        // Convertir la marque en minuscules pour la recherche
+        const marqueLower = marque.toLowerCase();
+        
+        // Chercher une image correspondant à la marque
+        if (CAR_IMAGES[marqueLower]) {
+            return CAR_IMAGES[marqueLower];
+        }
+        
+        // Chercher des correspondances partielles
+        for (const key in CAR_IMAGES) {
+            if (marqueLower.includes(key)) {
+                return CAR_IMAGES[key];
+            }
+        }
+        
+        // Image par défaut
+        return CAR_IMAGES.default;
+    }, []);
+    
     const debouncedSearch = useCallback(
         debounce((term) => {
             setSearchTerm(term);
@@ -51,65 +88,83 @@ const VehiculeList = ({ token, user, onLogout }) => {
         }, 300),
         []
     );
-
+    
     const fetchVehicles = useCallback(async () => {
-    try {
-        setLoading(true);
-        setError(null);
-        let url = `${API_BASE_URL}/api/vehicules/`;
-        const params = [];
-        if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
-        if (filters.marque) params.push(`marque=${encodeURIComponent(filters.marque)}`);
-        if (filters.carburant) params.push(`carburant=${filters.carburant}`);
-        if (filters.localisation) params.push(`localisation=${encodeURIComponent(filters.localisation)}`);
-        if (filters.statut) params.push(`statut=${filters.statut}`);
-        if (filters.prix_min) params.push(`prix_min=${filters.prix_min}`);
-        if (filters.prix_max) params.push(`prix_max=${filters.prix_max}`);
-        if (filters.places_min) params.push(`places_min=${filters.places_min}`);
-        if (filters.transmission) params.push(`transmission=${filters.transmission}`);
-        if (params.length) url += `?${params.join('&')}`;
-
-        console.log('Fetching vehicles from:', url);
-        const response = await axios.get(url, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-            timeout: 10000,
-        });
-
-        console.log('API response:', response.data);
-        const vehiclesData = Array.isArray(response.data)
-            ? response.data.map(vehicle => ({
-                ...vehicle,
-                image: vehicle.image ? `${API_BASE_URL}/${vehicle.image}` : 'https://via.placeholder.com/400x220?text=Aucune+image'
-            }))
-            : Array.isArray(response.data.results)
-            ? response.data.results.map(vehicle => ({
-                ...vehicle,
-                image: vehicle.image ? `${API_BASE_URL}/${vehicle.image}` : 'https://via.placeholder.com/400x220?text=Aucune+image'
-            }))
-            : [];
-
-        console.log('Processed vehicles:', vehiclesData);
-        setVehicles(vehiclesData);
-        setFilteredVehicles(vehiclesData);
-    } catch (err) {
-        console.error('Erreur lors du chargement des véhicules:', err.response?.data || err);
-        const status = err.response?.status;
-        let errorMsg = 'Erreur lors du chargement des véhicules';
-        if (status === 401) {
-            errorMsg = 'Session expirée. Veuillez vous reconnecter.';
-            onLogout();
-            navigate('/login');
-        } else if (status === 403) {
-            errorMsg = 'Accès non autorisé.';
+        try {
+            setLoading(true);
+            setError(null);
+            let url = `${API_BASE_URL}/api/vehicules/`;
+            const params = [];
+            if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
+            if (filters.marque) params.push(`marque=${encodeURIComponent(filters.marque)}`);
+            if (filters.carburant) params.push(`carburant=${filters.carburant}`);
+            if (filters.localisation) params.push(`localisation=${encodeURIComponent(filters.localisation)}`);
+            if (filters.statut) params.push(`statut=${filters.statut}`);
+            if (filters.prix_min) params.push(`prix_min=${filters.prix_min}`);
+            if (filters.prix_max) params.push(`prix_max=${filters.prix_max}`);
+            if (filters.places_min) params.push(`places_min=${filters.places_min}`);
+            if (filters.transmission) params.push(`transmission=${filters.transmission}`);
+            if (params.length) url += `?${params.join('&')}`;
+            
+            const response = await axios(url, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                timeout: 30000,
+            });
+            
+            let vehiclesData = [];
+            
+            if (Array.isArray(response.data)) {
+                vehiclesData = response.data.map(vehicle => ({
+                    ...vehicle,
+                    image: getStaticCarImage(vehicle.marque, vehicle.modele, vehicle.id)
+                }));
+            } else if (response.data.results && Array.isArray(response.data.results)) {
+                vehiclesData = response.data.results.map(vehicle => ({
+                    ...vehicle,
+                    image: getStaticCarImage(vehicle.marque, vehicle.modele, vehicle.id)
+                }));
+            }
+            
+            setVehicles(vehiclesData);
+            setFilteredVehicles(vehiclesData);
+            setRetryCount(0);
+        } catch (err) {
+            console.error('Erreur lors du chargement des véhicules:', err.response?.data || err);
+            
+            let errorMsg = 'Erreur lors du chargement des véhicules';
+            
+            if (err.code === 'ECONNABORTED') {
+                errorMsg = 'Le serveur met trop de temps à répondre. Veuillez vérifier votre connexion et réessayer.';
+                setRetryCount(prev => prev + 1);
+                
+                if (retryCount >= 3) {
+                    errorMsg = 'Impossible de se connecter au serveur après plusieurs tentatives. Veuillez réessayer plus tard.';
+                }
+            } else if (!err.response) {
+                errorMsg = 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion internet.';
+            } else {
+                const status = err.response?.status;
+                if (status === 401) {
+                    errorMsg = 'Session expirée. Veuillez vous reconnecter.';
+                    onLogout();
+                    navigate('/login');
+                } else if (status === 403) {
+                    errorMsg = 'Accès non autorisé.';
+                } else if (status === 500) {
+                    errorMsg = 'Erreur interne du serveur. Veuillez réessayer plus tard.';
+                } else if (status === 404) {
+                    errorMsg = 'Service indisponible. Veuillez réessayer plus tard.';
+                }
+            }
+            
+            setError(errorMsg);
+            setVehicles([]);
+            setFilteredVehicles([]);
+        } finally {
+            setLoading(false);
         }
-        setError(errorMsg);
-        setVehicles([]);
-        setFilteredVehicles([]);
-    } finally {
-        setLoading(false);
-    }
-}, [searchTerm, filters, token, onLogout, navigate]);
-
+    }, [searchTerm, filters, token, onLogout, navigate, getStaticCarImage, retryCount]);
+    
     const sortVehicles = useCallback((vehiclesList, sortOption) => {
         if (!Array.isArray(vehiclesList)) return [];
         return [...vehiclesList].sort((a, b) => {
@@ -131,23 +186,23 @@ const VehiculeList = ({ token, user, onLogout }) => {
             }
         });
     }, []);
-
+    
     const sortedVehicles = useMemo(() => {
         return sortVehicles(filteredVehicles, sortBy);
     }, [filteredVehicles, sortBy, sortVehicles]);
-
+    
     const paginatedVehicles = useMemo(() => {
         const startIndex = (currentPage - 1) * vehiclesPerPage;
         return sortedVehicles.slice(startIndex, startIndex + vehiclesPerPage);
     }, [sortedVehicles, currentPage, vehiclesPerPage]);
-
+    
     const totalPages = Math.ceil(sortedVehicles.length / vehiclesPerPage);
-
+    
     const handleFilterChange = (key, value) => {
         setFilters((prev) => ({ ...prev, [key]: value }));
         setCurrentPage(1);
     };
-
+    
     const resetFilters = () => {
         setFilters({
             marque: '',
@@ -164,13 +219,13 @@ const VehiculeList = ({ token, user, onLogout }) => {
         const searchInput = document.querySelector('.vehicule-search-input');
         if (searchInput) searchInput.value = '';
     };
-
+    
     const toggleFavorite = (vehicleId) => {
         setFavorites((prev) =>
             prev.includes(vehicleId) ? prev.filter((id) => id !== vehicleId) : [...prev, vehicleId]
         );
     };
-
+    
     const openReservationModal = (vehicle) => {
         if (!token || !user?.id) {
             setError('Vous devez être connecté pour réserver un véhicule.');
@@ -180,7 +235,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
         setSelectedVehicle(vehicle);
         setShowReservationModal(true);
     };
-
+    
     const closeReservationModal = () => {
         setShowReservationModal(false);
         setSelectedVehicle(null);
@@ -194,7 +249,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
             siege_enfant: false,
         });
     };
-
+    
     const calculateTotalPrice = () => {
         if (!selectedVehicle || !reservationData.date_debut || !reservationData.date_fin) {
             return 0;
@@ -209,19 +264,17 @@ const VehiculeList = ({ token, user, onLogout }) => {
         if (reservationData.siege_enfant) total += 8 * days;
         return total;
     };
-
+    
     const validateReservationData = (data, vehicle) => {
         const errors = [];
         if (!data.date_debut) errors.push('Date de début requise');
         if (!data.date_fin) errors.push('Date de fin requise');
         if (!vehicle?.id) errors.push('Véhicule requis');
         if (vehicle?.statut !== 'disponible') errors.push('Le véhicule n\'est pas disponible');
-
         const startDate = new Date(data.date_debut);
         const endDate = new Date(data.date_fin);
         const now = new Date();
         now.setHours(0, 0, 0, 0);
-
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
             errors.push('Dates invalides');
         } else {
@@ -230,10 +283,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
             const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
             if (diffDays > 30) errors.push('La réservation ne peut pas dépasser 30 jours');
         }
-
         return errors;
     };
-
+    
     const handleReservation = async () => {
         if (!selectedVehicle || !selectedVehicle.id) {
             setError('Aucun véhicule sélectionné');
@@ -245,17 +297,14 @@ const VehiculeList = ({ token, user, onLogout }) => {
             navigate('/login');
             return;
         }
-
         const errors = validateReservationData(reservationData, selectedVehicle);
         if (errors.length > 0) {
             setError(errors.join('; '));
             return;
         }
-
         try {
             setReservationLoading(true);
             setError(null);
-
             const reservationPayload = {
                 vehicule_id: String(selectedVehicle.id),
                 date_debut: new Date(reservationData.date_debut).toISOString(),
@@ -266,22 +315,15 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 gps: reservationData.gps,
                 siege_enfant: reservationData.siege_enfant,
             };
-
-            console.log('Reservation payload:', reservationPayload);
-
-            const response = await axios.post(
-                `${API_BASE_URL}/api/reservations/`,
-                reservationPayload,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
-                    timeout: 10000,
-                }
-            );
-
-            console.log('Reservation response:', response.data);
+            
+            const response = await axios.post(`${API_BASE_URL}/api/reservations/`, reservationPayload, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000,
+            });
+            
             setSuccess('Réservation effectuée avec succès !');
             closeReservationModal();
             await fetchVehicles();
@@ -330,7 +372,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
             setReservationLoading(false);
         }
     };
-
+    
     const showSuccessNotification = (message) => {
         const notification = document.createElement('div');
         notification.className = 'vehicule-success-notification';
@@ -343,20 +385,38 @@ const VehiculeList = ({ token, user, onLogout }) => {
         document.body.appendChild(notification);
         setTimeout(() => notification.remove(), 3000);
     };
-
+    
     useEffect(() => {
         fetchVehicles();
         const interval = setInterval(() => fetchVehicles(), 30000);
         return () => clearInterval(interval);
     }, [fetchVehicles]);
-
+    
     useEffect(() => {
         const container = document.querySelector('.vehicule-container');
         if (container) container.classList.add('vehicule-visible');
     }, []);
-
+    
     const handleSearch = (e) => debouncedSearch(e.target.value);
-
+    
+    const ConnectionError = ({ message, onRetry }) => (
+        <div className="vehicule-error-state">
+            <div className="error-icon">
+                <i className="fas fa-wifi-slash"></i>
+            </div>
+            <h2>Problème de connexion</h2>
+            <p>{message}</p>
+            <div className="error-actions">
+                <button className="vehicule-retry-btn" onClick={onRetry}>
+                    <i className="fas fa-redo"></i> Réessayer
+                </button>
+                <button className="vehicule-retry-btn" onClick={() => window.location.reload()}>
+                    <i className="fas fa-sync"></i> Actualiser la page
+                </button>
+            </div>
+        </div>
+    );
+    
     return (
         <div className="vehicule-container">
             <div className="vehicule-background">
@@ -381,7 +441,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                     <div className="vehicule-shape vehicule-shape-3"></div>
                 </div>
             </div>
-
+            
             <div className="vehicule-layout-fullwidth">
                 <header className="vehicule-header">
                     <div className="vehicule-header-content">
@@ -414,7 +474,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                         </div>
                     )}
                 </header>
-
+                
                 <main className="vehicule-main-fullwidth">
                     {error && (
                         <div className="vehicule-alert vehicule-alert-error">
@@ -438,7 +498,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                             </button>
                         </div>
                     )}
-
+                    
                     <div className="vehicule-card">
                         <div className="vehicule-card-header">
                             <h2 className="vehicule-card-title">
@@ -483,7 +543,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                 </button>
                             </div>
                         </div>
-
+                        
                         {showFilters && (
                             <div className="vehicule-form-grid">
                                 <div className="vehicule-form-group">
@@ -608,7 +668,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                             </div>
                         )}
                     </div>
-
+                    
                     <div className="vehicule-card">
                         <div className="vehicule-results-header">
                             <div className="vehicule-results-info">
@@ -631,7 +691,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                 </select>
                             </div>
                         </div>
-
+                        
                         {loading && (
                             <div className="vehicule-loading-state">
                                 <div className="vehicule-loading-spinner">
@@ -640,17 +700,24 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                 </div>
                             </div>
                         )}
-
+                        
                         {error && !loading && (
-                            <div className="vehicule-error-state">
-                                <h2>Erreur de chargement</h2>
-                                <p>{error}</p>
-                                <button className="vehicule-retry-btn" onClick={fetchVehicles}>
-                                    <i className="fas fa-redo"></i> Réessayer
-                                </button>
-                            </div>
+                            error.includes('connexion') || error.includes('timeout') || error.includes('serveur met trop de temps') ? (
+                                <ConnectionError 
+                                    message={error} 
+                                    onRetry={fetchVehicles} 
+                                />
+                            ) : (
+                                <div className="vehicule-error-state">
+                                    <h2>Erreur de chargement</h2>
+                                    <p>{error}</p>
+                                    <button className="vehicule-retry-btn" onClick={fetchVehicles}>
+                                        <i className="fas fa-redo"></i> Réessayer
+                                    </button>
+                                </div>
+                            )
                         )}
-
+                        
                         {!loading && !error && (
                             <>
                                 {paginatedVehicles.length > 0 ? (
@@ -658,26 +725,27 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                         {paginatedVehicles.map((vehicle) => (
                                             <div key={vehicle.id} className="vehicule-vehicle-card">
                                                 <div className="vehicule-vehicle-image">
-    <img
-        src={vehicle.image}
-        alt={`${vehicle.marque} ${vehicle.modele}`}
-        onError={(e) => (e.target.src = 'https://via.placeholder.com/400x220?text=Image+non+disponible')}
-        className="vehicule-image"
-    />
+                                                    <img
+                                                        src={getStaticCarImage(vehicle.marque, vehicle.modele, vehicle.id)}
+                                                        alt={`${vehicle.marque} ${vehicle.modele}`}
+                                                        className="vehicule-image loaded"
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                    />
                                                     <div className="vehicule-vehicle-overlay">
-        <button
-            className={`vehicule-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
-            onClick={() => toggleFavorite(vehicle.id)}
-        >
-            <i className="fas fa-heart"></i>
-        </button>
-        <button
-            className="vehicule-details-btn"
-            onClick={() => setShowVehicleDetails(vehicle)}
-        >
-            <i className="fas fa-info"></i>
-        </button>
-    </div>
+                                                        <button
+                                                            className={`vehicule-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
+                                                            onClick={() => toggleFavorite(vehicle.id)}
+                                                        >
+                                                            <i className="fas fa-heart"></i>
+                                                        </button>
+                                                        <button
+                                                            className="vehicule-details-btn"
+                                                            onClick={() => setShowVehicleDetails(vehicle)}
+                                                        >
+                                                            <i className="fas fa-info"></i>
+                                                        </button>
+                                                    </div>
                                                     <div className="vehicule-vehicle-badges">
                                                         <span className={`fuel-badge fuel-${vehicle.carburant?.toLowerCase() || 'essence'}`}>
                                                             {vehicle.carburant || 'Essence'}
@@ -742,6 +810,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                         </button>
                                     </div>
                                 )}
+                                
                                 {totalPages > 1 && (
                                     <div className="vehicule-pagination">
                                         <button
@@ -772,7 +841,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                             </>
                         )}
                     </div>
-
+                    
                     {showReservationModal && selectedVehicle && (
                         <div className="vehicule-modal-overlay">
                             <div className="vehicule-modal-content">
@@ -981,7 +1050,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                             </div>
                         </div>
                     )}
-
+                    
                     {showVehicleDetails && (
                         <div className="vehicule-modal-overlay">
                             <div className="vehicule-modal-content">
@@ -997,8 +1066,11 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                     <div className="vehicule-vehicle-details-content">
                                         <div className="vehicule-vehicle-image-large">
                                             <img
-                                                src={showVehicleDetails.image || '/api/placeholder/600/300'}
+                                                src={getStaticCarImage(showVehicleDetails.marque, showVehicleDetails.modele, showVehicleDetails.id)}
                                                 alt={`${showVehicleDetails.marque} ${showVehicleDetails.modele}`}
+                                                className="vehicule-image loaded"
+                                                loading="lazy"
+                                                decoding="async"
                                             />
                                         </div>
                                         <div className="vehicule-specs-grid">

@@ -446,7 +446,7 @@ class VehiculeViewSet(ModelViewSet):
             disponibles = queryset.filter(statut='disponible').count()
             logger.debug(f"Stats - Disponibles: {disponibles}")
             
-            loues = queryset.filter(statut='loue').count()
+            loues = queryset.filter(statut='loué').count()
             logger.debug(f"Stats - Loués: {loues}")
             
             maintenance = queryset.filter(statut='maintenance').count()
