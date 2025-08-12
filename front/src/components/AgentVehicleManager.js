@@ -14,46 +14,61 @@ const StatutVehicule = {
     HORS_SERVICE: 'hors_service'
 };
 
+// Images statiques de voitures
+const CAR_IMAGES = {
+  toyota: 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  peugeot: 'https://images.unsplash.com/photo-1600501667514-3c0b0a0c7d5c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  renault: 'https://images.unsplash.com/photo-1580273916550-e4bd757e8f4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  volkswagen: 'https://images.unsplash.com/photo-1554224712-d8560f709cbe?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  bmw: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  mercedes: 'https://images.unsplash.com/photo-1618843479313-40f1970e3868?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  audi: 'https://images.unsplash.com/photo-1616788494707-75d33d9e4e4a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  tesla: 'https://images.unsplash.com/photo-1560915479-3c9ca575e3b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  nissan: 'https://images.unsplash.com/photo-1609521005188-233b5c464c6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  ford: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  default: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80'
+};
+
+// Fonction pour obtenir l'URL de l'image statique
+const getStaticCarImage = (marque = '', modele = '') => {
+    const marqueLower = marque.toLowerCase();
+    
+    if (CAR_IMAGES[marqueLower]) {
+        return CAR_IMAGES[marqueLower];
+    }
+    
+    for (const key in CAR_IMAGES) {
+        if (marqueLower.includes(key)) {
+            return CAR_IMAGES[key];
+        }
+    }
+    
+    return CAR_IMAGES.default;
+};
+
 // Composant ImageFallback réutilisable et amélioré
 const ImageFallback = ({ src, alt, marque = '', modele = '', className = '' }) => {
     const [imgSrc, setImgSrc] = useState(src);
     const [isLoading, setIsLoading] = useState(true);
     const [imgKey, setImgKey] = useState(0);
-    const [isDataUri, setIsDataUri] = useState(src.startsWith('data:'));
-
-    // SVG de fallback en base64
-    const svgFallback = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIyMCIgdmlld0JveD0iMCAwIDQwMCAyMjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50IiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6IzQzNjFlZTtzdG9wLW9wYWNpdHk6MSIgLz4KPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojM2YzN2M5O3N0b3Atb3BhY2l0eToxIiAvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjIwIiBmaWxsPSJ1cmwoI2dyYWRpZW50KSIvPgo8cGF0aCBkPSJNODAgMTYwTDEzMCAxMjBMMTgwIDE2MEwyMzAgMTIwTDI4MCAxNjBMMzMwIDEyMEwzODAgMTYwVjE4MEgzMDBWMjAwSDEwMFYxODBIMTBWMTYwWiIgZmlsbD0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjIpIi8+CjxwYXRoIGQ9Ik04MCAxNjBMMTMwIDEyMEwxODAgMTYwTDIzMCAxMjBMMjgwIDE2MEwzMzAgMTIwTDM4MCAxNjBWMTgwSDMwMFYyMDBIMTBWMTgwSDEwVjE2MFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjcpIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iMzUwIiBjeT0iNjAiIHI9IjMwIiBmaWxsPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMSkiLz4KPGNpcmNsZSBjeD0iNTAiIGN5PSI0MCIgcj0iMjAiIGZpbGw9InJnYmEoMjU1LCAyNTUsIDI1NSwgMC4xKSIvPgo8Y2lyY2xlIGN4PSIxNTAiIGN5PSI3MCIgcj0iMjUiIGZpbGw9InJnYmEoMjU1LCAyNTUsIDI1NSwgMC4xKSIvPgo8dGV4dCB4PSIyMDAiIHk9IjExMCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjgpIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7QpNC10LzQtdC90LXQvdC40Y8KPC90ZXh0Pgo8dGV4dCB4PSIyMDAiIHk9IjE0MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuNikiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuKIkOKAjOKIkOKAjeKIkOKAjOKIkOKAjeKIkOKAjeKIkOKAjOKIkOKAjOKIkOKAjOKIkOKAjOKIkOKAjTwvdGV4dD4KPHBhdGggZD0iTTgwIDQwTDEwMCAyMEwxMjAgNDBNMTgwIDQwTDIwMCAyMEwyMjAgNDBNMjgwIDQwTDMwMCAyMEwzMjAgNDBNMzgwIDQwTDQwMCAyMEw0MjAgNDAiIHN0cm9rZT0icmdiYSgyNTUsIDI1NSwgMjU1LCAwLjMpIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+';
-
-    // Générer une URL de fallback pour les voitures
-    const getCarImageUrl = useCallback(() => {
-        if (marque && modele) {
-            return `https://source.unsplash.com/400x220/?${encodeURIComponent(`${marque} ${modele} car`)}&auto=format&fit=crop&w=400&h=220`;
-        }
-        return `https://source.unsplash.com/400x220/?car&auto=format&fit=crop&w=400&h=220`;
-    }, [marque, modele]);
-
+    
     const handleError = useCallback((e) => {
-        if (isDataUri) {
-            e.target.onerror = null; // Prevent infinite error loop
-            return;
-        }
-        setImgSrc(svgFallback);
-        setIsDataUri(true);
-        console.debug(`Image failed for ${marque} ${modele}, using SVG fallback`);
-    }, [marque, modele, svgFallback, isDataUri]);
-
+        e.target.onerror = null; // Prevent infinite error loop
+        setImgSrc(getStaticCarImage(marque, modele));
+        console.debug(`Image failed for ${marque} ${modele}, using static fallback`);
+    }, [marque, modele]);
+    
     const handleLoad = useCallback(() => {
         setIsLoading(false);
     }, []);
-
+    
     // Effet pour forcer le rechargement si la source change
     useEffect(() => {
         setImgSrc(src);
         setIsLoading(true);
-        setIsDataUri(src.startsWith('data:'));
         setImgKey(prev => prev + 1);
     }, [src]);
-
+    
     return (
         <div className={`image-container ${className}`}>
             {isLoading && (
@@ -90,6 +105,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [vehicleToDelete, setVehicleToDelete] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    
     const [formData, setFormData] = useState({
         marque: '',
         modele: '',
@@ -109,45 +125,47 @@ const VehicleManager = ({ token, user, onLogout }) => {
         date_derniere_maintenance: '',
         prochaine_maintenance: '',
         image: null,
-        agence_id: user?.role === 'agence' && user?.agence?.id ? user.agence.id : ''
+        agence_id: ''  // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
     });
-
+    
     // Fonction pour obtenir l'URL de l'image avec fallback
     const getImageUrl = useCallback((imagePath, marque = '', modele = '') => {
         if (!imagePath) {
-            return `https://source.unsplash.com/400x220/?${encodeURIComponent(`${marque} ${modele} car`)}&auto=format&fit=crop&w=400&h=220`;
+            return getStaticCarImage(marque, modele);
         }
         if (imagePath.startsWith('http')) {
             return imagePath;
         }
         return `${API_BASE_URL}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
     }, []);
-
+    
     const calculerScoreEcologique = (vehicle) => {
         if (!vehicle.emissionsCO2 || !vehicle.consommationEnergie) return 0;
         const emissionScore = Math.max(0, 100 - vehicle.emissionsCO2 / 2);
         const consumptionScore = Math.max(0, 100 - vehicle.consommationEnergie * 10);
         return (emissionScore + consumptionScore) / 2;
     };
-
+    
     const verifierDisponibilite = (vehicle) => {
         return vehicle.statut === StatutVehicule.DISPONIBLE;
     };
-
+    
     const fetchVehicles = useCallback(async () => {
         if (!token || !user) {
             setError('Vous devez être connecté pour accéder aux véhicules.');
             navigate('/login');
             return;
         }
+        
         setLoading(true);
         setError(null);
+        
         try {
             const response = await axios.get(VEHICLE_ENDPOINT, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
-
+            
             const data = Array.isArray(response.data.results) 
                 ? response.data.results.map(vehicle => ({
                     ...vehicle,
@@ -159,12 +177,13 @@ const VehicleManager = ({ token, user, onLogout }) => {
                     image: getImageUrl(vehicle.image, vehicle.marque, vehicle.modele)
                 }))
                 : [];
-
+            
             setVehicles(data);
         } catch (err) {
             console.error('Fetch vehicles error:', err.response || err);
             const status = err.response?.status;
             let errorMsg;
+            
             if (status === 401) {
                 errorMsg = 'Session expirée ou non autorisée. Veuillez vous reconnecter.';
                 onLogout();
@@ -176,13 +195,14 @@ const VehicleManager = ({ token, user, onLogout }) => {
             } else {
                 errorMsg = err.response?.data?.message || 'Impossible de charger les véhicules.';
             }
+            
             setError(errorMsg);
             setVehicles([]);
         } finally {
             setLoading(false);
         }
     }, [token, user, navigate, onLogout, getImageUrl]);
-
+    
     const validateVehicleData = (data) => {
         if (!data.marque || data.marque.trim().length < 1) return "La marque est requise";
         if (!data.modele || data.modele.trim().length < 1) return "Le modèle est requis";
@@ -204,24 +224,25 @@ const VehicleManager = ({ token, user, onLogout }) => {
             return "La date de dernière maintenance doit être valide";
         if (data.prochaine_maintenance && !isValidDate(data.prochaine_maintenance))
             return "La date de prochaine maintenance doit être valide";
-        if (user?.role === 'agence' && !data.agence_id)
-            return "L'identifiant de l'agence est requis pour les utilisateurs d'agence";
+        // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
         return '';
     };
-
+    
     const isValidDate = (dateString) => {
         const date = new Date(dateString);
         return date instanceof Date && !isNaN(date);
     };
-
+    
     const createVehicle = async () => {
         const validationError = validateVehicleData(formData);
         if (validationError) {
             setError(validationError);
             return;
         }
+        
         setLoading(true);
         setError(null);
+        
         try {
             const formDataToSend = new FormData();
             Object.entries(formData).forEach(([key, value]) => {
@@ -229,6 +250,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                     formDataToSend.append(key, value);
                 }
             });
+            
             await axios.post(VEHICLE_ENDPOINT, formDataToSend, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -236,6 +258,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                 },
                 timeout: 10000
             });
+            
             setSuccess('Véhicule créé avec succès !');
             resetForm();
             setShowModal(false);
@@ -244,6 +267,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             console.error('Create vehicle error:', err.response || err);
             const status = err.response?.status;
             let errorMsg = err.response?.data?.message || 'Erreur lors de la création du véhicule.';
+            
             if (status === 401) {
                 errorMsg = 'Session expirée. Veuillez vous reconnecter.';
                 onLogout();
@@ -251,20 +275,23 @@ const VehicleManager = ({ token, user, onLogout }) => {
             } else if (err.response?.data?.immatriculation) {
                 errorMsg = 'Un véhicule avec cette immatriculation existe déjà.';
             }
+            
             setError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
-
+    
     const updateVehicle = async () => {
         const validationError = validateVehicleData(formData);
         if (validationError) {
             setError(validationError);
             return;
         }
+        
         setLoading(true);
         setError(null);
+        
         try {
             const formDataToSend = new FormData();
             Object.entries(formData).forEach(([key, value]) => {
@@ -272,6 +299,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                     formDataToSend.append(key, value);
                 }
             });
+            
             await axios.put(`${VEHICLE_ENDPOINT}${selectedVehicle.id}/`, formDataToSend, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -279,6 +307,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                 },
                 timeout: 10000
             });
+            
             setSuccess('Véhicule mis à jour avec succès !');
             resetForm();
             setShowModal(false);
@@ -287,25 +316,29 @@ const VehicleManager = ({ token, user, onLogout }) => {
             console.error('Update vehicle error:', err.response || err);
             const status = err.response?.status;
             let errorMsg = err.response?.data?.message || 'Erreur lors de la mise à jour du véhicule.';
+            
             if (status === 401) {
                 errorMsg = 'Session expirée. Veuillez vous reconnecter.';
                 onLogout();
                 navigate('/login');
             }
+            
             setError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
-
+    
     const deleteVehicle = async (vehicleId) => {
         setLoading(true);
         setError(null);
+        
         try {
             await axios.delete(`${VEHICLE_ENDPOINT}${vehicleId}/`, {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 10000
             });
+            
             setSuccess('Véhicule supprimé avec succès !');
             fetchVehicles();
             setShowDeleteConfirmModal(false);
@@ -314,48 +347,54 @@ const VehicleManager = ({ token, user, onLogout }) => {
             console.error('Delete vehicle error:', err.response || err);
             const status = err.response?.status;
             let errorMsg = err.response?.data?.message || 'Erreur lors de la suppression du véhicule.';
+            
             if (status === 401) {
                 errorMsg = 'Session expirée. Veuillez vous reconnecter.';
                 onLogout();
                 navigate('/login');
             }
+            
             setError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
-
+    
     const planifierMaintenance = async (vehicle) => {
         setLoading(true);
         setError(null);
+        
         try {
             await axios.patch(
                 `${VEHICLE_ENDPOINT}${vehicle.id}/`,
                 { statut: StatutVehicule.MAINTENANCE },
                 { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
             );
+            
             setSuccess('Maintenance planifiée avec succès !');
             fetchVehicles();
         } catch (err) {
             console.error('Maintenance error:', err.response || err);
             const status = err.response?.status;
             let errorMsg = err.response?.data?.message || 'Erreur lors de la planification de maintenance.';
+            
             if (status === 401) {
                 errorMsg = 'Session expirée. Veuillez vous reconnecter.';
                 onLogout();
                 navigate('/login');
             }
+            
             setError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
-
+    
     const confirmDeleteVehicle = (vehicle) => {
         setVehicleToDelete(vehicle);
         setShowDeleteConfirmModal(true);
     };
-
+    
     const resetForm = () => {
         setFormData({
             marque: '',
@@ -376,12 +415,12 @@ const VehicleManager = ({ token, user, onLogout }) => {
             date_derniere_maintenance: '',
             prochaine_maintenance: '',
             image: null,
-            agence_id: user?.role === 'agence' && user?.agence?.id ? user.agence.id : ''
+            agence_id: ''  // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
         });
         setSelectedVehicle(null);
         setIsEditMode(false);
     };
-
+    
     const handleFormChange = (e) => {
         const { name, value, type, checked, files } = e.target;
         setFormData(prev => ({
@@ -389,7 +428,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value
         }));
     };
-
+    
     const openEditForm = (vehicle) => {
         setSelectedVehicle(vehicle);
         setIsEditMode(true);
@@ -412,27 +451,27 @@ const VehicleManager = ({ token, user, onLogout }) => {
             date_derniere_maintenance: vehicle.date_derniere_maintenance || '',
             prochaine_maintenance: vehicle.prochaine_maintenance || '',
             image: null,
-            agence_id: vehicle.agence_id || (user?.role === 'agence' && user?.agence?.id ? user.agence.id : '')
+            agence_id: vehicle.agence_id || ''  // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
         });
         setShowModal(true);
     };
-
+    
     const openDetailsModal = (vehicle) => {
         setSelectedVehicle(vehicle);
         setShowDetailsModal(true);
     };
-
+    
     const openCreateForm = () => {
         resetForm();
         setShowModal(true);
     };
-
+    
     const handleSearchChange = (e) => {
         const sanitizedValue = e.target.value.replace(/[<>]/g, '');
         setSearchTerm(sanitizedValue);
         setCurrentPage(1);
     };
-
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (isEditMode) {
@@ -441,13 +480,13 @@ const VehicleManager = ({ token, user, onLogout }) => {
             await createVehicle();
         }
     };
-
+    
     const handleKeyDown = (e) => {
         if (e.key === 'Escape') {
             closeModal();
         }
     };
-
+    
     useEffect(() => {
         if (!token || !user || !['agent', 'admin', 'agence'].includes(user.role)) {
             setError('Accès réservé aux agents, administrateurs ou utilisateurs d\'agence.');
@@ -456,28 +495,28 @@ const VehicleManager = ({ token, user, onLogout }) => {
         }
         fetchVehicles();
     }, [fetchVehicles, token, user, navigate]);
-
+    
     useEffect(() => {
         if (error) {
             const timer = setTimeout(() => setError(null), 8000);
             return () => clearTimeout(timer);
         }
     }, [error]);
-
+    
     useEffect(() => {
         if (success) {
             const timer = setTimeout(() => setSuccess(null), 5000);
             return () => clearTimeout(timer);
         }
     }, [success]);
-
+    
     useEffect(() => {
         if (showModal || showDetailsModal || showDeleteConfirmModal) {
             document.addEventListener('keydown', handleKeyDown);
             return () => document.removeEventListener('keydown', handleKeyDown);
         }
     }, [showModal, showDetailsModal, showDeleteConfirmModal]);
-
+    
     const filteredVehicles = vehicles.filter(vehicle =>
         vehicle && (
             (vehicle.marque || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -485,13 +524,12 @@ const VehicleManager = ({ token, user, onLogout }) => {
             (vehicle.prix_par_jour || '').toString().toLowerCase().includes(searchTerm.toLowerCase())
         )
     );
-
+    
     const indexOfLastVehicle = currentPage * itemsPerPage;
     const indexOfFirstVehicle = indexOfLastVehicle - itemsPerPage;
     const currentVehicles = filteredVehicles.slice(indexOfFirstVehicle, indexOfLastVehicle);
-
     const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage);
-
+    
     const stats = useMemo(() => {
         return {
             total: vehicles.length,
@@ -500,7 +538,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             maintenance: vehicles.filter(v => v.statut === StatutVehicule.MAINTENANCE).length
         };
     }, [vehicles]);
-
+    
     const generateParticles = () => {
         const particles = [];
         for (let i = 0; i < 20; i++) {
@@ -532,7 +570,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
         }
         return particles;
     };
-
+    
     const closeModal = () => {
         setShowModal(false);
         setShowDetailsModal(false);
@@ -540,7 +578,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
         setVehicleToDelete(null);
         resetForm();
     };
-
+    
     if (!token || !user || !['agent', 'admin', 'agence'].includes(user.role)) {
         return (
             <div className="vehicle-manager-container">
@@ -554,7 +592,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             </div>
         );
     }
-
+    
     return (
         <div className="vehicle-manager-container">
             <div className="floating-particles">{generateParticles()}</div>
@@ -573,6 +611,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                     </h1>
                     <p className="dashboard-subtitle">Gérez les véhicules de la flotte</p>
                 </div>
+                
                 <div className="stats-grid">
                     <div className="stat-card">
                         <div className="stat-icon icon-vehicles"><i className="fas fa-car"></i></div>
@@ -603,6 +642,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 </div>
+                
                 {error && (
                     <div className="error-container" role="alert" aria-live="assertive">
                         <i className="fas fa-exclamation-triangle"></i>
@@ -612,6 +652,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </button>
                     </div>
                 )}
+                
                 {success && (
                     <div className="success-alert" role="status" aria-live="polite">
                         <i className="fas fa-check-circle"></i>
@@ -621,6 +662,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </button>
                     </div>
                 )}
+                
                 <div className="controls-section">
                     <div className="controls-header">
                         <h3 className="controls-title">
@@ -642,6 +684,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         <i className="fas fa-search search-icon"></i>
                     </div>
                 </div>
+                
                 {loading ? (
                     <div className="loading-container">
                         <div className="loading-spinner"></div>
@@ -744,6 +787,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                 </table>
                             </div>
                         </div>
+                        
                         {totalPages > 1 && (
                             <div className="pagination-section">
                                 <div className="pagination">
@@ -771,6 +815,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         )}
                     </>
                 )}
+                
+                {/* Modal de création/modification */}
                 {showModal && (
                     <div className="modal-overlay" onClick={closeModal}>
                         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -1017,23 +1063,18 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             className="form-input"
                                         />
                                     </div>
-                                    {user?.role === 'agence' && (
-                                        <div className="form-group">
-                                            <label htmlFor="agence_id">ID de l'Agence *</label>
-                                            <input
-                                                type="text"
-                                                id="agence_id"
-                                                name="agence_id"
-                                                value={formData.agence_id}
-                                                onChange={handleFormChange}
-                                                className="form-input"
-                                                placeholder="Ex: 123"
-                                                required
-                                                aria-required="true"
-                                                disabled={isEditMode && formData.agence_id}
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="form-group">
+                                        <label htmlFor="agence_id">ID de l'Agence</label>
+                                        <input
+                                            type="text"
+                                            id="agence_id"
+                                            name="agence_id"
+                                            value={formData.agence_id}
+                                            onChange={handleFormChange}
+                                            className="form-input"
+                                            placeholder="Ex: 123"
+                                        />
+                                    </div>
                                 </div>
                                 {error && (
                                     <div className="error-container" role="alert" aria-live="assertive">
@@ -1059,6 +1100,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 )}
+                
+                {/* Modal de détails */}
                 {showDetailsModal && selectedVehicle && (
                     <div className="modal-overlay" onClick={closeModal}>
                         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -1177,6 +1220,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         </div>
                     </div>
                 )}
+                
+                {/* Modal de confirmation de suppression */}
                 {showDeleteConfirmModal && vehicleToDelete && (
                     <div className="modal-overlay" onClick={closeModal}>
                         <div className="modal-content modal-confirm" onClick={(e) => e.stopPropagation()}>

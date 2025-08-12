@@ -352,22 +352,21 @@ class UserStatsView(APIView):
 class VehiculeViewSet(ModelViewSet):
     queryset = Vehicule.objects.all()
     serializer_class = VehiculeSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny]  # À remplacer par IsAdminOrAgency pour plus de sécurité
     authentication_classes = [JWTAuthentication]
-
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
         user = self.request.user
-
         logger.debug(f"get_queryset - User: {user.email if user.is_authenticated else 'anonymous'}, Role: {user.role if user.is_authenticated else 'none'}")
-        if user.is_authenticated and user.role == 'agence' and user.agence:
-            logger.debug(f"Filtering queryset by agence: {user.agence.id}")
-            queryset = queryset.filter(agence=user.agence)
-        elif user.is_authenticated and user.role == 'agence' and not user.agence:
+        
+        # Les agences voient maintenant tous les véhicules, pas seulement ceux de leur agence
+        if user.is_authenticated and user.role == 'agence' and not user.agence:
             logger.warning(f"Agency user {user.email} has no associated agence")
             queryset = queryset.none()  # Return empty queryset for agency users without an agency
-
+        
+        # Filtres de recherche
         if params.get('carburant'):
             queryset = queryset.filter(carburant=params.get('carburant'))
         if params.get('statut'):
@@ -393,30 +392,23 @@ class VehiculeViewSet(ModelViewSet):
             queryset = queryset.filter(marque__icontains=params.get('marque'))
         if params.get('localisation'):
             queryset = queryset.filter(localisation__icontains=params.get('localisation'))
-
+        
         logger.debug(f"get_queryset - Final queryset size: {queryset.count()}")
         return queryset.order_by('-created_at').select_related('agence')
-
+    
     def perform_create(self, serializer):
         try:
             user = self.request.user
+            # Les agences peuvent maintenant créer des véhicules pour n'importe quelle agence
             if user.role == 'agence' and user.agence:
-                serializer.save(agence=user.agence)
+                serializer.save()
             else:
                 serializer.save()
             logger.info(f"Véhicule créé: {serializer.validated_data['marque']} {serializer.validated_data['modele']} par {user.email}")
-        except BulkWriteError as e:
-            if 'E11000 duplicate key error' in str(e):
-                logger.error(f"Erreur de clé en double lors de la création du véhicule pour {user.email}: {str(e)}")
-                return Response({
-                    'error': 'Un véhicule avec cette immatriculation existe déjà.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            logger.error(f"Erreur lors de la création du véhicule: {str(e)}")
-            raise
         except Exception as e:
             logger.error(f"Erreur lors de la création du véhicule: {str(e)}")
             raise
-
+    
     def perform_update(self, serializer):
         try:
             vehicle = serializer.save()
@@ -424,7 +416,7 @@ class VehiculeViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du véhicule: {str(e)}")
             raise
-
+    
     def perform_destroy(self, instance):
         try:
             logger.info(f"Véhicule supprimé: {instance.marque} {instance.modele} par {self.request.user.email}")
@@ -432,38 +424,29 @@ class VehiculeViewSet(ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur lors de la suppression du véhicule: {str(e)}")
             raise
-
+    
     @action(detail=False, methods=['get'])
     def stats(self, request):
         try:
             queryset = self.get_queryset()
-            logger.debug(f"Stats - Queryset size: {queryset.count()}")
             
-            # Compute individual stats with error handling
+            # Calcul des statistiques
             total = queryset.count()
-            logger.debug(f"Stats - Total vehicles: {total}")
-            
             disponibles = queryset.filter(statut='disponible').count()
-            logger.debug(f"Stats - Disponibles: {disponibles}")
-            
             loues = queryset.filter(statut='loué').count()
-            logger.debug(f"Stats - Loués: {loues}")
-            
             maintenance = queryset.filter(statut='maintenance').count()
-            logger.debug(f"Stats - Maintenance: {maintenance}")
-            
             hors_service = queryset.filter(statut='hors_service').count()
-            logger.debug(f"Stats - Hors service: {hors_service}")
             
-            # Compute par_carburant
-            par_carburant_query = queryset.values('carburant').annotate(count=Count('id')).values_list('carburant', 'count')
-            par_carburant = dict(par_carburant_query)
-            logger.debug(f"Stats - Par carburant: {par_carburant}")
+            # Calcul par type de carburant
+            par_carburant = dict(
+                queryset.values('carburant')
+                .annotate(count=Count('id'))
+                .values_list('carburant', 'count')
+            )
             
-            # Compute prix_moyen - CORRECTION: Gérer correctement Decimal128
+            # Calcul du prix moyen
             prix_moyen = 0.0
             try:
-                # Utiliser une approche différente pour éviter la conversion Decimal128
                 prix_values = queryset.values_list('prix_par_jour', flat=True).exclude(prix_par_jour__isnull=True)
                 if prix_values:
                     total_prix = 0
@@ -483,8 +466,6 @@ class VehiculeViewSet(ModelViewSet):
             except Exception as e:
                 logger.error(f"Erreur lors du calcul du prix moyen: {str(e)}")
                 prix_moyen = 0.0
-            
-            logger.debug(f"Stats - Prix moyen: {prix_moyen}")
             
             stats = {
                 'total': total,

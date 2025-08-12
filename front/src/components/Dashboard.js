@@ -62,7 +62,6 @@ const FloatingParticles = ({ animationsEnabled }) => {
         </div>
     );
 };
-
 FloatingParticles.propTypes = {
     animationsEnabled: PropTypes.bool.isRequired,
 };
@@ -83,7 +82,6 @@ const Sparkle = ({ top, left, delay, animationsEnabled }) => {
         />
     );
 };
-
 Sparkle.propTypes = {
     top: PropTypes.number.isRequired,
     left: PropTypes.number.isRequired,
@@ -110,7 +108,6 @@ const ProgressBar = ({ percentage, color, label }) => {
         </div>
     );
 };
-
 ProgressBar.propTypes = {
     percentage: PropTypes.number,
     color: PropTypes.string.isRequired,
@@ -176,7 +173,6 @@ const InteractiveChart = ({ data, label, color }) => {
         </div>
     );
 };
-
 InteractiveChart.propTypes = {
     data: PropTypes.array,
     label: PropTypes.string.isRequired,
@@ -268,7 +264,6 @@ const StatCard = ({
         </div>
     );
 };
-
 StatCard.propTypes = {
     icon: PropTypes.element.isRequired,
     number: PropTypes.number,
@@ -303,7 +298,6 @@ const MetricCard = ({ value, label, index, animationsEnabled }) => {
         </div>
     );
 };
-
 MetricCard.propTypes = {
     value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
     label: PropTypes.string.isRequired,
@@ -356,7 +350,6 @@ const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }
         </div>
     );
 };
-
 MaintenanceAlerts.propTypes = {
     alerts: PropTypes.arrayOf(PropTypes.shape({
         id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
@@ -436,7 +429,6 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
         </div>
     );
 };
-
 RevenueSection.propTypes = {
     revenueData: PropTypes.shape({
         total: PropTypes.number,
@@ -480,7 +472,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState({ 
         period: 'week', 
-        agenceId: user?.role === 'agence' ? user?.agence?.id : null 
+        agenceId: null  // Modification: Les agences voient maintenant toutes les agences par défaut
     });
     
     // Utiliser des refs pour éviter les dépendances changeantes
@@ -500,6 +492,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         return <Navigate to="/login" replace />;
     }
     
+    // Modification: Autoriser les agences à accéder au tableau de bord
     if (!['admin', 'agence'].includes(user.role)) {
         return <Navigate to="/unauthorized" replace />;
     }
@@ -682,7 +675,8 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             await Promise.all([
                 fetchMaintenanceAlerts(accessToken),
                 fetchRevenueData(accessToken, filterRef.current.period),
-                userRef.current?.role === 'admin' && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
+                // Modification: Charger les agences pour les admins et les agences
+                ['admin', 'agence'].includes(userRef.current?.role) && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
             ]);
         } catch (error) {
             console.error('Erreur lors du chargement des statistiques:', error);
@@ -784,7 +778,8 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 <option value="month">Dernier mois</option>
             </select>
             
-            {user.role === 'admin' && (
+            {/* Modification: Autoriser les agences à sélectionner des agences */}
+            {['admin', 'agence'].includes(user.role) && (
                 <select
                     value={filter.agenceId || ''}
                     onChange={(e) => handleFilterChange({ agenceId: e.target.value || null })}
@@ -946,7 +941,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         </div>
     );
 };
-
 StatsDashboard.propTypes = {
     token: PropTypes.string,
     user: PropTypes.shape({
@@ -961,5 +955,4 @@ StatsDashboard.propTypes = {
         animationsEnabled: PropTypes.bool,
     }),
 };
-
 export default StatsDashboard;

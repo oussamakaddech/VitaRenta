@@ -1,3 +1,4 @@
+// App.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
@@ -17,8 +18,6 @@ import RecommendationResults from './components/RecommendationResults';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
 import FeedbackSystem from './components/FeedbackSystem';
-
-// Importer les nouveaux composants
 import PredictiveMaintenance from './components/PredictiveMaintenance';
 import EcoScore from './components/EcoScore';
 
@@ -114,7 +113,6 @@ function App() {
                             path="/login"
                             element={<Login setToken={setToken} setUser={updateUser} onLogin={handleLogin} />}
                         />
-                        {/* Routes pour la réinitialisation du mot de passe (accessibles sans authentification) */}
                         <Route
                             path="/forgot-password"
                             element={<ForgotPassword />}
@@ -123,7 +121,6 @@ function App() {
                             path="/reset-password"
                             element={<ResetPassword />}
                         />
-                        {/* Routes protégées */}
                         <Route
                             path="/profile"
                             element={
@@ -148,7 +145,6 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
-                        {/* Routes pour les nouvelles fonctionnalités */}
                         <Route
                             path="/predictive-maintenance"
                             element={
@@ -176,7 +172,7 @@ function App() {
                         <Route
                             path="/admin/users"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
                                     <UserManagement token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
@@ -184,7 +180,7 @@ function App() {
                         <Route
                             path="/admin/vehicules"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
                                     <AgentVehicleManager token={token} user={user} onLogout={handleLogout} isAdmin={true} />
                                 </ProtectedRoute>
                             }
@@ -192,7 +188,7 @@ function App() {
                         <Route
                             path="/admin/agences"
                             element={
-                                <ProtectedRoute token={token} user={user} allowedRoles={['admin']}>
+                                <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
                                     <AgencyManagement token={token} user={user} onLogout={handleLogout} isAdmin={user?.role === 'admin'} />
                                 </ProtectedRoute>
                             }
@@ -213,16 +209,14 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
-<Route
-    path="/feedback"
-    element={
-        <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
-            {user ? <FeedbackSystem token={token} user={user} onLogout={handleLogout} /> : <div>Chargement...</div>}
-        </ProtectedRoute>
-    }
-/>
-
-
+                        <Route
+                            path="/feedback"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+                                    {user ? <FeedbackSystem token={token} user={user} onLogout={handleLogout} /> : <div>Chargement...</div>}
+                                </ProtectedRoute>
+                            }
+                        />
                         <Route
                             path="/unauthorized"
                             element={
@@ -287,7 +281,6 @@ function App() {
                                     <Link to="/recommendations" aria-label="Recommandations">Recommandations</Link>
                                     <Link to="/eco-score" aria-label="Score écologique">Score Écologique</Link>
                                     <Link to="/feedback" aria-label="Feedback et avis">Feedback</Link>
-
                                 </div>
                                 {(user?.role === 'admin' || user?.role === 'agence') && (
                                     <div className="footer-section">
@@ -297,7 +290,6 @@ function App() {
                                         <Link to="/admin/vehicules" aria-label="Admin véhicules">Admin véhicules</Link>
                                         <Link to="/admin/users" aria-label="Admin utilisateurs">Admin utilisateurs</Link>
                                         <Link to="/demand-prediction" aria-label="Prédictions">Prédictions</Link>
-                                        {/* Ajout des liens pour les nouvelles fonctionnalités */}
                                         <Link to="/predictive-maintenance" aria-label="Maintenance prédictive">Maintenance prédictive</Link>
                                     </div>
                                 )}

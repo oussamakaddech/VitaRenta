@@ -240,7 +240,7 @@ class VehiculeSerializer(serializers.ModelSerializer):
     agence = AgenceSerializer(read_only=True)
     agence_id = serializers.CharField(write_only=True, required=False, allow_null=True)
     image = serializers.ImageField(required=False, allow_null=True)
-
+    
     class Meta:
         model = Vehicule
         fields = [
@@ -251,12 +251,12 @@ class VehiculeSerializer(serializers.ModelSerializer):
             'agence_id', 'agence', 'created_at', 'updated_at', 'image'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'agence']
-
+    
     def validate_marque(self, value):
         if not value or len(value.strip()) < 1:
             return "Marque inconnue"
         return value.strip()
-
+    
     def validate_immatriculation(self, value):
         # Handle None, empty string, or whitespace-only values
         if not value or (isinstance(value, str) and not value.strip()):
@@ -278,37 +278,37 @@ class VehiculeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Cette immatriculation existe déjà.")
         
         return cleaned_value
-
+    
     def validate_modele(self, value):
         if not value or len(value.strip()) < 1:
             return "Modèle inconnu"
         return value.strip()
-
+    
     def validate_carburant(self, value):
         valid_choices = ['électrique', 'hybride', 'essence', 'diesel']
         if value not in valid_choices:
             return 'essence'
         return value
-
+    
     def validate_transmission(self, value):
         valid_choices = ['manuelle', 'automatique']
         if value not in valid_choices:
             return 'manuelle'
         return value
-
+    
     def validate_prix_par_jour(self, value):
         if value is None or value < 0:
             return 50
         if value > 50000:
             return 50000
         return value
-
+    
     def validate_statut(self, value):
         valid_choices = ['disponible', 'loué', 'maintenance', 'hors_service']
         if value not in valid_choices:
             return 'disponible'
         return value
-
+    
     def validate_image(self, value):
         if not value:
             return value
@@ -318,7 +318,7 @@ class VehiculeSerializer(serializers.ModelSerializer):
         if value.size > 5 * 1024 * 1024:  # 5MB limit
             raise serializers.ValidationError("L'image ne doit pas dépasser 5MB.")
         return value
-
+    
     def validate_agence_id(self, value):
         if value:
             try:
@@ -326,7 +326,7 @@ class VehiculeSerializer(serializers.ModelSerializer):
             except Agence.DoesNotExist:
                 raise serializers.ValidationError("L'agence spécifiée n'existe pas.")
         return None
-
+    
     def validate(self, attrs):
         """
         Object-level validation to ensure immatriculation is never None
@@ -336,7 +336,7 @@ class VehiculeSerializer(serializers.ModelSerializer):
             attrs['immatriculation'] = f"TMP-{uuid.uuid4().hex[:8].upper()}"
         
         return attrs
-
+    
     def create(self, validated_data):
         agence = validated_data.pop('agence_id', None)
         
@@ -346,7 +346,7 @@ class VehiculeSerializer(serializers.ModelSerializer):
         
         vehicle = Vehicule.objects.create(agence=agence, **validated_data)
         return vehicle
-
+    
     def update(self, instance, validated_data):
         agence = validated_data.pop('agence_id', None)
         if agence is not None:

@@ -1,3 +1,4 @@
+// Sidebar.js
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './Sidebar.css';
@@ -53,17 +54,8 @@ const Sidebar = ({ token, user, onLogout }) => {
                     )}
                 </div>
                 <div className="sidebar-menu">
-                    <Link
-                        to="/"
-                        className={`sidebar-link ${isActive('/') ? 'sidebar-link-active' : ''}`}
-                        onClick={handleLinkClick}
-                        aria-label="Page d'accueil"
-                    >
-                        <i className="fas fa-home"></i>
-                        Accueil
-                    </Link>
-                    
-                    {user?.role === 'client' ? (
+                    {/* Liens pour les clients */}
+                    {user?.role === 'client' && (
                         <>
                             <Link
                                 to="/vehicules"
@@ -83,18 +75,29 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 <i className="fas fa-thumbs-up"></i>
                                 Recommandations
                             </Link>
-                            {/* Lien Eco Score pour les clients */}
                             <Link
-                                to="/eco-score"
-                                className={`sidebar-link ${isActive('/eco-score') ? 'sidebar-link-active' : ''}`}
+                                to="/feedback"
+                                className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
                                 onClick={handleLinkClick}
-                                aria-label="Score écologique"
+                                aria-label="Feedback et avis"
                             >
-                                <i className="fas fa-leaf"></i>
-                                Score Écologique
+                                <i className="fas fa-comment-dots"></i>
+                                Feedback
+                            </Link>
+                            <Link
+                                to="/profile"
+                                className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Mon profil"
+                            >
+                                <i className="fas fa-user"></i>
+                                Mon Profil
                             </Link>
                         </>
-                    ) : (
+                    )}
+                    
+                    {/* Liens pour les agences et administrateurs */}
+                    {isAdminOrAgence && (
                         <>
                             <Link
                                 to="/dashboard"
@@ -123,134 +126,103 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 <i className="fas fa-thumbs-up"></i>
                                 Recommandations
                             </Link>
+                            <Link
+                                to="/agent/vehicules"
+                                className={`sidebar-link ${isActive('/agent/vehicules') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Gestion des véhicules"
+                            >
+                                <i className="fas fa-tools"></i>
+                                Gestion Véhicules
+                            </Link>
+                            <Link
+                                to="/demand-prediction"
+                                className={`sidebar-link ${isActive('/demand-prediction') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Prédictions de demande"
+                            >
+                                <i className="fas fa-chart-line"></i>
+                                Prédictions
+                            </Link>
                             
-                            {(user?.role === 'agence' || user?.role === 'admin') && (
-                                <>
-                                    <Link
-                                        to="/agent/vehicules"
-                                        className={`sidebar-link ${isActive('/agent/vehicules') ? 'sidebar-link-active' : ''}`}
-                                        onClick={handleLinkClick}
-                                        aria-label="Gestion des véhicules"
-                                    >
-                                        <i className="fas fa-tools"></i>
-                                        Gestion Véhicules
-                                    </Link>
-                                    <Link
-                                        to="/demand-prediction"
-                                        className={`sidebar-link ${isActive('/demand-prediction') ? 'sidebar-link-active' : ''}`}
-                                        onClick={handleLinkClick}
-                                        aria-label="Prédictions de demande"
-                                    >
-                                        <i className="fas fa-chart-line"></i>
-                                        Prédictions
-                                    </Link>
-                                    
-                                    {/* Sous-menu pour les fonctionnalités avancées */}
-                                    <div className="sidebar-submenu">
-                                        <button 
-                                            className={`sidebar-link submenu-toggle ${openSubmenus.maintenance ? 'open' : ''}`}
-                                            onClick={() => toggleSubmenu('maintenance')}
-                                            aria-expanded={openSubmenus.maintenance}
-                                            aria-label="Menu maintenance prédictive"
+                            {/* Sous-menu Maintenance Prédictive */}
+                            <div className="sidebar-submenu">
+                                <button 
+                                    className={`sidebar-link submenu-toggle ${openSubmenus.maintenance ? 'open' : ''}`}
+                                    onClick={() => toggleSubmenu('maintenance')}
+                                    aria-expanded={openSubmenus.maintenance}
+                                    aria-label="Menu maintenance prédictive"
+                                >
+                                    <i className="fas fa-wrench"></i>
+                                    Maintenance Prédictive
+                                    <i className={`fas fa-chevron-${openSubmenus.maintenance ? 'up' : 'down'}`}></i>
+                                </button>
+                                
+                                {openSubmenus.maintenance && (
+                                    <div className="submenu-items">
+                                        <Link
+                                            to="/predictive-maintenance"
+                                            className={`sidebar-link submenu-item ${isActive('/predictive-maintenance') ? 'sidebar-link-active' : ''}`}
+                                            onClick={handleLinkClick}
+                                            aria-label="Analyse de maintenance"
                                         >
-                                            <i className="fas fa-wrench"></i>
-                                            Maintenance Prédictive
-                                            <i className={`fas fa-chevron-${openSubmenus.maintenance ? 'up' : 'down'}`}></i>
-                                        </button>
-                                        
-                                        {openSubmenus.maintenance && (
-                                            <div className="submenu-items">
-                                                <Link
-                                                    to="/predictive-maintenance"
-                                                    className={`sidebar-link submenu-item ${isActive('/predictive-maintenance') ? 'sidebar-link-active' : ''}`}
-                                                    onClick={handleLinkClick}
-                                                    aria-label="Analyse de maintenance"
-                                                >
-                                                    <i className="fas fa-chart-bar"></i>
-                                                    Analyse de Maintenance
-                                                </Link>
-                                            </div>
-                                        )}
+                                            <i className="fas fa-chart-bar"></i>
+                                            Analyse de Maintenance
+                                        </Link>
                                     </div>
-                                    
-                                    <div className="sidebar-submenu">
-                                        <button 
-                                            className={`sidebar-link submenu-toggle ${openSubmenus.eco ? 'open' : ''}`}
-                                            onClick={() => toggleSubmenu('eco')}
-                                            aria-expanded={openSubmenus.eco}
-                                            aria-label="Menu score écologique"
+                                )}
+                            </div>
+                            
+                            {/* Sous-menu Score Écologique */}
+                            <div className="sidebar-submenu">
+                                <button 
+                                    className={`sidebar-link submenu-toggle ${openSubmenus.eco ? 'open' : ''}`}
+                                    onClick={() => toggleSubmenu('eco')}
+                                    aria-expanded={openSubmenus.eco}
+                                    aria-label="Menu score écologique"
+                                >
+                                    <i className="fas fa-leaf"></i>
+                                    Score Écologique
+                                    <i className={`fas fa-chevron-${openSubmenus.eco ? 'up' : 'down'}`}></i>
+                                </button>
+                                
+                                {openSubmenus.eco && (
+                                    <div className="submenu-items">
+                                        <Link
+                                            to="/eco-score"
+                                            className={`sidebar-link submenu-item ${isActive('/eco-score') ? 'sidebar-link-active' : ''}`}
+                                            onClick={handleLinkClick}
+                                            aria-label="Calcul du score écologique"
                                         >
-                                            <i className="fas fa-leaf"></i>
-                                            Score Écologique
-                                            <i className={`fas fa-chevron-${openSubmenus.eco ? 'up' : 'down'}`}></i>
-                                        </button>
-                                        
-                                        {openSubmenus.eco && (
-                                            <div className="submenu-items">
-                                                <Link
-                                                    to="/eco-score"
-                                                    className={`sidebar-link submenu-item ${isActive('/eco-score') ? 'sidebar-link-active' : ''}`}
-                                                    onClick={handleLinkClick}
-                                                    aria-label="Calcul du score écologique"
-                                                >
-                                                    <i className="fas fa-calculator"></i>
-                                                    Calcul du Score
-                                                </Link>
-                                               
-                                            </div>
-                                        )}
+                                            <i className="fas fa-calculator"></i>
+                                            Calcul du Score
+                                        </Link>
                                     </div>
-                                </>
-                            )}
-{user?.role === 'client' && (
-    <>
-        <Link
-            to="/feedback"
-            className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
-            onClick={handleLinkClick}
-            aria-label="Feedback et avis"
-        >
-            <i className="fas fa-comment-dots"></i>
-            Feedback
-        </Link>
-    
-    </>
-)}
-
-{(user?.role === 'agence' || user?.role === 'admin') && (
-    <>
-        <Link
-            to="/feedback"
-            className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
-            onClick={handleLinkClick}
-            aria-label="Feedback et avis"
-        >
-            <i className="fas fa-comment-dots"></i>
-            Feedback
-        </Link>
-        
-        
-    </>
-)}
-                            {isAdminOrAgence && (
-                                <>
-                                    <Link
-                                        to="/admin/agences"
-                                        className={`sidebar-link ${isActive('/admin/agences') ? 'sidebar-link-active' : ''}`}
-                                        onClick={handleLinkClick}
-                                        aria-label="Gestion des agences"
-                                    >
-                                        <i className="fas fa-cog"></i>
-                                        Gérer Agences
-                                    </Link>
-                                   
-                                </>
-                            )}
-                        </>
-                    )}
-                    
-                    {token ? (
-                        <>
+                                )}
+                            </div>
+                            
+                            <Link
+                                to="/feedback"
+                                className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Feedback et avis"
+                            >
+                                <i className="fas fa-comment-dots"></i>
+                                Feedback
+                            </Link>
+                            
+                         
+                            
+                            <Link
+                                to="/admin/agences"
+                                className={`sidebar-link ${isActive('/admin/agences') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Gestion des agences"
+                            >
+                                <i className="fas fa-cog"></i>
+                                Gérer Agences
+                            </Link>
+                            
                             <Link
                                 to="/profile"
                                 className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}
@@ -260,17 +232,11 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 <i className="fas fa-user"></i>
                                 Mon Profil
                             </Link>
-                            <button
-                                onClick={handleLogout}
-                                className="sidebar-link sidebar-link-logout"
-                                role="button"
-                                aria-label="Se déconnecter"
-                            >
-                                <i className="fas fa-sign-out-alt"></i>
-                                Déconnexion
-                            </button>
                         </>
-                    ) : (
+                    )}
+                    
+                    {/* Liens pour les utilisateurs non connectés */}
+                    {!token && (
                         <>
                             <Link
                                 to="/login"
@@ -300,6 +266,19 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 Mot de passe oublié
                             </Link>
                         </>
+                    )}
+                    
+                    {/* Bouton de déconnexion pour les utilisateurs connectés */}
+                    {token && (
+                        <button
+                            onClick={handleLogout}
+                            className="sidebar-link sidebar-link-logout"
+                            role="button"
+                            aria-label="Se déconnecter"
+                        >
+                            <i className="fas fa-sign-out-alt"></i>
+                            Déconnexion
+                        </button>
                     )}
                 </div>
                 

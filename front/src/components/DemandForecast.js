@@ -22,14 +22,14 @@ const DemandForecast = ({ token, user, onLogout }) => {
   
   const locations = useMemo(() => ['Tunis', 'Sfax', 'Sousse', 'Bizerte', 'Djerba'], []);
   const fuelTypes = useMemo(() => ['essence', 'diesel', 'électrique', 'hybride'], []);
-
+  
   useEffect(() => {
     if (!token || !user || !['admin', 'agence'].includes(user.role)) {
       setError('Accès réservé aux administrateurs et agences.');
       navigate('/unauthorized');
     }
   }, [token, user, navigate]);
-
+  
   const handleForecast = useCallback(async () => {
     setError('');
     setLoading(true);
@@ -82,14 +82,14 @@ const DemandForecast = ({ token, user, onLogout }) => {
       setLoading(false);
     }
   }, [token, selectedLocation, selectedFuel, selectedDate, navigate, onLogout]);
-
+  
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(''), 8000);
       return () => clearTimeout(timer);
     }
   }, [error]);
-
+  
   const particles = useMemo(() => {
     const particlesArray = [];
     for (let i = 0; i < 20; i++) {
@@ -109,7 +109,7 @@ const DemandForecast = ({ token, user, onLogout }) => {
     }
     return particlesArray;
   }, []);
-
+  
   const chartData = {
     labels: forecastData.map(item => item.period),
     datasets: [
@@ -123,7 +123,7 @@ const DemandForecast = ({ token, user, onLogout }) => {
       },
     ],
   };
-
+  
   const chartOptions = {
     responsive: true,
     plugins: {
@@ -157,11 +157,11 @@ const DemandForecast = ({ token, user, onLogout }) => {
       },
     },
   };
-
+  
   // Vérifier si les données sont constantes
   const hasConstantValues = forecastData.length > 1 && 
     forecastData.every(item => item.demand === forecastData[0].demand);
-
+  
   if (!token || !user || !['admin', 'agence'].includes(user.role)) {
     return (
       <div className="demand-forecast-container">
@@ -175,7 +175,7 @@ const DemandForecast = ({ token, user, onLogout }) => {
       </div>
     );
   }
-
+  
   return (
     <div className="demand-forecast-container">
       <div className="floating-particles">{particles}</div>
@@ -227,14 +227,13 @@ const DemandForecast = ({ token, user, onLogout }) => {
                     value={selectedLocation}
                     onChange={(e) => setSelectedLocation(e.target.value)}
                     aria-describedby="agency-location-help"
-                    disabled={user.role === 'agence' && user.agence}
                   >
                     {locations.map((loc) => (
                       <option key={loc} value={loc}>{loc}</option>
                     ))}
                   </select>
                   <small id="agency-location-help" className="text-muted">
-                    Sélectionnez la ville pour la prévision. (Verrouillé pour les agences.)
+                    Sélectionnez la ville pour la prévision.
                   </small>
                 </div>
                 <div className="form-group">
@@ -273,7 +272,7 @@ const DemandForecast = ({ token, user, onLogout }) => {
               <button
                 type="submit"
                 className="submit-btn"
-                disabled={loading || (user.role === 'agence' && user.agence && user.agence.ville !== selectedLocation)}
+                disabled={loading}
                 aria-busy={loading}
                 aria-label="Lancer la prévision de la demande"
               >

@@ -15,7 +15,7 @@ const CAR_IMAGES = {
   bmw: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
   mercedes: 'https://images.unsplash.com/photo-1618843479313-40f1970e3868?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
   audi: 'https://images.unsplash.com/photo-1616788494707-75d33d9e4e4a?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
-  tesla: 'https://images.unsplash.com/photo-1560915479-3c9ca575e3b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
+  tesla: 'https://images.unsplash.com/photo-1560915479-3c0ca575e3b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
   nissan: 'https://images.unsplash.com/photo-1609521005188-233b5c464c6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
   ford: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
   default: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'
@@ -59,6 +59,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
     const [vehiclesPerPage] = useState(12);
     const [showVehicleDetails, setShowVehicleDetails] = useState(null);
     const [retryCount, setRetryCount] = useState(0);
+    const [isScrolled, setIsScrolled] = useState(false);
     
     // Fonction pour obtenir l'URL de l'image statique
     const getStaticCarImage = useCallback((marque = '', modele = '', vehicleId = null) => {
@@ -386,6 +387,15 @@ const VehiculeList = ({ token, user, onLogout }) => {
         setTimeout(() => notification.remove(), 3000);
     };
     
+    // Effet pour détecter le défilement
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 50);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+    
     useEffect(() => {
         fetchVehicles();
         const interval = setInterval(() => fetchVehicles(), 30000);
@@ -442,8 +452,8 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 </div>
             </div>
             
-            <div className="vehicule-layout-fullwidth">
-                <header className="vehicule-header">
+            <div className={`vehicule-layout-fullwidth ${isScrolled ? 'scrolled' : ''}`}>
+                <header className={`vehicule-header ${isScrolled ? 'scrolled' : ''}`}>
                     <div className="vehicule-header-content">
                         <h1 className="vehicule-content-title">🚗 Location de Véhicules Premium</h1>
                         <p className="vehicule-content-subtitle">
@@ -499,7 +509,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                         </div>
                     )}
                     
-                    <div className="vehicule-card">
+                    <div className="vehicule-card vehicule-search-card">
                         <div className="vehicule-card-header">
                             <h2 className="vehicule-card-title">
                                 <i className="fas fa-search"></i> Recherche et Filtres
@@ -522,12 +532,14 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                     <button
                                         className={`vehicule-view-btn ${viewMode === 'grid' ? 'active' : ''}`}
                                         onClick={() => setViewMode('grid')}
+                                        aria-label="Vue grille"
                                     >
                                         <i className="fas fa-th-large"></i>
                                     </button>
                                     <button
                                         className={`vehicule-view-btn ${viewMode === 'list' ? 'active' : ''}`}
                                         onClick={() => setViewMode('list')}
+                                        aria-label="Vue liste"
                                     >
                                         <i className="fas fa-list"></i>
                                     </button>
@@ -545,120 +557,122 @@ const VehiculeList = ({ token, user, onLogout }) => {
                         </div>
                         
                         {showFilters && (
-                            <div className="vehicule-form-grid">
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-car vehicule-label-icon"></i>
-                                        Marque
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="vehicule-input"
-                                        placeholder="Ex: Toyota"
-                                        value={filters.marque}
-                                        onChange={(e) => handleFilterChange('marque', e.target.value)}
-                                    />
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-gas-pump vehicule-label-icon"></i>
-                                        Carburant
-                                    </label>
-                                    <select
-                                        className="vehicule-sort-select"
-                                        value={filters.carburant}
-                                        onChange={(e) => handleFilterChange('carburant', e.target.value)}
-                                    >
-                                        <option value="">Tous</option>
-                                        <option value="essence">Essence</option>
-                                        <option value="diesel">Diesel</option>
-                                        <option value="hybride">Hybride</option>
-                                        <option value="électrique">Électrique</option>
-                                    </select>
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-euro-sign vehicule-label-icon"></i>
-                                        Prix minimum
-                                    </label>
-                                    <input
-                                        type="number"
-                                        className="vehicule-input"
-                                        placeholder="Prix min"
-                                        value={filters.prix_min}
-                                        onChange={(e) => handleFilterChange('prix_min', e.target.value)}
-                                    />
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-euro-sign vehicule-label-icon"></i>
-                                        Prix maximum
-                                    </label>
-                                    <input
-                                        type="number"
-                                        className="vehicule-input"
-                                        placeholder="Prix max"
-                                        value={filters.prix_max}
-                                        onChange={(e) => handleFilterChange('prix_max', e.target.value)}
-                                    />
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-users vehicule-label-icon"></i>
-                                        Nombre de places min
-                                    </label>
-                                    <input
-                                        type="number"
-                                        className="vehicule-input"
-                                        placeholder="Places min"
-                                        value={filters.places_min}
-                                        onChange={(e) => handleFilterChange('places_min', e.target.value)}
-                                    />
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-map-marker-alt vehicule-label-icon"></i>
-                                        Localisation
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="vehicule-input"
-                                        placeholder="Ville ou région"
-                                        value={filters.localisation}
-                                        onChange={(e) => handleFilterChange('localisation', e.target.value)}
-                                    />
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-info-circle vehicule-label-icon"></i>
-                                        Statut
-                                    </label>
-                                    <select
-                                        className="vehicule-sort-select"
-                                        value={filters.statut}
-                                        onChange={(e) => handleFilterChange('statut', e.target.value)}
-                                    >
-                                        <option value="">Tous les statuts</option>
-                                        <option value="disponible">Disponible</option>
-                                        <option value="loué">Loué</option>
-                                        <option value="maintenance">Maintenance</option>
-                                        <option value="hors_service">Hors service</option>
-                                    </select>
-                                </div>
-                                <div className="vehicule-form-group">
-                                    <label className="vehicule-form-label">
-                                        <i className="fas fa-cog vehicule-label-icon"></i>
-                                        Transmission
-                                    </label>
-                                    <select
-                                        className="vehicule-sort-select"
-                                        value={filters.transmission}
-                                        onChange={(e) => handleFilterChange('transmission', e.target.value)}
-                                    >
-                                        <option value="">Tous</option>
-                                        <option value="manuelle">Manuelle</option>
-                                        <option value="automatique">Automatique</option>
-                                    </select>
+                            <div className="vehicule-filters-container">
+                                <div className="vehicule-form-grid">
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-car vehicule-label-icon"></i>
+                                            Marque
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="vehicule-input"
+                                            placeholder="Ex: Toyota"
+                                            value={filters.marque}
+                                            onChange={(e) => handleFilterChange('marque', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-gas-pump vehicule-label-icon"></i>
+                                            Carburant
+                                        </label>
+                                        <select
+                                            className="vehicule-sort-select"
+                                            value={filters.carburant}
+                                            onChange={(e) => handleFilterChange('carburant', e.target.value)}
+                                        >
+                                            <option value="">Tous</option>
+                                            <option value="essence">Essence</option>
+                                            <option value="diesel">Diesel</option>
+                                            <option value="hybride">Hybride</option>
+                                            <option value="électrique">Électrique</option>
+                                        </select>
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-euro-sign vehicule-label-icon"></i>
+                                            Prix minimum
+                                        </label>
+                                        <input
+                                            type="number"
+                                            className="vehicule-input"
+                                            placeholder="Prix min"
+                                            value={filters.prix_min}
+                                            onChange={(e) => handleFilterChange('prix_min', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-euro-sign vehicule-label-icon"></i>
+                                            Prix maximum
+                                        </label>
+                                        <input
+                                            type="number"
+                                            className="vehicule-input"
+                                            placeholder="Prix max"
+                                            value={filters.prix_max}
+                                            onChange={(e) => handleFilterChange('prix_max', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-users vehicule-label-icon"></i>
+                                            Nombre de places min
+                                        </label>
+                                        <input
+                                            type="number"
+                                            className="vehicule-input"
+                                            placeholder="Places min"
+                                            value={filters.places_min}
+                                            onChange={(e) => handleFilterChange('places_min', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-map-marker-alt vehicule-label-icon"></i>
+                                            Localisation
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="vehicule-input"
+                                            placeholder="Ville ou région"
+                                            value={filters.localisation}
+                                            onChange={(e) => handleFilterChange('localisation', e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-info-circle vehicule-label-icon"></i>
+                                            Statut
+                                        </label>
+                                        <select
+                                            className="vehicule-sort-select"
+                                            value={filters.statut}
+                                            onChange={(e) => handleFilterChange('statut', e.target.value)}
+                                        >
+                                            <option value="">Tous les statuts</option>
+                                            <option value="disponible">Disponible</option>
+                                            <option value="loué">Loué</option>
+                                            <option value="maintenance">Maintenance</option>
+                                            <option value="hors_service">Hors service</option>
+                                        </select>
+                                    </div>
+                                    <div className="vehicule-form-group">
+                                        <label className="vehicule-form-label">
+                                            <i className="fas fa-cog vehicule-label-icon"></i>
+                                            Transmission
+                                        </label>
+                                        <select
+                                            className="vehicule-sort-select"
+                                            value={filters.transmission}
+                                            onChange={(e) => handleFilterChange('transmission', e.target.value)}
+                                        >
+                                            <option value="">Tous</option>
+                                            <option value="manuelle">Manuelle</option>
+                                            <option value="automatique">Automatique</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="vehicule-filter-actions">
                                     <button className="vehicule-btn-secondary" onClick={resetFilters}>
@@ -736,12 +750,17 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                                         <button
                                                             className={`vehicule-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
                                                             onClick={() => toggleFavorite(vehicle.id)}
+                                                            aria-label={favorites.includes(vehicle.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
                                                         >
                                                             <i className="fas fa-heart"></i>
+                                                        <span className="sr-only">
+                                                            {favorites.includes(vehicle.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
+                                                        </span>
                                                         </button>
                                                         <button
                                                             className="vehicule-details-btn"
                                                             onClick={() => setShowVehicleDetails(vehicle)}
+                                                            aria-label="Voir les détails"
                                                         >
                                                             <i className="fas fa-info"></i>
                                                         </button>
@@ -817,6 +836,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                             className="vehicule-pagination-btn"
                                             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                                             disabled={currentPage === 1}
+                                            aria-label="Page précédente"
                                         >
                                             <i className="fas fa-chevron-left"></i> Précédent
                                         </button>
@@ -825,6 +845,8 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                                 key={index}
                                                 className={`vehicule-pagination-number ${currentPage === index + 1 ? 'active' : ''}`}
                                                 onClick={() => setCurrentPage(index + 1)}
+                                                aria-label={`Page ${index + 1}`}
+                                                aria-current={currentPage === index + 1 ? "page" : undefined}
                                             >
                                                 {index + 1}
                                             </button>
@@ -833,6 +855,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                             className="vehicule-pagination-btn"
                                             onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                                             disabled={currentPage === totalPages}
+                                            aria-label="Page suivante"
                                         >
                                             Suivant <i className="fas fa-chevron-right"></i>
                                         </button>
@@ -849,7 +872,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                     <h3 className="vehicule-modal-title">
                                         Réserver {selectedVehicle.marque} {selectedVehicle.modele}
                                     </h3>
-                                    <button className="vehicule-close-btn" onClick={closeReservationModal}>
+                                    <button className="vehicule-close-btn" onClick={closeReservationModal} aria-label="Fermer">
                                         ×
                                     </button>
                                 </div>
@@ -1058,7 +1081,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                                     <h3 className="vehicule-modal-title">
                                         {showVehicleDetails.marque} {showVehicleDetails.modele}
                                     </h3>
-                                    <button className="vehicule-close-btn" onClick={() => setShowVehicleDetails(null)}>
+                                    <button className="vehicule-close-btn" onClick={() => setShowVehicleDetails(null)} aria-label="Fermer">
                                         ×
                                     </button>
                                 </div>
@@ -1173,6 +1196,17 @@ const VehiculeList = ({ token, user, onLogout }) => {
                         </div>
                     )}
                 </main>
+                
+                <footer className="vehicule-footer">
+                    <div className="vehicule-footer-content">
+                        <p>© 2023 Location de Véhicules Premium. Tous droits réservés.</p>
+                        <div className="vehicule-footer-links">
+                            <a href="#" className="vehicule-footer-link">Mentions légales</a>
+                            <a href="#" className="vehicule-footer-link">Politique de confidentialité</a>
+                            <a href="#" className="vehicule-footer-link">Contact</a>
+                        </div>
+                    </div>
+                </footer>
             </div>
         </div>
     );
