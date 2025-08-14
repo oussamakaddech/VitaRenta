@@ -20,6 +20,7 @@ import ResetPassword from './components/ResetPassword';
 import FeedbackSystem from './components/FeedbackSystem';
 import PredictiveMaintenance from './components/PredictiveMaintenance';
 import EcoScore from './components/EcoScore';
+import ReservationList from './components/ReservationList'; // Ajout de l'import
 
 function App() {
     const [token, setToken] = useState('');
@@ -137,6 +138,15 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
+                        {/* Ajout de la route pour les réservations */}
+                        <Route
+                            path="/reservations"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+                                    <ReservationList token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
                         <Route
                             path="/dashboard"
                             element={
@@ -217,6 +227,7 @@ function App() {
                                 </ProtectedRoute>
                             }
                         />
+                        
                         <Route
                             path="/unauthorized"
                             element={
@@ -275,6 +286,7 @@ function App() {
                                 <div className="footer-section">
                                     <h4>Services</h4>
                                     <Link to="/vehicules" aria-label="Location de véhicules">Location de véhicules</Link>
+                                    <Link to="/reservations" aria-label="Mes réservations">Mes réservations</Link>
                                     <Link to="/agences" aria-label="Agences">Agences</Link>
                                     <Link to="/dashboard" aria-label="Tableau de bord">Tableau de bord</Link>
                                     <Link to="/profile" aria-label="Profil">Profil</Link>
@@ -286,6 +298,7 @@ function App() {
                                     <div className="footer-section">
                                         <h4>Gestion</h4>
                                         <Link to="/agent/vehicules" aria-label="Gestion véhicules">Gestion véhicules</Link>
+                                        <Link to="/reservations" aria-label="Gestion réservations">Gestion réservations</Link>
                                         <Link to="/admin/agences" aria-label="Admin agences">Admin agences</Link>
                                         <Link to="/admin/vehicules" aria-label="Admin véhicules">Admin véhicules</Link>
                                         <Link to="/admin/users" aria-label="Admin utilisateurs">Admin utilisateurs</Link>

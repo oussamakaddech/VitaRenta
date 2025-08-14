@@ -67,6 +67,15 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 Véhicules
                             </Link>
                             <Link
+                                to="/reservations"
+                                className={`sidebar-link ${isActive('/reservations') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Mes réservations"
+                            >
+                                <i className="fas fa-calendar-alt"></i>
+                                Mes Réservations
+                            </Link>
+                            <Link
                                 to="/recommendations"
                                 className={`sidebar-link ${isActive('/recommendations') ? 'sidebar-link-active' : ''}`}
                                 onClick={handleLinkClick}
@@ -116,6 +125,15 @@ const Sidebar = ({ token, user, onLogout }) => {
                             >
                                 <i className="fas fa-car"></i>
                                 Véhicules
+                            </Link>
+                            <Link
+                                to="/reservations"
+                                className={`sidebar-link ${isActive('/reservations') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Gestion des réservations"
+                            >
+                                <i className="fas fa-calendar-check"></i>
+                                Réservations
                             </Link>
                             <Link
                                 to="/recommendations"
@@ -210,8 +228,6 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 <i className="fas fa-comment-dots"></i>
                                 Feedback
                             </Link>
-                            
-                         
                             
                             <Link
                                 to="/admin/agences"

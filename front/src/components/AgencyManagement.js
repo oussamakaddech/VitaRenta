@@ -43,7 +43,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         site_web: '',
         description: ''
     });
-
+    
     const isActive = useCallback((path) => location.pathname === path, [location.pathname]);
     
     const handleLogout = useCallback(() => {
@@ -62,7 +62,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         if (data.site_web && !/^https?:\/\/[^\s$.?#].[^\s]*$/.test(data.site_web)) return "L'URL du site web n'est pas valide";
         return '';
     }, []);
-
+    
     // Récupérer les agences
     const fetchAgencies = useCallback(async () => {
         setLoading(true);
@@ -107,7 +107,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             setLoading(false);
         }
     }, [token, searchTerm, currentPageAgencies, itemsPerPage]);
-
+    
     // Récupérer les utilisateurs de rôle "agence" sans agence
     const fetchAgencyUsers = useCallback(async () => {
         try {
@@ -122,14 +122,14 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             console.error('Erreur lors du chargement des utilisateurs agence:', err);
         }
     }, [token]);
-
+    
     useEffect(() => {
         fetchAgencies();
         if (isAdmin) {
             fetchAgencyUsers(); // Charger les utilisateurs pour l'assignation
         }
     }, [fetchAgencies, fetchAgencyUsers, isAdmin]);
-
+    
     const updateStats = useCallback((agenciesData) => {
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
@@ -142,7 +142,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             }).length
         });
     }, []);
-
+    
     const createAgency = useCallback(async () => {
         const validationError = validateAgencyData(formData);
         if (validationError) {
@@ -170,7 +170,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             setLoading(false);
         }
     }, [formData, token, fetchAgencies, fetchAgencyUsers, isAdmin]);
-
+    
     const updateAgency = useCallback(async () => {
         const validationError = validateAgencyData(formData);
         if (validationError) {
@@ -195,7 +195,7 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             setLoading(false);
         }
     }, [formData, selectedAgency, token, fetchAgencies]);
-
+    
     const deleteAgency = useCallback(async (agencyId) => {
         if (!window.confirm('Voulez-vous vraiment supprimer cette agence ? Cette action est irréversible.')) {
             return;
@@ -216,41 +216,40 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
             setLoading(false);
         }
     }, [token, fetchAgencies]);
-
+    
     // Affecter un utilisateur de rôle "agence" à une agence
-    // AgencyManagement.js
-const assignUserToAgency = useCallback(async (userId, agencyId) => {
-    if (loading) return;
-    if (!token) {
-        setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
-        setModalState({ type: null, data: null });
-        return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-        const response = await axios.patch(`${API_BASE_URL}/api/assign_user_to_agency/`, { 
-            user_id: userId, 
-            agence_id: agencyId 
-        }, {
-            headers: { 
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 10000
-        });
-        setSuccess('Utilisateur affecté avec succès !');
-        fetchAgencies();
-        fetchAgencyUsers();
-        setModalState({ type: null, data: null });
-    } catch (err) {
-        console.error('Erreur lors de l\'affectation:', err);
-        setError(err.response?.data?.error || "Erreur lors de l'affectation de l'utilisateur.");
-    } finally {
-        setLoading(false);
-    }
-}, [token, fetchAgencies, fetchAgencyUsers, loading]);
-
+    const assignUserToAgency = useCallback(async (userId, agencyId) => {
+        if (loading) return;
+        if (!token) {
+            setError("Aucun token d'authentification trouvé. Veuillez vous reconnecter.");
+            setModalState({ type: null, data: null });
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await axios.patch(`${API_BASE_URL}/api/assign_user_to_agency/`, { 
+                user_id: userId, 
+                agence_id: agencyId 
+            }, {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
+            });
+            setSuccess('Utilisateur affecté avec succès !');
+            fetchAgencies();
+            fetchAgencyUsers();
+            setModalState({ type: null, data: null });
+        } catch (err) {
+            console.error('Erreur lors de l\'affectation:', err);
+            setError(err.response?.data?.error || "Erreur lors de l'affectation de l'utilisateur.");
+        } finally {
+            setLoading(false);
+        }
+    }, [token, fetchAgencies, fetchAgencyUsers, loading]);
+    
     const resetForm = useCallback(() => {
         setFormData({
             nom: '',
@@ -266,12 +265,12 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
         setSelectedAgency(null);
         setIsEditMode(false);
     }, []);
-
+    
     const handleFormChange = useCallback((e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     }, []);
-
+    
     const openEditForm = useCallback((agency) => {
         setSelectedAgency(agency);
         setIsEditMode(true);
@@ -288,16 +287,16 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
         });
         setModalState({ type: 'edit', data: agency });
     }, []);
-
+    
     const openDetailsModal = useCallback((agency) => {
         setModalState({ type: 'details', data: agency });
     }, []);
-
+    
     const openCreateForm = useCallback(() => {
         resetForm();
         setModalState({ type: 'create', data: null });
     }, [resetForm]);
-
+    
     // Ouvrir la modal pour affecter un utilisateur à une agence
     const openAssignUserModal = useCallback((agency) => {
         if (agencyUsers.length === 0) {
@@ -306,17 +305,17 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
         }
         setModalState({ type: 'assign_user', data: agency });
     }, [agencyUsers.length]);
-
+    
     const closeModal = useCallback(() => {
         setModalState({ type: null, data: null });
         resetForm();
     }, [resetForm]);
-
+    
     const handleSearchChange = useCallback((e) => {
         setSearchTerm(e.target.value);
         setCurrentPageAgencies(1);
     }, []);
-
+    
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
         if (isEditMode) {
@@ -325,7 +324,7 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
             await createAgency();
         }
     }, [isEditMode, createAgency, updateAgency]);
-
+    
     // Gérer la soumission du formulaire d'affectation d'utilisateur
     const handleAssignUserSubmit = useCallback(async (e) => {
         e.preventDefault();
@@ -339,36 +338,36 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
         
         await assignUserToAgency(userId, agencyId);
     }, [assignUserToAgency, modalState.data]);
-
+    
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Escape') {
             closeModal();
         }
     }, [closeModal]);
-
+    
     useEffect(() => {
         if (error) {
             const timer = setTimeout(() => setError(null), 8000);
             return () => clearTimeout(timer);
         }
     }, [error]);
-
+    
     useEffect(() => {
         if (success) {
             const timer = setTimeout(() => setSuccess(null), 5000);
             return () => clearTimeout(timer);
         }
     }, [success]);
-
+    
     useEffect(() => {
         if (modalState.type) {
             document.addEventListener('keydown', handleKeyDown);
             return () => document.removeEventListener('keydown', handleKeyDown);
         }
     }, [modalState.type, handleKeyDown]);
-
+    
     const canManageAllAgencies = user.role === 'admin' || user.role === 'agence';
-
+    
     // Génération des particules animées
     const particles = useMemo(() => {
         return Array.from({ length: 20 }).map((_, i) => (
@@ -385,10 +384,11 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
             />
         ));
     }, []);
-
+    
     return (
         <div className="agency-manager-container">
             <div className="floating-particles">{particles}</div>
+            
             <Sidebar
                 token={token}
                 user={user}
@@ -397,6 +397,7 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
                 isOpen={isSidebarOpen}
                 setIsOpen={setIsSidebarOpen}
             />
+            
             <div className="dashboard-content">
                 <div className="stats-dashboard">
                     <div className="dashboard-header">
@@ -887,14 +888,14 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
                                 <button
                                     type="button"
                                     onClick={closeModal}
-                                    className="cancel-btn"
+                                    className="btn-secondary"
                                     aria-label="Annuler la création"
                                 >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
                                 <button
                                     type="submit"
-                                    className="submit-btn"
+                                    className="btn-primary"
                                     disabled={loading}
                                     aria-label="Créer une nouvelle agence"
                                 >
@@ -1055,14 +1056,14 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
                                 <button
                                     type="button"
                                     onClick={closeModal}
-                                    className="cancel-btn"
+                                    className="btn-secondary"
                                     aria-label="Annuler la modification"
                                 >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
                                 <button
                                     type="submit"
-                                    className="submit-btn"
+                                    className="btn-primary"
                                     disabled={loading}
                                     aria-label="Modifier l'agence"
                                 >
@@ -1115,7 +1116,7 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
                                 <button
                                     type="button"
                                     onClick={() => openAssignUserModal(modalState.data)}
-                                    className="submit-btn"
+                                    className="btn-primary"
                                     disabled={agencyUsers.length === 0}
                                     aria-label={`Affecter un utilisateur à l'agence ${modalState.data.nom || 'inconnue'}`}
                                 >
@@ -1125,7 +1126,7 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
                             <button
                                 type="button"
                                 onClick={closeModal}
-                                className="cancel-btn"
+                                className="btn-secondary"
                                 aria-label="Fermer le modal"
                             >
                                 <i className="fas fa-times"></i> Fermer
@@ -1180,14 +1181,14 @@ const assignUserToAgency = useCallback(async (userId, agencyId) => {
                                 <button
                                     type="button"
                                     onClick={closeModal}
-                                    className="cancel-btn"
+                                    className="btn-secondary"
                                     aria-label="Annuler l'affectation"
                                 >
                                     <i className="fas fa-times"></i> Annuler
                                 </button>
                                 <button
                                     type="submit"
-                                    className="submit-btn"
+                                    className="btn-primary"
                                     disabled={loading}
                                     aria-label="Affecter l'utilisateur sélectionné"
                                 >
