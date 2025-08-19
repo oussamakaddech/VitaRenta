@@ -94,6 +94,15 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 Feedback
                             </Link>
                             <Link
+                                to="/diagnostic"
+                                className={`sidebar-link ${isActive('/diagnostic') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Assistant diagnostic automobile"
+                            >
+                                <i className="fas fa-stethoscope"></i>
+                                Diagnostic Auto
+                            </Link>
+                            <Link
                                 to="/profile"
                                 className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}
                                 onClick={handleLinkClick}
@@ -227,6 +236,16 @@ const Sidebar = ({ token, user, onLogout }) => {
                             >
                                 <i className="fas fa-comment-dots"></i>
                                 Feedback
+                            </Link>
+                            
+                            <Link
+                                to="/diagnostic"
+                                className={`sidebar-link ${isActive('/diagnostic') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Assistant diagnostic automobile"
+                            >
+                                <i className="fas fa-stethoscope"></i>
+                                Diagnostic Auto
                             </Link>
                             
                             <Link

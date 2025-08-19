@@ -312,7 +312,7 @@ const PredictiveMaintenance = ({ token, user }) => {
                             )}
                             
                             {historicalData.length > 0 && (
-                                <div className="chart-section">
+                                <div className="chart-section chart-section--light">
                                     <h4>Évolution des paramètres</h4>
                                     <ResponsiveContainer width="100%" height={400}>
                                         <LineChart data={historicalData}>
@@ -327,7 +327,7 @@ const PredictiveMaintenance = ({ token, user }) => {
                                                 yAxisId="left"
                                                 type="monotone"
                                                 dataKey="temperature"
-                                                stroke="#ff6b6b"
+                                                stroke="#ef4444"
                                                 strokeWidth={2}
                                                 name="Température (°C)"
                                             />
@@ -335,7 +335,7 @@ const PredictiveMaintenance = ({ token, user }) => {
                                                 yAxisId="left"
                                                 type="monotone"
                                                 dataKey="vibration"
-                                                stroke="#4ecdc4"
+                                                stroke="#10b981"
                                                 strokeWidth={2}
                                                 name="Vibration (m/s²)"
                                             />
@@ -343,7 +343,7 @@ const PredictiveMaintenance = ({ token, user }) => {
                                                 yAxisId="right"
                                                 type="monotone"
                                                 dataKey="battery_health"
-                                                stroke="#45b7d1"
+                                                stroke="#2563eb"
                                                 strokeWidth={2}
                                                 name="Batterie (%)"
                                             />

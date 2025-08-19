@@ -1,5 +1,8 @@
 /* index.css - Styles globaux pour VitaRenta */
 
+/* Import des styles Leaflet pour la carte */
+@import 'leaflet/dist/leaflet.css';
+
 /* Import des polices Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 

@@ -155,8 +155,9 @@ const fetchScoreDistribution = useCallback(async () => {
         fetchScoreDistribution();
     };
 
-    const COLORS = ['#4CAF50', '#e0e0e0'];
-    const BAR_COLOR = '#8884d8';
+    // High-contrast palette
+    const COLORS = ['#10b981', '#e5e7eb']; // green + light gray
+    const BAR_COLOR = '#2563eb'; // strong blue
 
     if (!token) {
         return <div className="error">Token d'authentification manquant</div>;
@@ -222,7 +223,7 @@ const fetchScoreDistribution = useCallback(async () => {
                                 </div>
                                 
                                 <div className="charts-container">
-                                    <div className="card">
+                                    <div className="card chart-section--light">
                                         <h4>Distribution du score</h4>
                                         <ResponsiveContainer width="100%" height={200}>
                                             <PieChart>
@@ -248,7 +249,7 @@ const fetchScoreDistribution = useCallback(async () => {
                                         </ResponsiveContainer>
                                     </div>
                                     
-                                    <div className="card">
+                                    <div className="card chart-section--light">
                                         <h4>Impact environnemental</h4>
                                         <ResponsiveContainer width="100%" height={200}>
                                             <BarChart data={[
@@ -268,7 +269,7 @@ const fetchScoreDistribution = useCallback(async () => {
                                     </div>
                                     
                                     {scoreDistribution.length > 0 && (
-                                        <div className="card">
+                                        <div className="card chart-section--light">
                                             <h4>Distribution des scores de la flotte</h4>
                                             <ResponsiveContainer width="100%" height={200}>
                                                 <BarChart data={scoreDistribution}>

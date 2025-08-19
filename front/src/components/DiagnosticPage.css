@@ -1,0 +1,625 @@
+/* Modern Web3 Design - Diagnostic Page */
+
+/* Web3 Design System - Scoped to Diagnostic Page */
+.diagnostic-page {
+  /* Primary Palette */
+  --web3-primary: #00f5ff;
+  --web3-secondary: #7c3aed;
+  --web3-accent: #ff006e;
+  --web3-success: #00ff88;
+  --web3-warning: #ffb800;
+  --web3-error: #ff3366;
+  
+  /* Background Layers */
+  --bg-primary: #0a0118;
+  --bg-secondary: #1a0b2e;
+  --bg-tertiary: #16213e;
+  --bg-surface: #2d1b69;
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  
+  /* Text Colors */
+  --text-primary: #000000;
+  --text-secondary: #2d3748;
+  --text-muted: #4a5568;
+  --text-glow: #1a202c;
+  
+  /* Glass Effects */
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(0, 245, 255, 0.2);
+  --glass-blur: blur(20px);
+  
+  /* Shadows & Glows */
+  --shadow-neon: 0 0 20px rgba(0, 245, 255, 0.3);
+  --shadow-deep: 0 20px 40px rgba(0, 0, 0, 0.4);
+  --glow-primary: 0 0 30px rgba(0, 245, 255, 0.5);
+  --glow-secondary: 0 0 30px rgba(124, 58, 237, 0.5);
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #00f5ff 0%, #7c3aed 100%);
+  --gradient-secondary: linear-gradient(135deg, #ff006e 0%, #00f5ff 100%);
+  --gradient-cyber: linear-gradient(45deg, #00f5ff 0%, #7c3aed 50%, #ff006e 100%);
+  --gradient-dark: linear-gradient(135deg, #0a0118 0%, #1a0b2e 100%);
+  
+  /* Animations */
+  --transition-fast: 0.2s ease-out;
+  --transition-smooth: 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-bounce: 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Main Container */
+.diagnostic-page {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(0, 245, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(124, 58, 237, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(255, 0, 110, 0.05) 0%, transparent 50%);
+  position: relative;
+  overflow-x: hidden;
+  padding: 20px;
+}
+
+/* Animated Background Elements - Diagnostic Page Only */
+.diagnostic-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(45deg, transparent 48%, rgba(0, 245, 255, 0.02) 49%, rgba(0, 245, 255, 0.02) 51%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, rgba(124, 58, 237, 0.02) 49%, rgba(124, 58, 237, 0.02) 51%, transparent 52%);
+  background-size: 80px 80px;
+  animation: diagnostic-grid-movement 30s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.diagnostic-page::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(0, 245, 255, 0.1) 0%, transparent 20%);
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+@keyframes diagnostic-grid-movement {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  100% { transform: translate(80px, 80px) rotate(360deg); }
+}
+
+/* Floating Particles - Diagnostic Page Only */
+.diagnostic-page .web3-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.diagnostic-page .particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: var(--web3-primary);
+  border-radius: 50%;
+  animation: diagnostic-float-particle 8s infinite linear;
+  box-shadow: var(--glow-primary);
+}
+
+.diagnostic-page .particle:nth-child(2n) {
+  background: var(--web3-secondary);
+  box-shadow: var(--glow-secondary);
+  animation-duration: 12s;
+}
+
+.diagnostic-page .particle:nth-child(3n) {
+  background: var(--web3-accent);
+  animation-duration: 10s;
+}
+
+@keyframes diagnostic-float-particle {
+  0% { 
+    transform: translateY(100vh) translateX(0) rotate(0deg); 
+    opacity: 0; 
+  }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { 
+    transform: translateY(-100px) translateX(200px) rotate(360deg); 
+    opacity: 0; 
+  }
+}
+
+/* Header Section - Reduced Size - Diagnostic Page Only */
+.diagnostic-page .diagnostic-page-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 30px 25px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-deep), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 30px;
+  position: relative;
+  overflow: hidden;
+}
+
+.diagnostic-page .diagnostic-page-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 3px;
+  background: var(--gradient-cyber);
+  animation: diagnostic-header-scan 4s infinite;
+}
+
+.diagnostic-page .diagnostic-page-header::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent, rgba(0, 245, 255, 0.1), transparent);
+  animation: diagnostic-rotate-glow 8s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes diagnostic-header-scan {
+  0% { left: -100%; }
+  50% { left: 100%; }
+  100% { left: 100%; }
+}
+
+@keyframes diagnostic-rotate-glow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.diagnostic-page .diagnostic-header-content {
+  position: relative;
+  z-index: 2;
+}
+
+.diagnostic-page .diagnostic-header-content h1 {
+  font-size: 3.5rem;
+  font-weight: 900;
+  margin: 0 0 15px 0;
+  background: var(--gradient-cyber);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: diagnostic-gradient-animation 5s ease-in-out infinite;
+  text-shadow: var(--glow-primary);
+  letter-spacing: -0.02em;
+}
+
+@keyframes diagnostic-gradient-animation {
+  0%, 100% { background-position: 0% 50%; }
+  25% { background-position: 100% 50%; }
+  50% { background-position: 50% 100%; }
+  75% { background-position: 0% 50%; }
+}
+
+.diagnostic-page .diagnostic-header-content p {
+  font-size: 1.4rem;
+  color: var(--text-secondary);
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.6;
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+/* Content Container - Diagnostic Page Only */
+.diagnostic-page .diagnostic-page-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Features Grid - Compact Version - Diagnostic Page Only */
+.diagnostic-page .features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.diagnostic-page .feature-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 20px 15px;
+  text-align: center;
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.diagnostic-page .feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--gradient-primary);
+  opacity: 0;
+  transition: var(--transition-smooth);
+  z-index: -1;
+}
+
+.diagnostic-page .feature-card::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  transition: var(--transition-smooth);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.diagnostic-page .feature-card:hover::before {
+  opacity: 0.1;
+}
+
+.diagnostic-page .feature-card:hover::after {
+  width: 300px;
+  height: 300px;
+}
+
+.diagnostic-page .feature-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: var(--web3-primary);
+  box-shadow: 
+    0 8px 25px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(0, 245, 255, 0.2);
+}
+
+.diagnostic-page .feature-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(0, 245, 255, 0.3));
+  animation: diagnostic-icon-pulse 4s ease-in-out infinite;
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes diagnostic-icon-pulse {
+  0%, 100% { 
+    transform: scale(1); 
+    filter: drop-shadow(0 0 8px rgba(0, 245, 255, 0.3));
+  }
+  50% { 
+    transform: scale(1.05); 
+    filter: drop-shadow(0 0 12px rgba(0, 245, 255, 0.5));
+  }
+}
+
+.diagnostic-page .feature-card h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px 0;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  z-index: 2;
+}
+
+.diagnostic-page .feature-card p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 400;
+  position: relative;
+  z-index: 2;
+}
+
+/* Diagnostic Tabs - Expanded for Chatbot - Diagnostic Page Only */
+.diagnostic-page .diagnostic-tabs {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: var(--shadow-deep);
+  position: relative;
+  overflow: hidden;
+  min-height: 600px; /* Increased height for chatbot */
+}
+
+.diagnostic-page .diagnostic-tabs::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(0, 245, 255, 0.05) 50%, transparent 70%);
+  animation: diagnostic-tab-shimmer 6s ease-in-out infinite;
+}
+
+@keyframes diagnostic-tab-shimmer {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+}
+
+.diagnostic-page .tab-navigation {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 16px;
+  padding: 6px;
+  margin-bottom: 20px;
+  gap: 6px;
+  position: relative;
+  z-index: 2;
+}
+
+.diagnostic-page .tab-btn {
+  flex: 1;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.diagnostic-page .tab-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--gradient-primary);
+  opacity: 0;
+  transition: var(--transition-smooth);
+}
+
+.diagnostic-page .tab-btn:hover:not(.active)::before {
+  opacity: 0.1;
+}
+
+.diagnostic-page .tab-btn.active {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-neon);
+  transform: scale(1.02);
+}
+
+.diagnostic-page .tab-btn.active::before {
+  opacity: 0;
+}
+
+.diagnostic-page .tab-content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+}
+
+.diagnostic-page .chatbot-section,
+.diagnostic-page .guide-section {
+  margin: 10px 0;
+  height: calc(100% - 20px);
+  min-height: 500px; /* Ensure adequate height for chatbot */
+}
+
+.diagnostic-page .chatbot-section {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.diagnostic-page .chatbot-section > * {
+  width: 100%;
+  max-width: none; /* Allow chatbot to use full width */
+}
+
+/* Disclaimer - Compact Version - Diagnostic Page Only */
+.diagnostic-page .disclaimer {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 184, 0, 0.3);
+  border-radius: 16px;
+  padding: 20px 25px;
+  margin-top: 30px;
+  position: relative;
+  overflow: hidden;
+}
+
+.diagnostic-page .disclaimer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--web3-warning), var(--web3-accent), var(--web3-warning));
+  background-size: 200% 100%;
+  animation: diagnostic-warning-pulse 3s ease-in-out infinite;
+}
+
+@keyframes diagnostic-warning-pulse {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.diagnostic-page .disclaimer-content h4 {
+  color: var(--web3-warning);
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diagnostic-page .disclaimer-content p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+}
+
+.diagnostic-page .disclaimer-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive Design - Diagnostic Page Only */
+@media (max-width: 1200px) {
+  .diagnostic-page {
+    padding: 15px;
+  }
+  
+  .diagnostic-page .diagnostic-page-header {
+    padding: 40px 30px;
+  }
+  
+  .diagnostic-page .diagnostic-header-content h1 {
+    font-size: 3.2rem;
+  }
+  
+  .diagnostic-page .features-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+  }
+}
+
+@media (max-width: 768px) {
+  .diagnostic-page .diagnostic-page-header {
+    padding: 30px 20px;
+    margin-bottom: 40px;
+  }
+  
+  .diagnostic-page .diagnostic-header-content h1 {
+    font-size: 2.8rem;
+  }
+  
+  .diagnostic-page .diagnostic-header-content p {
+    font-size: 1.2rem;
+  }
+  
+  .diagnostic-page .features-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    margin-bottom: 50px;
+  }
+  
+  .diagnostic-page .feature-card {
+    padding: 30px 25px;
+  }
+  
+  .diagnostic-page .diagnostic-tabs {
+    padding: 30px 20px;
+  }
+  
+  .diagnostic-page .tab-navigation {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .diagnostic-page .tab-btn {
+    padding: 15px 20px;
+    font-size: 1rem;
+  }
+  
+  .diagnostic-page .disclaimer {
+    padding: 30px 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .diagnostic-page .diagnostic-header-content h1 {
+    font-size: 2.2rem;
+  }
+  
+  .diagnostic-page .feature-icon {
+    font-size: 3rem;
+  }
+  
+  .diagnostic-page .feature-card h3 {
+    font-size: 1.4rem;
+  }
+  
+  .diagnostic-page .feature-card p {
+    font-size: 1rem;
+  }
+}
+
+/* Advanced Animations - Diagnostic Page Only */
+@keyframes diagnostic-data-stream {
+  0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+}
+
+.diagnostic-page .data-stream {
+  position: fixed;
+  width: 2px;
+  height: 20px;
+  background: linear-gradient(to bottom, transparent, var(--web3-primary), transparent);
+  animation: diagnostic-data-stream 3s linear infinite;
+  pointer-events: none;
+}
+
+/* Accessibility & Reduced Motion - Diagnostic Page Only */
+@media (prefers-reduced-motion: reduce) {
+  .diagnostic-page * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High Contrast Mode - Diagnostic Page Only */
+@media (prefers-contrast: high) {
+  .diagnostic-page {
+    --glass-border: rgba(255, 255, 255, 0.8);
+    --text-secondary: #ffffff;
+  }
+  
+  .diagnostic-page .diagnostic-page-header,
+  .diagnostic-page .feature-card,
+  .diagnostic-page .diagnostic-tabs,
+  .diagnostic-page .disclaimer {
+    border: 2px solid var(--web3-primary);
+  }
+}

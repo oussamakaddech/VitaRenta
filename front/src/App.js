@@ -21,6 +21,7 @@ import FeedbackSystem from './components/FeedbackSystem';
 import PredictiveMaintenance from './components/PredictiveMaintenance';
 import EcoScore from './components/EcoScore';
 import ReservationList from './components/ReservationList'; // Ajout de l'import
+import DiagnosticPage from './components/DiagnosticPage';
 
 function App() {
     const [token, setToken] = useState('');
@@ -168,6 +169,14 @@ function App() {
                             element={
                                 <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
                                     <EcoScore token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/diagnostic"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+                                    <DiagnosticPage token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
                         />

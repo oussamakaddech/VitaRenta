@@ -1,0 +1,395 @@
+/* Web3 Chatbot Styles - Aligned with Main Application */
+
+/* Import main application variables */
+:root {
+    /* Web3 Color Palette */
+    --web3-primary: #3b82f6;
+    --web3-secondary: #ff0080;
+    --web3-accent: #7b00ff;
+    --web3-success: #00ff88;
+    --web3-warning: #ffaa00;
+    --web3-error: #ff3366;
+    --web3-info: #00ffff;
+    
+    /* Dark Theme Colors */
+    --dark-bg-primary: #0a0a0f;
+    --dark-bg-secondary: #151520;
+    --dark-bg-tertiary: #1a1a2e;
+    --dark-surface: #16213e;
+    --dark-surface-light: #202040;
+    
+    /* Text Colors */
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3cc;
+    --text-muted: #666680;
+    --text-accent: var(--web3-primary);
+    
+    /* Glassmorphism */
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-backdrop: blur(20px);
+    
+    /* Web3 Gradients */
+    --gradient-primary: linear-gradient(135deg, var(--web3-primary), var(--web3-accent));
+    --gradient-secondary: linear-gradient(135deg, var(--web3-secondary), var(--web3-accent));
+    --gradient-cyber: linear-gradient(45deg, #00d4ff 0%, #7b00ff 50%, #ff0080 100%);
+}
+
+/* Main chatbot container with same background as main app */
+.web3-chatbot {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: var(--dark-bg-primary);
+    background-image: 
+        radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(123, 0, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(255, 0, 128, 0.05) 0%, transparent 50%);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Animated background grid - same as main app */
+.web3-chatbot::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        linear-gradient(45deg, transparent 49%, rgba(59, 130, 246, 0.01) 50%, transparent 51%),
+        linear-gradient(-45deg, transparent 49%, rgba(123, 0, 255, 0.01) 50%, transparent 51%);
+    background-size: 50px 50px;
+    animation: cyber-grid 20s linear infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes cyber-grid {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(50px, 50px); }
+}
+
+/* Container with glassmorphism effect */
+.web3-container {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-backdrop);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    margin: 20px;
+    padding: 30px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Header styles */
+.web3-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px 0;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.web3-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: var(--gradient-cyber);
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientShift 3s ease-in-out infinite;
+    margin-bottom: 10px;
+    text-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+}
+
+@keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+.web3-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+/* Chat area */
+.web3-chat-area {
+    height: 400px;
+    overflow-y: auto;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 15px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.web3-chat-area::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 48%, rgba(59, 130, 246, 0.1) 49%, rgba(59, 130, 246, 0.1) 51%, transparent 52%);
+    background-size: 20px 20px;
+    animation: scanlines 2s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes scanlines {
+    0% { transform: translateY(-20px); }
+    100% { transform: translateY(20px); }
+}
+
+/* Custom scrollbar */
+.web3-chat-area::-webkit-scrollbar {
+    width: 8px;
+}
+
+.web3-chat-area::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+}
+
+.web3-chat-area::-webkit-scrollbar-thumb {
+    background: var(--gradient-primary);
+    border-radius: 10px;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+/* Message styles */
+.web3-message {
+    margin-bottom: 15px;
+    padding: 15px 20px;
+    border-radius: 15px;
+    position: relative;
+    animation: messageSlide 0.3s ease-out;
+    backdrop-filter: blur(5px);
+}
+
+@keyframes messageSlide {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.web3-message-user {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(0, 150, 255, 0.2));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    margin-left: 50px;
+    text-align: right;
+}
+
+.web3-message-bot {
+    background: linear-gradient(135deg, rgba(123, 0, 255, 0.2), rgba(255, 0, 128, 0.2));
+    border: 1px solid rgba(123, 0, 255, 0.3);
+    margin-right: 50px;
+}
+
+.web3-message-content {
+    margin: 0;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.web3-message-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+/* Input area */
+.web3-input-area {
+    display: flex;
+    gap: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 15px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.web3-input {
+    flex: 1;
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 25px;
+    color: var(--text-primary);
+    font-size: 16px;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.web3-input::placeholder {
+    color: var(--text-muted);
+}
+
+.web3-input:focus {
+    border-color: var(--web3-primary);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Buttons */
+.web3-button {
+    padding: 15px 25px;
+    border: none;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.web3-button-primary {
+    background: var(--gradient-primary);
+    color: var(--dark-bg-primary);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+}
+
+.web3-button-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.web3-button-secondary {
+    background: var(--gradient-secondary);
+    color: var(--text-primary);
+    box-shadow: 0 4px 15px rgba(255, 0, 128, 0.3);
+}
+
+.web3-button-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 0, 128, 0.4);
+}
+
+.web3-button-ghost {
+    background: transparent;
+    color: var(--web3-primary);
+    border: 2px solid var(--web3-primary);
+}
+
+.web3-button-ghost:hover {
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+/* Loading animation */
+.web3-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.web3-loader {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
+    border-top: 3px solid var(--web3-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Status indicators */
+.web3-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.web3-status-online {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--web3-success);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.web3-status-offline {
+    background: rgba(255, 51, 102, 0.2);
+    color: var(--web3-error);
+    border: 1px solid rgba(255, 51, 102, 0.3);
+}
+
+.web3-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .web3-container {
+        margin: 10px;
+        padding: 20px;
+    }
+    
+    .web3-title {
+        font-size: 2rem;
+    }
+    
+    .web3-message-user {
+        margin-left: 20px;
+    }
+    
+    .web3-message-bot {
+        margin-right: 20px;
+    }
+    
+    .web3-input-area {
+        flex-direction: column;
+    }
+    
+    .web3-button {
+        padding: 12px 20px;
+    }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .web3-container {
+        border: 2px solid var(--text-primary);
+    }
+    
+    .web3-input {
+        border: 2px solid var(--text-primary);
+    }
+    
+    .web3-button {
+        border: 2px solid currentColor;
+    }
+}

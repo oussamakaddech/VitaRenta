@@ -881,6 +881,15 @@
     transform: scale(1.1);
 }
 
+.map-btn {
+    background: var(--warning-yellow);
+}
+
+.map-btn:hover {
+    background: #d97706;
+    transform: scale(1.1);
+}
+
 .cancel-btn {
     background: var(--glass-bg);
     color: var(--white);
@@ -1356,5 +1365,107 @@
     .floating-particles,
     .sparkle {
         display: none;
+    }
+}
+
+/* Styles pour l'intégration de la carte */
+.map-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.map-container {
+    background: var(--white);
+    border-radius: 15px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    width: 90vw;
+    height: 80vh;
+    max-width: 1200px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.map-header {
+    background: var(--primary-gradient);
+    color: var(--white);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.map-header h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.map-close-btn {
+    background: transparent;
+    border: 2px solid var(--white);
+    color: var(--white);
+    padding: 0.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+}
+
+.map-close-btn:hover {
+    background: var(--white);
+    color: var(--primary-blue);
+    transform: scale(1.1);
+}
+
+.map-close-btn i {
+    font-size: 1rem;
+}
+
+/* Ajustements pour le composant AgencyMap à l'intérieur */
+.map-container .agency-map-container {
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.map-container .map-header-internal {
+    display: none; /* Cacher le header interne car on a déjà un header */
+}
+
+/* Responsive pour la carte intégrée */
+@media (max-width: 768px) {
+    .map-overlay {
+        padding: 1rem;
+    }
+    
+    .map-container {
+        width: 95vw;
+        height: 90vh;
+    }
+    
+    .map-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .map-header h3 {
+        font-size: 1.25rem;
     }
 }
