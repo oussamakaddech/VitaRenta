@@ -11,7 +11,8 @@ const AppRouter = ({ user, children }) => {
         '/location', 
         '/client-vehicules', 
         '/client-profile',
-        '/client-reservations'
+        '/client-reservations',
+        '/agencies-locator'
     ];
     
     // Routes publiques (sans sidebar)

@@ -103,6 +103,15 @@ const Sidebar = ({ token, user, onLogout }) => {
                                 Diagnostic Auto
                             </Link>
                             <Link
+                                to="/agencies-locator"
+                                className={`sidebar-link ${isActive('/agencies-locator') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Trouver nos agences"
+                            >
+                                <i className="fas fa-map-marked-alt"></i>
+                                Nos Agences
+                            </Link>
+                            <Link
                                 to="/profile"
                                 className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}
                                 onClick={handleLinkClick}
@@ -256,6 +265,16 @@ const Sidebar = ({ token, user, onLogout }) => {
                             >
                                 <i className="fas fa-cog"></i>
                                 Gérer Agences
+                            </Link>
+                            
+                            <Link
+                                to="/agencies-locator"
+                                className={`sidebar-link ${isActive('/agencies-locator') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Vue client des agences"
+                            >
+                                <i className="fas fa-map-marked-alt"></i>
+                                Vue Client Agences
                             </Link>
                             
                             <Link

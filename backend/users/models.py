@@ -150,7 +150,8 @@ class Agence(models.Model):
     description = models.TextField(blank=True, null=True)
     date_creation = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
-
+    latitude = models.FloatField(null=True, blank=True)     # <-- AJOUT
+    longitude = models.FloatField(null=True, blank=True)    # <-- AJOUT
     def clean(self):
         super().clean()
         if self.nom:

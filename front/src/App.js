@@ -22,6 +22,7 @@ import PredictiveMaintenance from './components/PredictiveMaintenance';
 import EcoScore from './components/EcoScore';
 import ReservationList from './components/ReservationList'; // Ajout de l'import
 import DiagnosticPage from './components/DiagnosticPage';
+import AgencyLocator from './components/AgencyLocator';
 
 function App() {
     const [token, setToken] = useState('');
@@ -209,6 +210,14 @@ function App() {
                             element={
                                 <ProtectedRoute token={token} user={user} allowedRoles={['admin', 'agence']}>
                                     <AgencyManagement token={token} user={user} onLogout={handleLogout} isAdmin={user?.role === 'admin'} />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/agencies-locator"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+                                    <AgencyLocator token={token} user={user} onLogout={handleLogout} />
                                 </ProtectedRoute>
                             }
                         />

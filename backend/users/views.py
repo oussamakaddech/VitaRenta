@@ -21,7 +21,7 @@ import logging
 import os
 
 from generate_eco_score_dataset import FUEL_TYPES
-from .permissions import IsAdminOrAgency 
+from .permissions import IsAdminOrAgency, IsAdminOrAgencyOrClientReadOnly
 from django.conf import settings
 from rest_framework.decorators import action
 from .models import  EcoScore, Feedback, IOTData, User, Vehicule, Agence, Reservation
@@ -488,17 +488,50 @@ class VehiculeViewSet(ModelViewSet):
 class AgenceViewSet(ModelViewSet):
     queryset = Agence.objects.all()
     serializer_class = AgenceSerializer
-    permission_classes = [IsAdminOrAgency]
+    permission_classes = [IsAdminOrAgencyOrClientReadOnly]
     authentication_classes = [JWTAuthentication]
+    
+    def get_permissions(self):
+        """
+        Override get_permissions to handle different permissions for different actions
+        """
+        if self.action in ['list', 'retrieve']:
+            # Allow anyone to view agencies
+            permission_classes = [AllowAny]
+        elif self.action == 'active_only':
+            # Allow authenticated users to see active agencies
+            permission_classes = [IsAuthenticated]
+        else:
+            # Require admin or agency role for write operations
+            permission_classes = [IsAdminOrAgency]
+        
+        return [permission() for permission in permission_classes]
     
     def get_queryset(self):
         queryset = super().get_queryset()
         params = self.request.query_params
         user = self.request.user
         
+        # If user is an agency user, restrict to their own agency
         if user.is_authenticated and user.role == 'agence' and user.agence:
             queryset = queryset.filter(id=user.agence.id)
         
+        # Handle active filter parameter
+        if params.get('active'):
+            active_param = params.get('active').lower()
+            if active_param == 'true':
+                # Due to MongoDB/djongo compatibility issues with boolean filters,
+                # we'll handle this in Python rather than at the database level
+                all_agencies = list(queryset)
+                active_agencies = [agency for agency in all_agencies if agency.active]
+                # Return a queryset-like object with the filtered results
+                return self.queryset.filter(id__in=[agency.id for agency in active_agencies])
+            elif active_param == 'false':
+                all_agencies = list(queryset)
+                inactive_agencies = [agency for agency in all_agencies if not agency.active]
+                return self.queryset.filter(id__in=[agency.id for agency in inactive_agencies])
+        
+        # Other filter parameters
         if params.get('nom'):
             queryset = queryset.filter(nom__icontains=params.get('nom'))
         if params.get('search'):
@@ -608,6 +641,33 @@ class AgenceViewSet(ModelViewSet):
             logger.error(f"Erreur lors de la récupération des statistiques pour l'agence {pk}: {str(e)}")
             return Response({
                 'error': 'Erreur lors de la récupération des statistiques'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def active_only(self, request):
+        """
+        Endpoint accessible à tous les utilisateurs authentifiés pour récupérer 
+        les agences actives. Utile pour les clients qui doivent voir les agences 
+        disponibles pour effectuer des réservations.
+        """
+        try:
+            # Due to MongoDB/djongo compatibility issues with boolean filters,
+            # we'll handle this in Python rather than at the database level
+            all_agencies = list(self.queryset.all())
+            active_agencies = [agency for agency in all_agencies if agency.active]
+            
+            serializer = self.get_serializer(active_agencies, many=True)
+            
+            logger.info(f"Liste des agences actives récupérée par {request.user.email} (rôle: {request.user.role})")
+            return Response({
+                'agences': serializer.data,
+                'count': len(active_agencies),
+                'message': 'Agences actives récupérées avec succès'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des agences actives: {str(e)}")
+            return Response({
+                'error': 'Erreur lors de la récupération des agences actives'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class IsClientOrAgence(BasePermission):

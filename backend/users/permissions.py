@@ -89,3 +89,30 @@ class IsClientOrAgencyOrAdmin(permissions.BasePermission):
                 return obj.user and obj.user.id == request.user.id
             return False
         return False
+
+class IsAdminOrAgencyOrClientReadOnly(permissions.BasePermission):
+    """
+    Allows:
+    - Admins and agency users to perform all actions on agencies.
+    - Clients to only view agencies (read-only access).
+    - Unauthenticated users to view agencies for public browsing.
+    """
+    def has_permission(self, request, view):
+        # Allow read access to anyone (including unauthenticated users)
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # For write operations, require authentication and admin/agency role
+        if not (request.user and request.user.is_authenticated):
+            return False
+        return request.user.role in ['admin', 'agence']
+
+    def has_object_permission(self, request, view, obj):
+        # Allow read access to anyone
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # For write operations, require admin/agency role
+        if not (request.user and request.user.is_authenticated):
+            return False
+        return request.user.role in ['admin', 'agence']

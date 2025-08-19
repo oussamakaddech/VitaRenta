@@ -1045,6 +1045,27 @@
     opacity: 0.8;
 }
 
+/* Style spécifique pour le bouton de carte */
+.quick-action-card[aria-label*="carte"] .quick-action-icon,
+.quick-action-card[aria-label*="Carte"] .quick-action-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.quick-action-card[aria-label*="carte"]:hover .quick-action-icon,
+.quick-action-card[aria-label*="Carte"]:hover .quick-action-icon {
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.quick-action-card[aria-label*="liste"] .quick-action-icon,
+.quick-action-card[aria-label*="Liste"] .quick-action-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.quick-action-card[aria-label*="liste"]:hover .quick-action-icon,
+.quick-action-card[aria-label*="Liste"]:hover .quick-action-icon {
+    background: linear-gradient(135deg, #d97706, #b45309);
+}
+
 /* Pagination */
 .pagination-section {
     display: flex;

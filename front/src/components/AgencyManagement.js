@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import Sidebar from './Sidebar';
+import AgencyMap from './AgencyMap';
 import './AgencyManagement.css';
 import { useLocation } from 'react-router-dom';
 
@@ -26,6 +27,8 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
     const [selectedAgency, setSelectedAgency] = useState(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [modalState, setModalState] = useState({ type: null, data: null });
+    const [showMap, setShowMap] = useState(false);
+    const [mapSelectedAgency, setMapSelectedAgency] = useState(null);
     const [stats, setStats] = useState({
         totalAgencies: 0,
         activeAgencies: 0,
@@ -296,6 +299,21 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
         resetForm();
         setModalState({ type: 'create', data: null });
     }, [resetForm]);
+    
+    // Fonctions de gestion de la carte
+    const toggleMap = useCallback(() => {
+        setShowMap(prev => !prev);
+        setMapSelectedAgency(null);
+    }, []);
+    
+    const handleMapAgencySelect = useCallback((agency) => {
+        setMapSelectedAgency(agency);
+        openDetailsModal(agency);
+    }, [openDetailsModal]);
+    
+    const closeMapSelection = useCallback(() => {
+        setMapSelectedAgency(null);
+    }, []);
     
     // Ouvrir la modal pour affecter un utilisateur à une agence
     const openAssignUserModal = useCallback((agency) => {
@@ -588,8 +606,34 @@ const AgencyManagement = ({ token, user, isAdmin, onLogout }) => {
                                     </button>
                                 </>
                             )}
+                            <button
+                                onClick={toggleMap}
+                                className="quick-action-card"
+                                disabled={loading}
+                                aria-label={showMap ? "Masquer la carte" : "Afficher la carte des agences"}
+                            >
+                                <div className="quick-action-icon">
+                                    <i className={`fas fa-${showMap ? 'list' : 'map-marker-alt'}`}></i>
+                                </div>
+                                <div className="quick-action-content">
+                                    <div className="quick-action-title">{showMap ? 'Liste' : 'Carte'}</div>
+                                    <div className="quick-action-description">
+                                        {showMap ? 'Afficher la liste des agences' : 'Voir les agences sur la carte'}
+                                    </div>
+                                </div>
+                            </button>
                         </div>
                     </div>
+                    
+                    {/* Carte des agences */}
+                    {showMap && (
+                        <AgencyMap
+                            agencies={agencies}
+                            onAgencySelect={handleMapAgencySelect}
+                            selectedAgency={mapSelectedAgency}
+                            showDemo={agencies.length === 0}
+                        />
+                    )}
                     
                     {/* Liste des agences */}
                     <div className="agencies-section">

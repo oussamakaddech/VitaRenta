@@ -17,7 +17,7 @@ User = get_user_model()
 class AgenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Agence
-        fields = ['id', 'nom', 'adresse', 'ville', 'code_postal', 'pays', 'telephone', 'email', 'site_web', 'description', 'date_creation', 'active']
+        fields = ['id', 'nom', 'adresse', 'ville', 'code_postal', 'pays', 'telephone', 'email', 'site_web', 'description', 'date_creation', 'active','latitude', 'longitude' ]
         read_only_fields = ['id', 'date_creation']
     
     def validate_nom(self, value):
