@@ -23,6 +23,11 @@ import EcoScore from './components/EcoScore';
 import ReservationList from './components/ReservationList'; // Ajout de l'import
 import DiagnosticPage from './components/DiagnosticPage';
 import AgencyLocator from './components/AgencyLocator';
+import EcoChallenges from './components/EcoChallenges';
+import PermissionsDemo from './components/Demo-PermissionsTest';
+import BackendDiagnostic from './components/BackendDiagnostic';
+import AuthDebug from './components/AuthDebug';
+import ApiTester from './components/ApiTester';
 
 function App() {
     const [token, setToken] = useState('');
@@ -174,6 +179,34 @@ function App() {
                             }
                         />
                         <Route
+                            path="/eco-challenges"
+                            element={
+                                <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
+                                    <EcoChallenges token={token} user={user} onLogout={handleLogout} />
+                                </ProtectedRoute>
+                            }
+                        />
+                        {/* Route temporaire pour tester les permissions CRUD */}
+                        <Route
+                            path="/test-permissions"
+                            element={<PermissionsDemo />}
+                        />
+                        {/* Route pour le diagnostic backend */}
+                        <Route
+                            path="/backend-diagnostic"
+                            element={<BackendDiagnostic />}
+                        />
+                        {/* Route pour debug authentification */}
+                        <Route
+                            path="/auth-debug"
+                            element={<AuthDebug />}
+                        />
+                        {/* Route pour test API */}
+                        <Route
+                            path="/api-test"
+                            element={<ApiTester token={token} user={user} />}
+                        />
+                        <Route
                             path="/diagnostic"
                             element={
                                 <ProtectedRoute token={token} user={user} allowedRoles={['client', 'agence', 'admin']}>
@@ -310,6 +343,7 @@ function App() {
                                     <Link to="/profile" aria-label="Profil">Profil</Link>
                                     <Link to="/recommendations" aria-label="Recommandations">Recommandations</Link>
                                     <Link to="/eco-score" aria-label="Score écologique">Score Écologique</Link>
+                                    <Link to="/eco-challenges" aria-label="Défis éco-responsables">Défis Éco-Responsables</Link>
                                     <Link to="/feedback" aria-label="Feedback et avis">Feedback</Link>
                                 </div>
                                 {(user?.role === 'admin' || user?.role === 'agence') && (

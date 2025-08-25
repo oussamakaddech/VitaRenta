@@ -46,6 +46,9 @@
     background-color: #ffebee;
     color: #d32f2f;
 }
+header {
+    display: none !important;
+}
 
 .vehicle-selector-empty {
     background-color: #fff8e1;

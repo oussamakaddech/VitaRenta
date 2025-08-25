@@ -6,6 +6,7 @@ import './AgentVehicleManager.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const VEHICLE_ENDPOINT = `${API_BASE_URL}/api/vehicules/`;
+const AGENCES_ENDPOINT = `${API_BASE_URL}/api/agences/`;
 
 const StatutVehicule = {
     DISPONIBLE: 'disponible',
@@ -23,7 +24,7 @@ const CAR_IMAGES = {
   bmw: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
   mercedes: 'https://images.unsplash.com/photo-1618843479313-40f1970e3868?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
   audi: 'https://images.unsplash.com/photo-1616788494707-75d33d9e4e4a?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
-  tesla: 'https://images.unsplash.com/photo-1560915479-3c9ca575e3b5?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
+  tesla: 'https://images.unsplash.com/photo-1560915479-3c0b0a0c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
   nissan: 'https://images.unsplash.com/photo-1609521005188-233b5c464c6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
   ford: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80',
   default: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=220&q=80'
@@ -92,10 +93,13 @@ const ImageFallback = ({ src, alt, marque = '', modele = '', className = '' }) =
 const VehicleManager = ({ token, user, onLogout }) => {
     const navigate = useNavigate();
     const [vehicles, setVehicles] = useState([]);
+    const [agences, setAgences] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [loadingAgences, setLoadingAgences] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedAgenceFilter, setSelectedAgenceFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(8);
     const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -125,7 +129,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
         date_derniere_maintenance: '',
         prochaine_maintenance: '',
         image: null,
-        agence_id: ''  // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
+        agence_id: ''
     });
     
     // Fonction pour obtenir l'URL de l'image avec fallback
@@ -149,6 +153,32 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const verifierDisponibilite = (vehicle) => {
         return vehicle.statut === StatutVehicule.DISPONIBLE;
     };
+    
+    // Récupérer la liste des agences
+    const fetchAgences = useCallback(async () => {
+        if (!token) return;
+        
+        setLoadingAgences(true);
+        try {
+            const response = await axios.get(AGENCES_ENDPOINT, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 10000
+            });
+            
+            const data = Array.isArray(response.data.results) 
+                ? response.data.results
+                : Array.isArray(response.data)
+                ? response.data
+                : [];
+            
+            setAgences(data);
+        } catch (err) {
+            console.error('Fetch agencies error:', err.response || err);
+            setError('Erreur lors du chargement des agences.');
+        } finally {
+            setLoadingAgences(false);
+        }
+    }, [token]);
     
     const fetchVehicles = useCallback(async () => {
         if (!token || !user) {
@@ -224,7 +254,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
             return "La date de dernière maintenance doit être valide";
         if (data.prochaine_maintenance && !isValidDate(data.prochaine_maintenance))
             return "La date de prochaine maintenance doit être valide";
-        // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
         return '';
     };
     
@@ -415,7 +444,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             date_derniere_maintenance: '',
             prochaine_maintenance: '',
             image: null,
-            agence_id: ''  // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
+            agence_id: ''
         });
         setSelectedVehicle(null);
         setIsEditMode(false);
@@ -451,7 +480,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
             date_derniere_maintenance: vehicle.date_derniere_maintenance || '',
             prochaine_maintenance: vehicle.prochaine_maintenance || '',
             image: null,
-            agence_id: vehicle.agence_id || ''  // Les agences peuvent maintenant gérer des véhicules sans être limitées à leur agence
+            agence_id: vehicle.agence ? vehicle.agence.id : ''
         });
         setShowModal(true);
     };
@@ -469,6 +498,11 @@ const VehicleManager = ({ token, user, onLogout }) => {
     const handleSearchChange = (e) => {
         const sanitizedValue = e.target.value.replace(/[<>]/g, '');
         setSearchTerm(sanitizedValue);
+        setCurrentPage(1);
+    };
+    
+    const handleAgenceFilterChange = (e) => {
+        setSelectedAgenceFilter(e.target.value);
         setCurrentPage(1);
     };
     
@@ -494,7 +528,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
             return;
         }
         fetchVehicles();
-    }, [fetchVehicles, token, user, navigate]);
+        fetchAgences();
+    }, [fetchVehicles, fetchAgences, token, user, navigate]);
     
     useEffect(() => {
         if (error) {
@@ -522,7 +557,8 @@ const VehicleManager = ({ token, user, onLogout }) => {
             (vehicle.marque || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (vehicle.modele || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (vehicle.prix_par_jour || '').toString().toLowerCase().includes(searchTerm.toLowerCase())
-        )
+        ) &&
+        (selectedAgenceFilter ? vehicle.agence && vehicle.agence.id === selectedAgenceFilter : true)
     );
     
     const indexOfLastVehicle = currentPage * itemsPerPage;
@@ -672,16 +708,38 @@ const VehicleManager = ({ token, user, onLogout }) => {
                             <i className="fas fa-plus"></i> Nouveau Véhicule
                         </button>
                     </div>
-                    <div className="search-bar">
-                        <input
-                            type="text"
-                            className="search-input"
-                            placeholder="Rechercher par marque, modèle, prix..."
-                            value={searchTerm}
-                            onChange={handleSearchChange}
-                            aria-label="Rechercher des véhicules"
-                        />
-                        <i className="fas fa-search search-icon"></i>
+                    
+                    <div className="filter-container">
+                        <div className="filter-group">
+                            <label htmlFor="agence-filter">Filtrer par agence:</label>
+                            <select
+                                id="agence-filter"
+                                value={selectedAgenceFilter}
+                                onChange={handleAgenceFilterChange}
+                                className="filter-select"
+                                disabled={loadingAgences}
+                            >
+                                <option value="">Toutes les agences</option>
+                                {agences.map(agence => (
+                                    <option key={agence.id} value={agence.id}>
+                                        {agence.nom}
+                                    </option>
+                                ))}
+                            </select>
+                            {loadingAgences && <span className="loading-spinner-small"></span>}
+                        </div>
+                        
+                        <div className="search-bar">
+                            <input
+                                type="text"
+                                className="search-input"
+                                placeholder="Rechercher par marque, modèle, prix..."
+                                value={searchTerm}
+                                onChange={handleSearchChange}
+                                aria-label="Rechercher des véhicules"
+                            />
+                            <i className="fas fa-search search-icon"></i>
+                        </div>
                     </div>
                 </div>
                 
@@ -695,12 +753,12 @@ const VehicleManager = ({ token, user, onLogout }) => {
                         <i className="fas fa-car empty-icon"></i>
                         <h4>Aucun véhicule trouvé</h4>
                         <p>
-                            {searchTerm
+                            {searchTerm || selectedAgenceFilter
                                 ? "Aucun véhicule ne correspond à vos critères de recherche."
                                 : "Aucun véhicule n'a été chargé. Ajoutez un nouveau véhicule."
                             }
                         </p>
-                        {!searchTerm && (
+                        {!searchTerm && !selectedAgenceFilter && (
                             <button onClick={openCreateForm} className="add-first-vehicle-btn" aria-label="Ajouter le premier véhicule">
                                 <i className="fas fa-plus"></i> Ajouter le premier véhicule
                             </button>
@@ -717,6 +775,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                             <th>Marque</th>
                                             <th>Modèle</th>
                                             <th>Prix</th>
+                                            <th>Agence</th>
                                             <th>Statut</th>
                                             <th>Score Écologique</th>
                                             <th>Actions</th>
@@ -737,6 +796,7 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                                 <td>{vehicle.marque}</td>
                                                 <td>{vehicle.modele}</td>
                                                 <td className="vehicle-price">{vehicle.prix_par_jour} €</td>
+                                                <td>{vehicle.agence ? vehicle.agence.nom : 'Non assignée'}</td>
                                                 <td>
                                                     <span className={`status-badge status-${vehicle.statut}`}>
                                                         {vehicle.statut}
@@ -1064,16 +1124,27 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                         />
                                     </div>
                                     <div className="form-group">
-                                        <label htmlFor="agence_id">ID de l'Agence</label>
-                                        <input
-                                            type="text"
-                                            id="agence_id"
-                                            name="agence_id"
-                                            value={formData.agence_id}
-                                            onChange={handleFormChange}
-                                            className="form-input"
-                                            placeholder="Ex: 123"
-                                        />
+                                        <label htmlFor="agence_id">Agence</label>
+                                        {loadingAgences ? (
+                                            <select className="form-input" disabled>
+                                                <option>Chargement des agences...</option>
+                                            </select>
+                                        ) : (
+                                            <select
+                                                id="agence_id"
+                                                name="agence_id"
+                                                value={formData.agence_id}
+                                                onChange={handleFormChange}
+                                                className="form-input"
+                                            >
+                                                <option value="">Sélectionner une agence</option>
+                                                {agences.map(agence => (
+                                                    <option key={agence.id} value={agence.id}>
+                                                        {agence.nom}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
                                 </div>
                                 {error && (
@@ -1174,6 +1245,12 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                         <span className="detail-value">{selectedVehicle.localisation || 'Non spécifié'}</span>
                                     </div>
                                     <div className="vehicle-detail-item">
+                                        <span className="detail-label">Agence:</span>
+                                        <span className="detail-value">
+                                            {selectedVehicle.agence ? selectedVehicle.agence.nom : 'Non assignée'}
+                                        </span>
+                                    </div>
+                                    <div className="vehicle-detail-item">
                                         <span className="detail-label">Statut:</span>
                                         <span className={`status-badge status-${selectedVehicle.statut}`}>{selectedVehicle.statut}</span>
                                     </div>
@@ -1184,10 +1261,6 @@ const VehicleManager = ({ token, user, onLogout }) => {
                                     <div className="vehicle-detail-item">
                                         <span className="detail-label">Prochaine maintenance:</span>
                                         <span className="detail-value">{selectedVehicle.prochaine_maintenance || 'Non spécifié'}</span>
-                                    </div>
-                                    <div className="vehicle-detail-item">
-                                        <span className="detail-label">Agence ID:</span>
-                                        <span className="detail-value">{selectedVehicle.agence_id || 'Non spécifié'}</span>
                                     </div>
                                     <div className="vehicle-detail-item">
                                         <span className="detail-label">Score écologique:</span>

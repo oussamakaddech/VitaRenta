@@ -1031,3 +1031,6 @@ body {
     font-size: var(--font-sm);
   }
 }
+header {
+    display: none !important;
+}

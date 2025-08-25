@@ -48,6 +48,9 @@
 * {
     box-sizing: border-box;
 }
+header {
+    display: none !important;
+}
 
 /* ===== CONTAINER PRINCIPAL DESKTOP ===== */
 .login-container-desktop {

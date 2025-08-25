@@ -358,3 +358,6 @@
     transform: translateY(0);
   }
 }
+header {
+    display: none !important;
+}

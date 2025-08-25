@@ -390,6 +390,9 @@ body, .maintenance-container, .card, .data-status, .vehicle-selector {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+header {
+    display: none !important;
+}
 
 .chart-section {
     background-color: rgb(72, 46, 243);

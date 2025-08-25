@@ -46,7 +46,7 @@ class TooManyAttemptsMiddleware:
 
                         if email:
                             try:
-                                user = User.objects.get(email=not email)
+                                user = User.objects.get(email=email)  # Corrigé: était "email=not email"
                                 # Check user-specific lockout
                                 if (hasattr(user, 'login_attempts') and
                                         hasattr(user, 'last_login_attempt') and

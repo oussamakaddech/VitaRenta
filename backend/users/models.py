@@ -417,13 +417,466 @@ class MaintenancePrediction(models.Model):
 
 from django.db import models
 from django.contrib.auth import get_user_model
-from djongo import models as djongo_models
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from decimal import Decimal
+import uuid
+from datetime import timedelta
 
 User = get_user_model()
 
+class EcoChallengeType(models.TextChoices):
+    ECO_DRIVING = 'eco_driving', 'Conduite Écologique'
+    CO2_REDUCTION = 'co2_reduction', 'Réduction CO₂'
+    FUEL_EFFICIENCY = 'fuel_efficiency', 'Efficacité Énergétique'
+    ECO_SCORE = 'eco_score', 'Score Écologique'
+    LOW_EMISSION = 'low_emission', 'Faibles émissions'
+    DISTANCE_REDUCTION = 'distance_reduction', 'Réduction de distance'
+    ALTERNATIVE_TRANSPORT = 'alternative_transport', 'Transport alternatif'
+
+class ChallengeDifficulty(models.TextChoices):
+    BEGINNER = 'beginner', 'Débutant'
+    INTERMEDIATE = 'intermediate', 'Intermédiaire'
+    ADVANCED = 'advanced', 'Avancé'
+    EXPERT = 'expert', 'Expert'
+
+class ChallengeStatus(models.TextChoices):
+    ACTIVE = 'active', 'Actif'
+    COMPLETED = 'completed', 'Terminé'
+    ABANDONED = 'abandoned', 'Abandonné'
+    EXPIRED = 'expired', 'Expiré'
+
+class RewardType(models.TextChoices):
+    POINTS = 'points', 'Points'
+    BADGE = 'badge', 'Badge'
+    DISCOUNT = 'discount', 'Réduction'
+    FREE_RENTAL = 'free_rental', 'Location gratuite'
+    CERTIFICATE = 'certificate', 'Certificat'
+    ECO_BONUS = 'eco_bonus', 'Bonus écologique'
+
+class EcoChallenge(models.Model):
+    """Modèle pour les défis éco-responsables"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    type = models.CharField(max_length=30, choices=EcoChallengeType.choices)
+    title = models.CharField(max_length=200, verbose_name="Titre")
+    description = models.TextField(verbose_name="Description")
+    
+    # Objectif et mesure
+    target_value = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        validators=[MinValueValidator(0)],
+        verbose_name="Valeur objectif"
+    )
+    unit = models.CharField(max_length=50, verbose_name="Unité de mesure")
+    
+    # Difficulté et durée
+    difficulty = models.CharField(
+        max_length=20, 
+        choices=ChallengeDifficulty.choices,
+        default=ChallengeDifficulty.BEGINNER
+    )
+    duration_days = models.PositiveIntegerField(
+        default=14,
+        validators=[MinValueValidator(1), MaxValueValidator(365)],
+        verbose_name="Durée en jours"
+    )
+    
+    # Récompenses
+    reward_points = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Points de récompense"
+    )
+    reward_credit_euros = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(0)],
+        verbose_name="Crédit en euros"
+    )
+    reward_badge = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Badge de récompense"
+    )
+    
+    # Métadonnées
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
+    featured = models.BooleanField(default=False, verbose_name="En vedette")
+    max_participants = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Nombre max de participants"
+    )
+    auto_approve_participants = models.BooleanField(default=True)
+    
+    # Dates de validité
+    valid_from = models.DateTimeField(default=timezone.now)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    
+    # Métadonnées avancées
+    created_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='created_challenges',
+        verbose_name="Créé par"
+    )
+    
+    category = models.CharField(
+        max_length=50,
+        choices=[
+            ('environmental', 'Environnemental'),
+            ('efficiency', 'Efficacité'),
+            ('innovation', 'Innovation'),
+            ('community', 'Communauté'),
+        ],
+        default='environmental'
+    )
+    
+    priority = models.CharField(
+        max_length=20,
+        choices=[
+            ('low', 'Faible'),
+            ('medium', 'Moyenne'),
+            ('high', 'Haute'),
+            ('critical', 'Critique'),
+        ],
+        default='medium'
+    )
+    
+    tags = models.JSONField(default=list, blank=True)
+    requirements = models.JSONField(default=dict, blank=True)
+    success_criteria = models.JSONField(default=dict, blank=True)
+    
+    # Gamification
+    bonus_multiplier = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=1.00
+    )
+    seasonal_bonus = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.00
+    )
+    
+    # Impact environnemental
+    total_impact_co2 = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0
+    )
+    estimated_completion_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=50.00
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Défi Éco-Responsable"
+        verbose_name_plural = "Défis Éco-Responsables"
+        ordering = ['-featured', '-created_at']
+        indexes = [
+            models.Index(fields=['type', 'difficulty']),
+            models.Index(fields=['is_active', 'featured']),
+            models.Index(fields=['created_by']),
+            models.Index(fields=['category', 'priority']),
+        ]
+    
+    def __str__(self):
+        return f"{self.title} ({self.get_type_display()})"
+    
+    @property
+    def is_available(self):
+        """Vérifie si le défi est disponible"""
+        now = timezone.now()
+        if not self.is_active:
+            return False
+        if self.valid_until and now > self.valid_until:
+            return False
+        if self.max_participants:
+            current_participants = self.user_challenges.filter(
+                status__in=[ChallengeStatus.ACTIVE, ChallengeStatus.COMPLETED]
+            ).count()
+            if current_participants >= self.max_participants:
+                return False
+        return True
+    
+    @property
+    def completion_rate_actual(self):
+        """Taux de completion réel"""
+        total_participants = self.user_challenges.count()
+        if total_participants == 0:
+            return 0
+        completed = self.user_challenges.filter(status=ChallengeStatus.COMPLETED).count()
+        return (completed / total_participants) * 100
+    
+    @property
+    def average_progress(self):
+        """Progression moyenne des participants"""
+        from django.db.models import Avg
+        participants = self.user_challenges.filter(status=ChallengeStatus.ACTIVE)
+        if not participants.exists():
+            return 0
+        return participants.aggregate(avg=Avg('progress'))['avg'] or 0
+    
+    def get_participant_stats(self):
+        """Statistiques détaillées des participants"""
+        return {
+            'total': self.user_challenges.count(),
+            'active': self.user_challenges.filter(status=ChallengeStatus.ACTIVE).count(),
+            'completed': self.user_challenges.filter(status=ChallengeStatus.COMPLETED).count(),
+            'abandoned': self.user_challenges.filter(status=ChallengeStatus.ABANDONED).count(),
+            'completion_rate': self.completion_rate_actual,
+            'average_progress': float(self.average_progress),
+        }
+
+class UserEcoChallenge(models.Model):
+    """Modèle pour les défis acceptés par les utilisateurs"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE,
+        related_name='eco_challenges'
+    )
+    challenge = models.ForeignKey(
+        EcoChallenge,
+        on_delete=models.CASCADE,
+        related_name='user_challenges'
+    )
+    
+    # Statut et progression
+    status = models.CharField(
+        max_length=20,
+        choices=ChallengeStatus.choices,
+        default=ChallengeStatus.ACTIVE
+    )
+    progress = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(0)]
+    )
+    
+    # Dates importantes
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    deadline = models.DateTimeField(verbose_name="Date limite", null=True, blank=True)
+    
+    # Métadonnées
+    reward_claimed = models.BooleanField(default=False)
+    final_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    
+    class Meta:
+        verbose_name = "Défi Utilisateur"
+        verbose_name_plural = "Défis Utilisateur"
+        unique_together = ('user', 'challenge')
+        ordering = ['-started_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.challenge.title}"
+    
+    @property
+    def progress_percentage(self):
+        """Calcule le pourcentage de progression"""
+        if self.challenge.target_value == 0:
+            return 0
+        return min(float(self.progress / self.challenge.target_value) * 100, 100)
+    
+    @property
+    def days_remaining(self):
+        """Calcule les jours restants"""
+        if self.status != ChallengeStatus.ACTIVE or not self.deadline:
+            return 0
+        now = timezone.now()
+        if now >= self.deadline:
+            return 0
+        return (self.deadline - now).days
+    
+    @property
+    def is_completed(self):
+        """Vérifie si le défi est terminé avec succès"""
+        return self.progress >= self.challenge.target_value
+    
+    @property
+    def is_expired(self):
+        """Vérifie si le défi a expiré"""
+        if not self.deadline:
+            return False
+        return timezone.now() >= self.deadline and self.status == ChallengeStatus.ACTIVE
+    
+    def save(self, *args, **kwargs):
+        # Auto-calcul de la deadline si pas définie
+        if not self.deadline and self.challenge:
+            if not self.started_at:
+                self.started_at = timezone.now()
+            self.deadline = self.started_at + timedelta(days=self.challenge.duration_days)
+        
+        # Auto-completion si objectif atteint
+        if self.is_completed and self.status == ChallengeStatus.ACTIVE:
+            self.status = ChallengeStatus.COMPLETED
+            self.completed_at = timezone.now()
+        
+        # Auto-expiration si deadline dépassée
+        if self.is_expired:
+            self.status = ChallengeStatus.EXPIRED
+        
+        super().save(*args, **kwargs)
+
+class EcoChallengeProgress(models.Model):
+    """Modèle pour tracer la progression des défis"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_challenge = models.ForeignKey(
+        UserEcoChallenge,
+        on_delete=models.CASCADE,
+        related_name='progress_history'
+    )
+    
+    # Données de progression
+    value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)]
+    )
+    eco_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    co2_saved = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)]
+    )
+    energy_consumption = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)]
+    )
+    distance_km = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)]
+    )
+    
+    # Source des données
+    vehicle_id = models.UUIDField(null=True, blank=True)
+    reservation_id = models.UUIDField(null=True, blank=True)
+    
+    # Timestamp
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Progression de Défi"
+        verbose_name_plural = "Progressions de Défis"
+        ordering = ['-recorded_at']
+    
+    def __str__(self):
+        return f"{self.user_challenge} - {self.value} ({self.recorded_at.date()})"
+
+class EcoChallengeReward(models.Model):
+    """Modèle pour tracer les récompenses attribuées"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='eco_rewards'
+    )
+    user_challenge = models.ForeignKey(
+        UserEcoChallenge,
+        on_delete=models.CASCADE,
+        related_name='rewards',
+        null=True,
+        blank=True
+    )
+    challenge = models.ForeignKey(
+        EcoChallenge,
+        on_delete=models.CASCADE,
+        related_name='rewards',
+        null=True,
+        blank=True
+    )
+    
+    # Informations de la récompense
+    title = models.CharField(max_length=200, default="Récompense")
+    description = models.TextField(blank=True, null=True)
+    reward_type = models.CharField(
+        max_length=20, 
+        choices=RewardType.choices,
+        default=RewardType.POINTS
+    )
+    
+    # Valeurs des récompenses
+    points = models.PositiveIntegerField(default=0)
+    points_awarded = models.PositiveIntegerField(default=0)  # Compatibilité
+    credit_awarded = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(0)]
+    )
+    badge_awarded = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Statut de réclamation
+    claimed = models.BooleanField(default=False)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Métadonnées
+    awarded_at = models.DateTimeField(auto_now_add=True)
+    awarded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rewards_awarded'
+    )
+    applied_to_account = models.BooleanField(default=False)
+    
+    class Meta:
+        verbose_name = "Récompense de Défi"
+        verbose_name_plural = "Récompenses de Défis"
+        ordering = ['-awarded_at']
+    
+    def save(self, *args, **kwargs):
+        # Synchroniser points avec points_awarded pour compatibilité
+        if self.points and not self.points_awarded:
+            self.points_awarded = self.points
+        elif self.points_awarded and not self.points:
+            self.points = self.points_awarded
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.title} - {self.user.nom or self.user.username} ({self.points}pts)"
+
+
 class Feedback(models.Model):
     # Utiliser ObjectIdField pour MongoDB avec Djongo
-    _id = djongo_models.ObjectIdField(primary_key=True)
+    try:
+        from djongo import models as djongo_models
+        _id = djongo_models.ObjectIdField(primary_key=True)
+    except ImportError:
+        id = models.AutoField(primary_key=True)
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedback')
     rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])

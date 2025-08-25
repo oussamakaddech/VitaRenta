@@ -62,6 +62,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.BearerTokenMiddleware",
+    "core.djongo_middleware.DjongoConnectionMiddleware",  # Nouveau middleware MongoDB
     
 ]
 
@@ -113,34 +114,54 @@ else:
     MONGO_USER = os.getenv("MONGO_USER", "")
     MONGO_PASSWORD = os.getenv("MONGO_PASSWORD", "")
 
+    # Configuration optimisée pour éviter les problèmes de connexion MongoDB
+    CONNECTION_POOL_CONFIG = {
+        "maxPoolSize": int(os.getenv("MONGO_MAX_POOL_SIZE", "50")),
+        "minPoolSize": int(os.getenv("MONGO_MIN_POOL_SIZE", "5")),
+        "maxIdleTimeMS": int(os.getenv("MONGO_MAX_IDLE_TIME", "30000")),
+        "waitQueueTimeoutMS": int(os.getenv("MONGO_WAIT_QUEUE_TIMEOUT", "5000")),
+        "serverSelectionTimeoutMS": int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT", "5000")),
+        "connectTimeoutMS": int(os.getenv("MONGO_CONNECT_TIMEOUT", "5000")),
+        "socketTimeoutMS": int(os.getenv("MONGO_SOCKET_TIMEOUT", "5000")),
+        "retryWrites": True,
+        "retryReads": True,
+        "w": "majority",
+        # Configuration spécifique pour éviter les déconnexions
+        "heartbeatFrequencyMS": 10000,
+        "serverSelectionTimeoutMS": 30000,
+    }
+
     if MONGO_USER and MONGO_PASSWORD:
+        AUTH_CONFIG = {
+            "username": MONGO_USER,
+            "password": MONGO_PASSWORD,
+            "authSource": os.getenv("MONGO_AUTH_SOURCE", "admin"),
+            "authMechanism": os.getenv("MONGO_AUTH_MECHANISM", "SCRAM-SHA-1"),
+        }
+        CLIENT_CONFIG = {
+            "host": MONGO_URI,
+            **AUTH_CONFIG,
+            **CONNECTION_POOL_CONFIG
+        }
         DATABASES = {
             "default": {
                 "ENGINE": "djongo",
                 "NAME": MONGO_DB,
-                "CLIENT": {
-                    "host": MONGO_URI,
-                    "username": MONGO_USER,
-                    "password": MONGO_PASSWORD,
-                    "authSource": os.getenv("MONGO_AUTH_SOURCE", "admin"),
-                    "authMechanism": os.getenv("MONGO_AUTH_MECHANISM", "SCRAM-SHA-1"),
-                    "retryWrites": True,
-                    "w": "majority",
-                },
+                "CLIENT": CLIENT_CONFIG,
                 "ENFORCE_SCHEMA": False,
             }
         }
         print(f"🔄 MongoDB avec auth: {MONGO_HOST}:{MONGO_PORT}/{MONGO_DB}")
     else:
+        CLIENT_CONFIG = {
+            "host": MONGO_URI,
+            **CONNECTION_POOL_CONFIG
+        }
         DATABASES = {
             "default": {
                 "ENGINE": "djongo",
                 "NAME": MONGO_DB,
-                "CLIENT": {
-                    "host": MONGO_URI,
-                    "retryWrites": True,
-                    "w": "majority",
-                },
+                "CLIENT": CLIENT_CONFIG,
                 "ENFORCE_SCHEMA": False,
             }
         }
@@ -228,6 +249,11 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
+        # Formatter sans emojis pour la console Windows
+        "simple": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
+        },
     },
     "handlers": {
         "file": {
@@ -235,23 +261,41 @@ LOGGING = {
             "class": "logging.FileHandler",
             "filename": LOGS_DIR / "vitarenta.log",
             "formatter": "verbose",
+            "encoding": "utf-8",  # ✅ Encodage UTF-8 pour le fichier
         },
         "console": {
             "level": os.getenv("LOG_LEVEL", "DEBUG"),
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "simple",
+            "stream": "ext://sys.stdout",  # Force l'utilisation de stdout
+        },
+        # Handler spécial pour erreurs Unicode
+        "safe_console": {
+            "level": "ERROR",
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
         },
     },
     "loggers": {
         "": {
-            "handlers": ["file", "console"],
+            "handlers": ["file", "safe_console"],
             "level": os.getenv("LOG_LEVEL", "INFO"),
-            "propagate": True,
+            "propagate": False,
         },
         "django": {
-            "handlers": ["file", "console"],
+            "handlers": ["file", "safe_console"],
             "level": os.getenv("LOG_LEVEL", "INFO"),
-            "propagate": True,
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["file"],  # Pas de console pour éviter erreurs Unicode
+            "level": "INFO",
+            "propagate": False,
+        },
+        "users.views": {
+            "handlers": ["file"],  # Nos logs avec emojis vont que dans le fichier
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }
@@ -316,5 +360,24 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Paris'
+
+# Configuration pour les tâches périodiques (Celery Beat)
+# Disabled temporarily until celery is installed
+# from celery.schedules import crontab
+
+# CELERY_BEAT_SCHEDULE = {
+#     'check-expired-challenges': {
+#         'task': 'users.tasks.check_expired_challenges',
+#         'schedule': crontab(minute=0, hour='*/1'),  # Chaque heure
+#     },
+#     'update-challenge-progress': {
+#         'task': 'users.tasks.update_challenges_from_eco_score',
+#         'schedule': crontab(minute='*/30'),  # Toutes les 30 minutes
+#     },
+#     'process-challenge-rewards': {
+#         'task': 'users.tasks.process_challenge_rewards',
+#         'schedule': crontab(minute=0, hour=2),  # Tous les jours à 2h du matin
+#     },
+# }
 # URL du frontend pour la réinitialisation du mot de passe
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')

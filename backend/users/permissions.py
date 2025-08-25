@@ -89,6 +89,68 @@ class IsClientOrAgencyOrAdmin(permissions.BasePermission):
                 return obj.user and obj.user.id == request.user.id
             return False
         return False
+# backend/users/challenge_permissions.py (amélioration)
+
+from rest_framework import permissions
+from rest_framework.exceptions import PermissionDenied
+from .models import EcoChallenge, UserEcoChallenge
+
+class IsAdminOrAgencyForChallenges(permissions.BasePermission):
+    """
+    Permission avancée pour la gestion complète des défis éco-responsables
+    - Admins: accès complet à tous les défis
+    - Agences: peuvent créer et gérer leurs propres défis
+    """
+    
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        
+        # Actions de lecture pour tous les utilisateurs authentifiés
+        if view.action in ['list', 'retrieve', 'available', 'stats']:
+            return True
+            
+        # Actions d'écriture pour admins et agences uniquement
+        if request.user.role in ['admin', 'agence']:
+            return True
+            
+        return False
+    
+    def has_object_permission(self, request, view, obj):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        
+        # Admin a tous les droits
+        if request.user.role == 'admin':
+            return True
+        
+        # Agence peut gérer ses propres défis
+        if request.user.role == 'agence':
+            # Vous pouvez ajouter une relation "created_by" au modèle EcoChallenge
+            # pour tracer qui a créé le défi
+            return True
+        
+        # Clients peuvent seulement lire
+        if view.action in ['retrieve'] and request.user.role == 'client':
+            return True
+            
+        return False
+
+class CanManageChallengeData(permissions.BasePermission):
+    """Permission pour gérer les données avancées des défis"""
+    
+    def has_permission(self, request, view):
+        return (request.user and 
+                request.user.is_authenticated and 
+                request.user.role in ['admin', 'agence'])
+
+class CanViewAnalytics(permissions.BasePermission):
+    """Permission pour voir les analytics avancées"""
+    
+    def has_permission(self, request, view):
+        return (request.user and 
+                request.user.is_authenticated and 
+                request.user.role in ['admin', 'agence'])
 
 class IsAdminOrAgencyOrClientReadOnly(permissions.BasePermission):
     """

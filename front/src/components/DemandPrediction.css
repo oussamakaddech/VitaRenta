@@ -38,6 +38,9 @@
     --web3-purple: #3b82f6;
     --web3-green: #3b82f6;
 }
+header {
+    display: none !important;
+}
 
 /* Container principal de la prévision de demande */
 .demand-forecast-main-container {
@@ -93,7 +96,7 @@
         transform: translateY(-100vh) rotate(360deg);
         opacity: 0;
     }
-}
+}  
 
 @keyframes demandForecastSparkle {
     0% {

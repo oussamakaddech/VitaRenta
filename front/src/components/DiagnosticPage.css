@@ -623,3 +623,6 @@
     border: 2px solid var(--web3-primary);
   }
 }
+header {
+    display: none !important;
+}

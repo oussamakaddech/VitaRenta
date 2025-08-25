@@ -711,3 +711,6 @@ textarea:focus {
         font-size: 0.8rem;
     }
 }
+header {
+    display: none !important;
+}

@@ -11,8 +11,11 @@ from .views import (
     AssignUserToAgencyView,  EcoScoreViewSet, FeedbackViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
     UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView,
-    MaintenancePredictionViewSet
+    MaintenancePredictionViewSet, EcoChallengeViewSet, UserEcoChallengeViewSet, 
+    EcoChallengeProgressViewSet, EcoChallengeRewardViewSet
 )
+from .test_views import test_simple_view, active_challenges_simple
+from .mongo_views import simple_mongo_test, active_challenges_mongo
 
 # Router configuration
 router = DefaultRouter()
@@ -24,6 +27,10 @@ router.register(r'iot-data', IOTDataViewSet)
 router.register(r'eco-score', EcoScoreViewSet)
 router.register(r'maintenance-prediction', MaintenancePredictionViewSet)
 router.register(r'feedback', FeedbackViewSet)
+router.register(r'eco-challenges', EcoChallengeViewSet, basename='eco-challenges')
+router.register(r'user-eco-challenges', UserEcoChallengeViewSet, basename='user-eco-challenges')
+router.register(r'eco-challenge-progress', EcoChallengeProgressViewSet, basename='eco-challenge-progress')
+router.register(r'eco-challenge-rewards', EcoChallengeRewardViewSet, basename='eco-challenge-rewards')
 
 urlpatterns = [
     # Authentication routes
@@ -66,6 +73,7 @@ urlpatterns = [
     # Routes pour la réinitialisation du mot de passe
     path('password-reset-request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),  
+    
     
     # Router routes (doit être en dernier pour éviter les conflits)
     path('api/', include(router.urls)),

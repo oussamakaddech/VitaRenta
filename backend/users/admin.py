@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
-from .models import User, Agence, Vehicule, Reservation
+from .models import (
+    User, Agence, Vehicule, Reservation, EcoChallenge, UserEcoChallenge, 
+    EcoChallengeProgress, EcoChallengeReward
+)
 
 class UserAdmin(BaseUserAdmin):
     list_display = ('email', 'nom', 'role', 'is_active', 'get_agence_display', 'date_joined')
@@ -303,6 +306,122 @@ class ReservationAdmin(admin.ModelAdmin):
         self.message_user(request, f"{queryset.count()} réservations annulées.")
 
     cancel_reservations.short_description = "Annuler les réservations"
+
+# Admin pour les défis éco-responsables
+@admin.register(EcoChallenge)
+class EcoChallengeAdmin(admin.ModelAdmin):
+    list_display = [
+        'title', 'type', 'difficulty', 'target_value', 'unit',
+        'reward_points', 'reward_credit_euros', 'duration_days',
+        'is_active', 'participants_count', 'created_at'
+    ]
+    list_filter = ['type', 'difficulty', 'is_active', 'created_at']
+    search_fields = ['title', 'description']
+    readonly_fields = ['created_at', 'updated_at', 'participants_count']
+    
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('title', 'description', 'type', 'difficulty')
+        }),
+        ('Objectif', {
+            'fields': ('target_value', 'unit', 'duration_days')
+        }),
+        ('Récompenses', {
+            'fields': ('reward_points', 'reward_credit_euros', 'reward_badge')
+        }),
+        ('Paramètres', {
+            'fields': ('is_active', 'max_participants', 'valid_from', 'valid_until')
+        }),
+        ('Statistiques', {
+            'fields': ('participants_count',),
+            'classes': ('collapse',)
+        }),
+        ('Métadonnées', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def participants_count(self, obj):
+        """Affiche le nombre de participants"""
+        count = obj.user_challenges.count()
+        return format_html(
+            '<span style="font-weight: bold; color: {};">{} participants</span>',
+            'green' if count > 0 else 'gray',
+            count
+        )
+    participants_count.short_description = 'Participants'
+
+@admin.register(UserEcoChallenge)
+class UserEcoChallengeAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'challenge_title', 'status', 'progress_display',
+        'progress_percentage_display', 'days_remaining_display',
+        'started_at', 'deadline'
+    ]
+    list_filter = ['status', 'challenge__type', 'started_at', 'completed_at']
+    search_fields = ['user__username', 'user__email', 'challenge__title']
+    readonly_fields = ['started_at', 'progress_percentage', 'days_remaining']
+    
+    def challenge_title(self, obj):
+        return obj.challenge.title
+    challenge_title.short_description = 'Défi'
+    
+    def progress_display(self, obj):
+        return f"{obj.progress} / {obj.challenge.target_value} {obj.challenge.unit}"
+    progress_display.short_description = 'Progression'
+    
+    def progress_percentage_display(self, obj):
+        percentage = obj.progress_percentage
+        color = 'green' if percentage >= 75 else 'orange' if percentage >= 50 else 'red'
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{:.1f}%</span>',
+            color, percentage
+        )
+    progress_percentage_display.short_description = 'Pourcentage'
+    
+    def days_remaining_display(self, obj):
+        days = obj.days_remaining
+        color = 'red' if days <= 3 else 'orange' if days <= 7 else 'green'
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{} jours</span>',
+            color, days
+        )
+    days_remaining_display.short_description = 'Jours restants'
+
+@admin.register(EcoChallengeProgress)
+class EcoChallengeProgressAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_challenge', 'value', 'eco_score', 'co2_saved',
+        'distance_km', 'recorded_at'
+    ]
+    list_filter = ['recorded_at', 'user_challenge__challenge__type']
+    search_fields = ['user_challenge__user__username', 'user_challenge__challenge__title']
+    readonly_fields = ['recorded_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'user_challenge__user', 'user_challenge__challenge'
+        )
+
+@admin.register(EcoChallengeReward)
+class EcoChallengeRewardAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'challenge_title', 'points_awarded', 'credit_awarded',
+        'badge_awarded', 'awarded_at', 'applied_to_account'
+    ]
+    list_filter = ['awarded_at', 'applied_to_account']
+    search_fields = ['user__username', 'user__email', 'user_challenge__challenge__title']
+    readonly_fields = ['awarded_at']
+    
+    def challenge_title(self, obj):
+        return obj.user_challenge.challenge.title
+    challenge_title.short_description = 'Défi'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'user', 'user_challenge__challenge'
+        )
 
 admin.site.register(User, UserAdmin)
 admin.site.site_header = "Administration VitaRenta"

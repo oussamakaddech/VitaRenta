@@ -338,3 +338,6 @@
 .map-fullscreen-btn:hover {
     background: white;
 }
+header {
+    display: none !important;
+}

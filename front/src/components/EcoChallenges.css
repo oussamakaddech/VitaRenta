@@ -1,0 +1,1976 @@
+/* ========================================
+   CYBER ECO CHALLENGES WEB 3.0 DESIGN
+   Version: Neural 3.0
+   Date: 2025-08-22
+   ======================================== */
+
+/* Variables CSS Web3 pour CyberEcoChallenges */
+:root {
+    /* Couleurs primaires Web3 */
+    --cyber-primary: #0052ff;
+    --cyber-secondary: #00d4ff;
+    --cyber-accent: #8b5cf6;
+    --cyber-success: #10b981;
+    --cyber-warning: #f59e0b;
+    --cyber-error: #ef4444;
+    --cyber-dark: #0a0a0f;
+    --cyber-dark-secondary: #1a1a2e;
+    --cyber-dark-tertiary: #2a2a3e;
+    
+    /* Couleurs néon */
+    --neon-cyan: #00d4ff;
+    --neon-purple: #8b5cf6;
+    --neon-green: #10b981;
+    --neon-pink: #f472b6;
+    --neon-yellow: #fbbf24;
+    --neon-orange: #fb923c;
+    
+    /* Gradients Web3 */
+    --cyber-gradient-primary: linear-gradient(135deg, #0052ff 0%, #00d4ff 50%, #8b5cf6 100%);
+    --cyber-gradient-secondary: linear-gradient(135deg, #10b981 0%, #00d4ff 50%, #8b5cf6 100%);
+    --cyber-gradient-neural: linear-gradient(135deg, #00d4ff 0%, #8b5cf6 25%, #10b981 50%, #f472b6 75%, #fbbf24 100%);
+    --cyber-gradient-hologram: linear-gradient(45deg, 
+        rgba(0, 212, 255, 0.1) 0%, 
+        rgba(139, 92, 246, 0.1) 25%, 
+        rgba(16, 185, 129, 0.1) 50%, 
+        rgba(244, 114, 182, 0.1) 75%,
+        rgba(0, 212, 255, 0.1) 100%
+    );
+    
+    /* Glassmorphism avancé */
+    --cyber-glass-bg: rgba(255, 255, 255, 0.03);
+    --cyber-glass-border: rgba(0, 212, 255, 0.2);
+    --cyber-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --cyber-glass-backdrop: blur(25px);
+    --cyber-neural-glow: 0 0 30px rgba(0, 212, 255, 0.4);
+    
+    /* Typographie futuriste */
+    --cyber-font-primary: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+    --cyber-font-secondary: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    
+    /* Espacement neural */
+    --cyber-space-xs: 0.25rem;
+    --cyber-space-sm: 0.5rem;
+    --cyber-space-md: 1rem;
+    --cyber-space-lg: 1.5rem;
+    --cyber-space-xl: 2rem;
+    --cyber-space-2xl: 3rem;
+    --cyber-space-3xl: 4rem;
+    
+    /* Bordures et rayons */
+    --cyber-radius-sm: 8px;
+    --cyber-radius-md: 16px;
+    --cyber-radius-lg: 24px;
+    --cyber-radius-xl: 32px;
+    --cyber-radius-neural: 50%;
+    
+    /* Transitions avancées */
+    --cyber-transition-fast: 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --cyber-transition-normal: 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    --cyber-transition-slow: 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+    --cyber-transition-bounce: 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    /* Ombres neurales */
+    --cyber-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --cyber-shadow-md: 0 8px 16px rgba(0, 0, 0, 0.2);
+    --cyber-shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.3);
+    --cyber-shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.4);
+    --cyber-shadow-neural: 0 0 40px rgba(0, 212, 255, 0.6);
+    --cyber-shadow-hologram: 0 0 60px rgba(139, 92, 246, 0.5);
+}
+
+/* Reset CSS moderne */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background: var(--cyber-dark);
+    color: #ffffff;
+    font-family: var(--cyber-font-secondary);
+    line-height: 1.6;
+    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========================================
+   ANIMATIONS WEB3 NEURALES
+   ======================================== */
+
+@keyframes cyberNeuralFloat {
+    0%, 100% {
+        transform: translateY(0px) rotateZ(0deg);
+        filter: brightness(1);
+    }
+    25% {
+        transform: translateY(-15px) rotateZ(90deg);
+        filter: brightness(1.2);
+    }
+    50% {
+        transform: translateY(-25px) rotateZ(180deg);
+        filter: brightness(1.5);
+    }
+    75% {
+        transform: translateY(-15px) rotateZ(270deg);
+        filter: brightness(1.2);
+    }
+}
+
+@keyframes cyberHologramGlow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+    25% {
+        box-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
+        text-shadow: 0 0 20px rgba(139, 92, 246, 0.8);
+    }
+    50% {
+        box-shadow: 0 0 60px rgba(16, 185, 129, 0.8);
+        text-shadow: 0 0 30px rgba(16, 185, 129, 1);
+    }
+    75% {
+        box-shadow: 0 0 40px rgba(244, 114, 182, 0.6);
+        text-shadow: 0 0 20px rgba(244, 114, 182, 0.8);
+    }
+}
+
+@keyframes cyberNeuralPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+        filter: brightness(1);
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.9;
+        filter: brightness(1.3);
+    }
+}
+
+@keyframes cyberMatrixSlide {
+    from {
+        opacity: 0;
+        transform: translateX(-100px) rotateY(-15deg);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) rotateY(0deg);
+    }
+}
+
+@keyframes cyberHologramFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(50px) scale(0.8);
+        filter: blur(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0px);
+    }
+}
+
+@keyframes cyberNeuralSpin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes cyberDataFlow {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes cyberProgressBeam {
+    0% {
+        left: -100%;
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        left: 100%;
+        opacity: 0;
+    }
+}
+
+@keyframes cyberRingPulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(2.5);
+        opacity: 0;
+    }
+}
+
+@keyframes cyberBorderGlow {
+    0%, 100% {
+        border-color: var(--neon-cyan);
+        box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    }
+    25% {
+        border-color: var(--neon-purple);
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+    }
+    50% {
+        border-color: var(--neon-green);
+        box-shadow: 0 0 40px rgba(16, 185, 129, 0.6);
+    }
+    75% {
+        border-color: var(--neon-pink);
+        box-shadow: 0 0 30px rgba(244, 114, 182, 0.5);
+    }
+}
+
+/* ========================================
+   CONTAINER PRINCIPAL
+   ======================================== */
+
+.cyber-eco-challenges {
+    min-height: 100vh;
+    background: linear-gradient(135deg, var(--cyber-dark) 0%, var(--cyber-dark-secondary) 50%, var(--cyber-dark-tertiary) 100%);
+    position: relative;
+    overflow: hidden;
+    font-family: var(--cyber-font-secondary);
+    color: #ffffff;
+    padding: var(--cyber-space-lg);
+}
+
+/* Système de particules neurales */
+.cyber-particle-system {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden;
+}
+
+.cyber-neural-particle {
+    position: absolute;
+    border-radius: 50%;
+    animation: cyberNeuralFloat 8s infinite linear;
+    opacity: 0.7;
+    box-shadow: 0 0 15px currentColor;
+    filter: blur(0.5px);
+}
+
+.cyber-neural-particle::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, currentColor 0%, transparent 70%);
+    opacity: 0.3;
+    animation: cyberNeuralPulse 3s infinite ease-in-out;
+}
+
+/* Grille neuronale de fond */
+.cyber-neural-grid {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.1;
+}
+
+.cyber-grid-lines {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        linear-gradient(rgba(0, 212, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.1) 1px, transparent 1px);
+    background-size: 50px 50px;
+    animation: cyberDataFlow 20s linear infinite;
+}
+
+.cyber-data-flow {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: 
+        radial-gradient(circle at 20% 30%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 50% 10%, rgba(16, 185, 129, 0.03) 0%, transparent 40%);
+    animation: cyberDataFlow 15s ease-in-out infinite;
+}
+
+/* ========================================
+   STATUS HUD WEB3
+   ======================================== */
+
+.cyber-status-hud {
+    position: fixed;
+    top: var(--cyber-space-lg);
+    right: var(--cyber-space-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-md);
+    background: var(--cyber-glass-bg);
+    border: 1px solid var(--cyber-glass-border);
+    border-radius: var(--cyber-radius-lg);
+    padding: var(--cyber-space-md) var(--cyber-space-lg);
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    font-family: var(--cyber-font-primary);
+    font-size: 0.85rem;
+    z-index: 1000;
+    animation: cyberMatrixSlide 1s ease;
+    transition: var(--cyber-transition-normal);
+}
+
+.cyber-status-hud:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: var(--cyber-neural-glow);
+}
+
+.cyber-status-core {
+    position: relative;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--neon-green);
+    box-shadow: 0 0 10px currentColor;
+}
+
+.cyber-status-pulse {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    opacity: 0;
+    animation: cyberRingPulse 2s infinite;
+}
+
+.cyber-status-hud.mock .cyber-status-core {
+    background: var(--neon-orange);
+    animation: cyberBorderGlow 3s ease-in-out infinite;
+}
+
+.cyber-status-hud.real .cyber-status-core {
+    background: var(--neon-green);
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+}
+
+.cyber-status-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.cyber-status-label {
+    color: var(--neon-cyan);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyber-status-sublabel {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.75rem;
+}
+
+/* ========================================
+   HEADER MATRIX
+   ======================================== */
+
+.cyber-header-matrix {
+    text-align: center;
+    margin-bottom: var(--cyber-space-3xl);
+    position: relative;
+    z-index: 2;
+}
+
+.cyber-title-hologram {
+    position: relative;
+    margin-bottom: var(--cyber-space-xl);
+}
+
+.cyber-main-title {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 900;
+    margin-bottom: var(--cyber-space-md);
+    font-family: var(--cyber-font-primary);
+    letter-spacing: -0.02em;
+    position: relative;
+    display: inline-block;
+}
+
+.cyber-gradient-text {
+    background: var(--cyber-gradient-neural);
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: cyberDataFlow 6s ease-in-out infinite;
+    filter: drop-shadow(0 0 30px rgba(0, 212, 255, 0.5));
+}
+
+.cyber-title-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--cyber-gradient-neural);
+    background-size: 400% 400%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: blur(3px);
+    z-index: -1;
+    opacity: 0.7;
+    animation: cyberDataFlow 6s ease-in-out infinite;
+}
+
+.cyber-subtitle {
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-family: var(--cyber-font-primary);
+}
+
+.cyber-user-interface {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--cyber-space-lg);
+    background: var(--cyber-glass-bg);
+    border: 1px solid var(--cyber-glass-border);
+    border-radius: var(--cyber-radius-lg);
+    padding: var(--cyber-space-lg) var(--cyber-space-xl);
+    margin: var(--cyber-space-xl) auto 0;
+    max-width: 500px;
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-neural-glow);
+    animation: cyberHologramFadeIn 1s ease 0.5s both;
+    transition: var(--cyber-transition-normal);
+}
+
+.cyber-user-interface:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--cyber-shadow-neural);
+}
+
+.cyber-avatar-container {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--cyber-gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--cyber-shadow-md);
+}
+
+.cyber-avatar-glow {
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    border-radius: 50%;
+    background: var(--cyber-gradient-neural);
+    opacity: 0.5;
+    animation: cyberNeuralSpin 10s linear infinite;
+    z-index: -1;
+}
+
+.cyber-avatar-icon {
+    font-size: 1.8rem;
+    color: white;
+}
+
+.cyber-user-data {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.cyber-username {
+    color: var(--neon-cyan);
+    font-family: var(--cyber-font-primary);
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyber-user-rank {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* ========================================
+   STATS MATRIX
+   ======================================== */
+
+.cyber-stats-matrix {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--cyber-space-lg);
+    margin-bottom: var(--cyber-space-3xl);
+    animation: cyberHologramFadeIn 1s ease 0.3s both;
+}
+
+.cyber-stat-pod {
+    position: relative;
+    background: var(--cyber-glass-bg);
+    border: 1px solid var(--cyber-glass-border);
+    border-radius: var(--cyber-radius-lg);
+    padding: var(--cyber-space-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-md);
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    transition: var(--cyber-transition-normal);
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.cyber-stat-pod::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+    transition: var(--cyber-transition-slow);
+}
+
+.cyber-stat-pod:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: var(--cyber-neural-glow);
+    border-color: var(--neon-cyan);
+}
+
+.cyber-stat-pod:hover::before {
+    left: 100%;
+}
+
+.cyber-stat-core {
+    width: 60px;
+    height: 60px;
+    background: var(--cyber-gradient-primary);
+    border-radius: var(--cyber-radius-neural);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    box-shadow: var(--cyber-shadow-md);
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-stat-core::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--cyber-gradient-neural);
+    opacity: 0;
+    transition: var(--cyber-transition-normal);
+}
+
+.cyber-stat-pod:hover .cyber-stat-core::after {
+    opacity: 0.3;
+}
+
+.cyber-stat-data {
+    flex: 1;
+    min-width: 0;
+}
+
+.cyber-stat-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--neon-cyan);
+    font-family: var(--cyber-font-primary);
+    margin-bottom: var(--cyber-space-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cyber-stat-label {
+    display: block;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.cyber-stat-pulse {
+    position: absolute;
+    top: 50%;
+    right: var(--cyber-space-md);
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background: var(--neon-green);
+    border-radius: 50%;
+    animation: cyberNeuralPulse 2s infinite;
+    box-shadow: 0 0 10px currentColor;
+}
+
+/* ========================================
+   SECTION CONTAINERS
+   ======================================== */
+
+.cyber-section-container {
+    margin-bottom: var(--cyber-space-3xl);
+    animation: cyberHologramFadeIn 1s ease 0.4s both;
+}
+
+.cyber-section-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: var(--cyber-space-xl);
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-lg);
+    font-family: var(--cyber-font-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    position: relative;
+}
+
+.cyber-section-line {
+    flex: 1;
+    height: 2px;
+    background: var(--cyber-gradient-neural);
+    border-radius: 1px;
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-section-line::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    animation: cyberProgressBeam 3s infinite;
+}
+
+/* ========================================
+   CHALLENGES GRID
+   ======================================== */
+
+.cyber-challenges-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: var(--cyber-space-xl);
+}
+
+/* ========================================
+   CHALLENGE PODS WEB3
+   ======================================== */
+
+.cyber-challenge-pod {
+    position: relative;
+    background: var(--cyber-glass-bg);
+    border: 1px solid var(--cyber-glass-border);
+    border-radius: var(--cyber-radius-xl);
+    padding: var(--cyber-space-xl);
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    transition: var(--cyber-transition-normal);
+    animation: cyberHologramFadeIn 0.8s ease both;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.cyber-challenge-pod::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--cyber-gradient-neural);
+    border-radius: var(--cyber-radius-lg) var(--cyber-radius-lg) 0 0;
+}
+
+.cyber-challenge-pod:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: var(--cyber-neural-glow);
+    border-color: var(--neon-cyan);
+}
+
+.cyber-pod-glow {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, var(--glow-color, var(--neon-cyan)), transparent, var(--glow-color, var(--neon-cyan)));
+    border-radius: inherit;
+    z-index: -1;
+    opacity: 0;
+    transition: var(--cyber-transition-normal);
+    animation: cyberBorderGlow 4s linear infinite;
+}
+
+.cyber-challenge-pod:hover .cyber-pod-glow {
+    opacity: 0.5;
+}
+
+.cyber-challenge-pod.active .cyber-pod-glow {
+    --glow-color: var(--neon-green);
+    opacity: 0.6;
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+}
+
+.cyber-challenge-pod.completed .cyber-pod-glow {
+    --glow-color: var(--neon-cyan);
+    opacity: 0.4;
+}
+
+.cyber-challenge-pod.beginner .cyber-pod-glow {
+    --glow-color: var(--neon-green);
+}
+
+.cyber-challenge-pod.intermediate .cyber-pod-glow {
+    --glow-color: var(--neon-cyan);
+}
+
+.cyber-challenge-pod.advanced .cyber-pod-glow {
+    --glow-color: var(--neon-purple);
+}
+
+.cyber-challenge-pod.expert .cyber-pod-glow {
+    --glow-color: var(--neon-pink);
+}
+
+/* ========================================
+   CHALLENGE HEADER
+   ======================================== */
+
+.cyber-challenge-header {
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-lg);
+    margin-bottom: var(--cyber-space-lg);
+}
+
+.cyber-challenge-avatar {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--avatar-color, var(--neon-cyan)), var(--cyber-primary));
+    border-radius: var(--cyber-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    box-shadow: var(--cyber-shadow-md);
+    flex-shrink: 0;
+    transition: var(--cyber-transition-normal);
+}
+
+.cyber-challenge-avatar:hover {
+    transform: scale(1.1) rotateY(15deg);
+    box-shadow: var(--cyber-shadow-neural);
+}
+
+.cyber-avatar-rings {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    pointer-events: none;
+}
+
+.cyber-ring-pulse {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 1px solid var(--ring-color, var(--neon-cyan));
+    border-radius: 50%;
+    opacity: 0;
+    animation: cyberRingPulse 3s infinite;
+}
+
+.cyber-challenge-avatar.active {
+    background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+}
+
+.cyber-challenge-avatar.completed {
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+}
+
+.cyber-challenge-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.cyber-challenge-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: var(--cyber-space-sm);
+    font-family: var(--cyber-font-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.cyber-difficulty-badge {
+    padding: var(--cyber-space-xs) var(--cyber-space-md);
+    border-radius: var(--cyber-radius-sm);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: var(--cyber-font-primary);
+    display: inline-block;
+    border: 1px solid currentColor;
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-difficulty-badge::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: currentColor;
+    opacity: 0.1;
+    z-index: -1;
+}
+
+.cyber-difficulty-badge.beginner {
+    color: var(--neon-green);
+}
+
+.cyber-difficulty-badge.intermediate {
+    color: var(--neon-cyan);
+}
+
+.cyber-difficulty-badge.advanced {
+    color: var(--neon-purple);
+}
+
+.cyber-difficulty-badge.expert {
+    color: var(--neon-pink);
+}
+
+.cyber-progress-indicator,
+.cyber-completion-timestamp {
+    font-size: 0.9rem;
+    color: var(--neon-cyan);
+    font-family: var(--cyber-font-primary);
+    display: block;
+    margin-top: var(--cyber-space-xs);
+    font-weight: 500;
+}
+
+.cyber-completion-timestamp {
+    color: var(--neon-green);
+}
+
+/* ========================================
+   CHALLENGE DESCRIPTION
+   ======================================== */
+
+.cyber-challenge-description {
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+    margin-bottom: var(--cyber-space-lg);
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+/* ========================================
+   REWARDS MATRIX
+   ======================================== */
+
+.cyber-rewards-matrix {
+    display: flex;
+    gap: var(--cyber-space-md);
+    margin-bottom: var(--cyber-space-lg);
+    flex-wrap: wrap;
+}
+
+.cyber-reward {
+    padding: var(--cyber-space-sm) var(--cyber-space-md);
+    border-radius: var(--cyber-radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: var(--cyber-font-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-xs);
+    transition: var(--cyber-transition-fast);
+    cursor: pointer;
+    border: 1px solid currentColor;
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-reward::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: currentColor;
+    opacity: 0.1;
+    z-index: -1;
+}
+
+.cyber-reward:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 0 15px currentColor;
+}
+
+.cyber-reward.neural-points {
+    color: var(--neon-yellow);
+}
+
+.cyber-reward.quantum-credits {
+    color: var(--neon-green);
+}
+
+.cyber-reward.neural-earned {
+    color: var(--neon-cyan);
+}
+
+/* ========================================
+   MISSION INTEL
+   ======================================== */
+
+.cyber-mission-intel {
+    display: flex;
+    gap: var(--cyber-space-lg);
+    margin-bottom: var(--cyber-space-lg);
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    flex-wrap: wrap;
+}
+
+.cyber-intel-data {
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-xs);
+    font-family: var(--cyber-font-primary);
+    font-weight: 500;
+}
+
+.cyber-challenge-meta {
+    display: flex;
+    gap: var(--cyber-space-md);
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: var(--cyber-font-primary);
+    flex-wrap: wrap;
+}
+
+.cyber-meta-tag {
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-xs);
+}
+
+/* ========================================
+   NEURAL PROGRESS BARS
+   ======================================== */
+
+.cyber-neural-progress {
+    margin-bottom: var(--cyber-space-lg);
+    position: relative;
+}
+
+.cyber-progress-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: var(--cyber-radius-sm);
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cyber-progress-beam {
+    height: 100%;
+    background: linear-gradient(90deg, var(--beam-color, var(--neon-cyan)), var(--neon-purple));
+    border-radius: var(--cyber-radius-sm);
+    transition: width var(--cyber-transition-slow);
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-progress-beam.active {
+    background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+}
+
+.cyber-progress-spark {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    width: 10px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    border-radius: 50%;
+    animation: cyberNeuralPulse 1.5s ease-in-out infinite;
+}
+
+.cyber-progress-display {
+    font-size: 0.8rem;
+    color: var(--neon-cyan);
+    font-family: var(--cyber-font-primary);
+    margin-top: var(--cyber-space-xs);
+    font-weight: 600;
+    float: right;
+}
+
+/* ========================================
+   PERFORMANCE MATRIX
+   ======================================== */
+
+.cyber-performance-matrix {
+    margin-bottom: var(--cyber-space-lg);
+}
+
+.cyber-performance-analyzer {
+    display: flex;
+    align-items: center;
+    gap: var(--cyber-space-md);
+    margin-bottom: var(--cyber-space-sm);
+}
+
+.cyber-performance-label {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: var(--cyber-font-primary);
+    min-width: 120px;
+    font-weight: 500;
+}
+
+.cyber-performance-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: var(--cyber-radius-sm);
+    overflow: hidden;
+}
+
+.cyber-performance-beam {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
+    border-radius: var(--cyber-radius-sm);
+    transition: width var(--cyber-transition-slow);
+    position: relative;
+}
+
+.cyber-performance-spark {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+    border-radius: 50%;
+    animation: cyberNeuralPulse 1s ease-in-out infinite;
+}
+
+.cyber-performance-value {
+    font-size: 0.9rem;
+    color: var(--neon-cyan);
+    font-family: var(--cyber-font-primary);
+    min-width: 50px;
+    text-align: right;
+    font-weight: 600;
+}
+
+/* ========================================
+   NEURAL BUTTONS
+   ======================================== */
+
+.cyber-neural-button {
+    width: 100%;
+    padding: var(--cyber-space-lg) var(--cyber-space-xl);
+    background: var(--cyber-gradient-primary);
+    border: none;
+    border-radius: var(--cyber-radius-lg);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: var(--cyber-transition-normal);
+    position: relative;
+    overflow: hidden;
+    font-family: var(--cyber-font-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: var(--cyber-shadow-md);
+    border: 1px solid var(--cyber-glass-border);
+}
+
+.cyber-neural-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: var(--cyber-transition-slow);
+}
+
+.cyber-neural-button:hover:not(:disabled) {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: var(--cyber-neural-glow);
+}
+
+.cyber-neural-button:hover:not(:disabled)::before {
+    left: 100%;
+}
+
+.cyber-neural-button:active {
+    transform: translateY(-1px);
+}
+
+.cyber-neural-button:disabled {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.cyber-button-text {
+    position: relative;
+    z-index: 2;
+}
+
+.cyber-button-glow {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: var(--cyber-gradient-neural);
+    border-radius: inherit;
+    z-index: -1;
+    opacity: 0;
+    transition: var(--cyber-transition-normal);
+}
+
+.cyber-neural-button:hover:not(:disabled) .cyber-button-glow {
+    opacity: 0.5;
+}
+
+.cyber-button-spark {
+    position: absolute;
+    top: 50%;
+    right: var(--cyber-space-md);
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    opacity: 0;
+    animation: cyberNeuralPulse 2s infinite;
+}
+
+.cyber-neural-button:hover:not(:disabled) .cyber-button-spark {
+    opacity: 1;
+}
+
+/* ========================================
+   ACTIONS MATRIX
+   ======================================== */
+
+.cyber-actions-matrix {
+    margin-top: var(--cyber-space-3xl);
+    text-align: center;
+}
+
+.cyber-system-button {
+    padding: var(--cyber-space-lg) var(--cyber-space-xl);
+    background: var(--cyber-glass-bg);
+    border: 2px solid var(--cyber-glass-border);
+    border-radius: var(--cyber-radius-lg);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    backdrop-filter: var(--cyber-glass-backdrop);
+    transition: var(--cyber-transition-normal);
+    margin-bottom: var(--cyber-space-lg);
+    font-family: var(--cyber-font-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: var(--cyber-shadow-md);
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-system-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.2), transparent);
+    transition: var(--cyber-transition-slow);
+}
+
+.cyber-system-button:hover {
+    border-color: var(--neon-cyan);
+    box-shadow: var(--cyber-neural-glow);
+    transform: translateY(-2px);
+}
+
+.cyber-system-button:hover::before {
+    left: 100%;
+}
+
+.cyber-system-button:hover .cyber-button-glow {
+    opacity: 0.3;
+}
+
+.cyber-system-alert {
+    background: var(--cyber-glass-bg);
+    border: 1px solid var(--cyber-glass-border);
+    border-left: 4px solid var(--neon-orange);
+    border-radius: var(--cyber-radius-lg);
+    padding: var(--cyber-space-lg);
+    margin: var(--cyber-space-lg) auto;
+    max-width: 600px;
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--cyber-space-lg);
+    text-align: left;
+}
+
+.cyber-alert-icon {
+    font-size: 1.5rem;
+    color: var(--neon-orange);
+    margin-top: 2px;
+    flex-shrink: 0;
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+}
+
+.cyber-alert-content {
+    flex: 1;
+}
+
+.cyber-alert-content p {
+    margin-bottom: var(--cyber-space-md);
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.6;
+}
+
+.cyber-alert-content strong {
+    color: var(--neon-orange);
+    font-weight: 700;
+}
+
+.cyber-neural-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cyber-space-sm);
+    padding: var(--cyber-space-md) var(--cyber-space-lg);
+    background: var(--cyber-gradient-primary);
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: var(--cyber-radius-md);
+    font-weight: 600;
+    transition: var(--cyber-transition-normal);
+    font-family: var(--cyber-font-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: var(--cyber-shadow-md);
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-neural-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: var(--cyber-transition-slow);
+}
+
+.cyber-neural-link:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--cyber-neural-glow);
+    text-decoration: none;
+    color: #ffffff;
+}
+
+.cyber-neural-link:hover::before {
+    left: 100%;
+}
+
+.cyber-connection-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--cyber-space-sm);
+    color: var(--neon-green);
+    font-family: var(--cyber-font-primary);
+    font-weight: 500;
+    margin-top: var(--cyber-space-lg);
+}
+
+.cyber-status-icon {
+    font-size: 1.2rem;
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+}
+
+/* ========================================
+   EMPTY STATES HOLOGRAPHIQUES
+   ======================================== */
+
+.cyber-empty-matrix {
+    text-align: center;
+    padding: var(--cyber-space-3xl) var(--cyber-space-lg);
+    background: var(--cyber-glass-bg);
+    border: 2px dashed var(--cyber-glass-border);
+    border-radius: var(--cyber-radius-lg);
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    transition: var(--cyber-transition-normal);
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-empty-matrix::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--cyber-gradient-hologram);
+    opacity: 0;
+    transition: var(--cyber-transition-normal);
+}
+
+.cyber-empty-matrix:hover {
+    border-color: var(--neon-cyan);
+    transform: translateY(-2px);
+}
+
+.cyber-empty-matrix:hover::before {
+    opacity: 0.1;
+}
+
+.cyber-hologram-icon {
+    position: relative;
+    display: inline-block;
+    font-size: 4rem;
+    margin-bottom: var(--cyber-space-lg);
+}
+
+.cyber-icon-rings {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    pointer-events: none;
+}
+
+.cyber-ring {
+    position: absolute;
+    border: 1px solid var(--neon-cyan);
+    border-radius: 50%;
+    opacity: 0;
+    animation: cyberRingPulse 3s infinite;
+}
+
+.cyber-ring.cyber-ring-1 {
+    width: 50px;
+    height: 50px;
+    top: 15px;
+    left: 15px;
+}
+
+.cyber-ring.cyber-ring-2 {
+    width: 65px;
+    height: 65px;
+    top: 7.5px;
+    left: 7.5px;
+    animation-delay: 0.5s;
+}
+
+.cyber-ring.cyber-ring-3 {
+    width: 80px;
+    height: 80px;
+    top: 0;
+    left: 0;
+    animation-delay: 1s;
+}
+
+.cyber-empty-matrix h4 {
+    font-size: 1.8rem;
+    margin-bottom: var(--cyber-space-md);
+    font-family: var(--cyber-font-primary);
+    font-weight: 700;
+}
+
+.cyber-empty-matrix p {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+/* ========================================
+   LOADING STATES NEURAUX
+   ======================================== */
+
+.cyber-loading-matrix {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: var(--cyber-space-3xl);
+    background: var(--cyber-glass-bg);
+    border-radius: var(--cyber-radius-lg);
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    margin: var(--cyber-space-lg);
+    position: relative;
+}
+
+.cyber-ai-brain-loader {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    margin-bottom: var(--cyber-space-xl);
+}
+
+.cyber-brain-core {
+    width: 50px;
+    height: 50px;
+    background: radial-gradient(circle, var(--neon-cyan), var(--neon-purple));
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: cyberNeuralPulse 2s infinite;
+    box-shadow: 0 0 30px var(--neon-cyan);
+}
+
+.cyber-brain-waves {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.cyber-wave {
+    position: absolute;
+    border: 2px solid var(--neon-cyan);
+    border-radius: 50%;
+    opacity: 0;
+    animation: cyberRingPulse 4s infinite;
+}
+
+.cyber-wave.cyber-wave-1 {
+    width: 60px;
+    height: 60px;
+    top: 20px;
+    left: 20px;
+}
+
+.cyber-wave.cyber-wave-2 {
+    width: 80px;
+    height: 80px;
+    top: 10px;
+    left: 10px;
+    animation-delay: 0.7s;
+}
+
+.cyber-wave.cyber-wave-3 {
+    width: 100px;
+    height: 100px;
+    top: 0;
+    left: 0;
+    animation-delay: 1.4s;
+}
+
+.cyber-loading-text {
+    text-align: center;
+}
+
+.cyber-loading-text span {
+    font-size: 1.5rem;
+    font-family: var(--cyber-font-primary);
+    font-weight: 700;
+    margin-bottom: var(--cyber-space-lg);
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.cyber-progress-bar {
+    width: 300px;
+    height: 4px;
+    background: rgba(0, 212, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: var(--cyber-space-lg);
+}
+
+.cyber-progress-fill {
+    height: 100%;
+    background: var(--cyber-gradient-neural);
+    animation: cyberProgressBeam 2.5s infinite;
+    border-radius: 2px;
+}
+
+/* ========================================
+   ERROR STATES HOLOGRAPHIQUES
+   ======================================== */
+
+.cyber-error-matrix {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: var(--cyber-space-3xl);
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--cyber-radius-lg);
+    backdrop-filter: var(--cyber-glass-backdrop);
+    box-shadow: var(--cyber-glass-shadow);
+    margin: var(--cyber-space-lg);
+    text-align: center;
+    transition: var(--cyber-transition-normal);
+    position: relative;
+}
+
+.cyber-error-hologram {
+    position: relative;
+    margin-bottom: var(--cyber-space-xl);
+}
+
+.cyber-error-icon {
+    font-size: 4rem;
+    color: var(--cyber-error);
+    margin-bottom: var(--cyber-space-lg);
+    animation: cyberNeuralPulse 2s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.5));
+}
+
+.cyber-hologram-rings {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    pointer-events: none;
+}
+
+.cyber-error-matrix h3 {
+    font-size: 2rem;
+    margin-bottom: var(--cyber-space-lg);
+    font-family: var(--cyber-font-primary);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.cyber-error-message {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.2rem;
+    line-height: 1.6;
+    margin-bottom: var(--cyber-space-xl);
+}
+
+.cyber-retry-button {
+    padding: var(--cyber-space-lg) var(--cyber-space-2xl);
+    background: var(--cyber-gradient-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--cyber-radius-lg);
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1.1rem;
+    transition: var(--cyber-transition-normal);
+    font-family: var(--cyber-font-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow: var(--cyber-shadow-md);
+    position: relative;
+    overflow: hidden;
+}
+
+.cyber-retry-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: var(--cyber-transition-slow);
+}
+
+.cyber-retry-button:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--cyber-neural-glow);
+}
+
+.cyber-retry-button:hover::before {
+    left: 100%;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN WEB3
+   ======================================== */
+
+@media (max-width: 1024px) {
+    .cyber-challenges-grid {
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    }
+    
+    .cyber-stats-matrix {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: var(--cyber-space-md);
+    }
+    
+    .cyber-challenge-header {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--cyber-space-md);
+    }
+    
+    .cyber-challenge-avatar {
+        width: 70px;
+        height: 70px;
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .cyber-eco-challenges {
+        padding: var(--cyber-space-md);
+    }
+    
+    .cyber-challenges-grid {
+        grid-template-columns: 1fr;
+        gap: var(--cyber-space-lg);
+    }
+    
+    .cyber-stats-matrix {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+    
+    .cyber-main-title {
+        font-size: clamp(2rem, 5vw, 3rem);
+    }
+    
+    .cyber-section-title {
+        font-size: 1.4rem;
+        flex-direction: column;
+        gap: var(--cyber-space-sm);
+        text-align: center;
+    }
+    
+    .cyber-challenge-pod {
+        padding: var(--cyber-space-lg);
+    }
+    
+    .cyber-status-hud {
+        position: relative;
+        margin: var(--cyber-space-md) auto;
+        width: fit-content;
+        top: auto;
+        right: auto;
+    }
+    
+    .cyber-user-interface {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--cyber-space-md);
+    }
+}
+
+@media (max-width: 480px) {
+    .cyber-eco-challenges {
+        padding: var(--cyber-space-sm);
+    }
+    
+    .cyber-stats-matrix {
+        grid-template-columns: 1fr;
+    }
+    
+    .cyber-challenge-pod {
+        padding: var(--cyber-space-md);
+    }
+    
+    .cyber-rewards-matrix {
+        flex-direction: column;
+        gap: var(--cyber-space-sm);
+    }
+    
+    .cyber-mission-intel {
+        flex-direction: column;
+        gap: var(--cyber-space-sm);
+    }
+    
+    .cyber-performance-analyzer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--cyber-space-sm);
+    }
+    
+    .cyber-performance-label {
+        min-width: auto;
+    }
+    
+    .cyber-performance-value {
+        text-align: left;
+        min-width: auto;
+    }
+    
+    .cyber-ai-brain-loader {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .cyber-brain-core {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .cyber-wave.cyber-wave-1 { width: 50px; height: 50px; top: 15px; left: 15px; }
+    .cyber-wave.cyber-wave-2 { width: 65px; height: 65px; top: 7.5px; left: 7.5px; }
+    .cyber-wave.cyber-wave-3 { width: 80px; height: 80px; top: 0; left: 0; }
+}
+
+/* ========================================
+   ACCESSIBILITY AMÉLIORÉE
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    
+    .cyber-particle-system,
+    .cyber-neural-grid {
+        display: none;
+    }
+}
+
+/* États de focus pour l'accessibilité */
+.cyber-neural-button:focus,
+.cyber-system-button:focus,
+.cyber-neural-link:focus,
+.cyber-stat-pod:focus,
+.cyber-challenge-pod:focus {
+    outline: 3px solid var(--neon-cyan);
+    outline-offset: 2px;
+}
+
+/* Navigation au clavier */
+.cyber-stat-pod:focus,
+.cyber-challenge-pod:focus {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: var(--cyber-neural-glow);
+    border-color: var(--neon-cyan);
+}
+
+/* ========================================
+   HIGH CONTRAST MODE
+   ======================================== */
+
+@media (prefers-contrast: high) {
+    :root {
+        --cyber-glass-bg: rgba(255, 255, 255, 0.15);
+        --cyber-glass-border: rgba(255, 255, 255, 0.4);
+    }
+    
+    .cyber-challenge-pod,
+    .cyber-stat-pod,
+    .cyber-status-hud,
+    .cyber-user-interface,
+    .cyber-system-alert,
+    .cyber-empty-matrix,
+    .cyber-loading-matrix,
+    .cyber-error-matrix {
+        border-width: 2px;
+    }
+    
+    .cyber-challenge-description,
+    .cyber-system-alert p,
+    .cyber-empty-matrix p {
+        color: rgba(255, 255, 255, 0.95);
+    }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+    .cyber-eco-challenges::before,
+    .cyber-particle-system,
+    .cyber-neural-grid,
+    .cyber-status-hud,
+    .cyber-system-button,
+    .cyber-neural-link,
+    .cyber-neural-button {
+        display: none !important;
+    }
+    
+    .cyber-challenge-pod,
+    .cyber-stat-pod {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 2px solid #000;
+        background: #fff;
+        color: #000;
+    }
+    
+    .cyber-challenges-grid {
+        display: block;
+    }
+    
+    .cyber-challenge-pod {
+        margin-bottom: var(--cyber-space-lg);
+        page-break-inside: avoid;
+    }
+    
+    .cyber-main-title {
+        color: #000;
+        background: none;
+        -webkit-text-fill-color: #000;
+    }
+}
+
+/* ========================================
+   DARK MODE OPTIMIZATIONS
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --cyber-glass-bg: rgba(255, 255, 255, 0.02);
+        --cyber-glass-border: rgba(0, 212, 255, 0.15);
+    }
+}
+
+/* ========================================
+   PERFORMANCE OPTIMIZATIONS
+   ======================================== */
+
+.cyber-challenge-pod,
+.cyber-stat-pod,
+.cyber-status-hud,
+.cyber-neural-particle {
+    will-change: transform;
+}
+
+.cyber-progress-beam,
+.cyber-performance-beam {
+    will-change: width;
+}
+
+.cyber-ai-brain-loader {
+    will-change: transform;
+}
+
+/* Accélération GPU pour des animations plus fluides */
+.cyber-challenge-avatar,
+.cyber-stat-core,
+.cyber-brain-core {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+/* Optimisations pour les animations neurales */
+.cyber-neural-particle,
+.cyber-progress-spark,
+.cyber-performance-spark {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform;
+}
+header {
+    display: none !important;
+}

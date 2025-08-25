@@ -2,17 +2,93 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import PropTypes from 'prop-types';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
-import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend, Filler } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import {
+    Chart as ChartJS,
+    ArcElement,
+    Tooltip,
+    Legend,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    PointElement,
+    LineElement,
+    RadialLinearScale,
+    Filler,
+    ScatterController,
+    BubbleController
+} from 'chart.js';
+import { Doughnut, Bar, Line, Radar, Scatter, Bubble, PolarArea } from 'react-chartjs-2';
 import './Dashboard.css';
 
-// Enregistrement des composants Chart.js
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend, Filler);
+// Enregistrement des composants Chart.js étendus
+ChartJS.register(
+    ArcElement, 
+    Tooltip, 
+    Legend, 
+    CategoryScale, 
+    LinearScale, 
+    BarElement, 
+    Title, 
+    PointElement, 
+    LineElement, 
+    RadialLinearScale,
+    Filler,
+    ScatterController,
+    BubbleController
+);
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-// Hook pour les animations
-const useAnimateOnMount = (delay = 0, animationsEnabled = true) => {
+// Hook personnalisé pour les animations avec Intersection Observer
+const useAdvancedAnimateOnMount = (threshold = 0.1, rootMargin = '0px') => {
+    const [isVisible, setIsVisible] = useState(false);
+    const elementRef = useRef();
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setIsVisible(true);
+                    observer.disconnect();
+                }
+            },
+            { threshold, rootMargin }
+        );
+
+        const currentElement = elementRef.current;
+        if (currentElement) {
+            observer.observe(currentElement);
+        }
+
+        return () => {
+            if (currentElement) {
+                observer.unobserve(currentElement);
+            }
+        };
+    }, [threshold, rootMargin]);
+
+    return [elementRef, isVisible];
+};
+
+// Fonction utilitaire pour générer des couleurs dynamiques
+const generateDynamicColors = (count, baseHue = 200) => {
+    const colors = [];
+    const saturation = 70;
+    const lightness = 60;
+    
+    for (let i = 0; i < count; i++) {
+        const hue = (baseHue + (i * 360 / count)) % 360;
+        colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+    }
+    return colors;
+};
+
+// Fonction utilitaire pour les nombres sécurisés
+const fleetSafeNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+
+// Hook personnalisé pour les animations simples (fallback)
+const useFleetAnimateOnMount = (delay = 0, animationsEnabled = true) => {
     const [isVisible, setIsVisible] = useState(false);
     
     useEffect(() => {
@@ -28,286 +104,613 @@ const useAnimateOnMount = (delay = 0, animationsEnabled = true) => {
     return isVisible;
 };
 
-// Fonction utilitaire pour les nombres sécurisés
-const SafeNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+// Composant Graphique Doughnut Avancé
+const AdvancedDoughnutChart = ({ data, labels, title, colors }) => {
+    const safeData = Array.isArray(data) ? data : [];
+    const safeLabels = Array.isArray(labels) ? labels : [];
+    const dynamicColors = colors || generateDynamicColors(safeData.length);
+
+    const chartData = useMemo(() => ({
+        labels: safeLabels,
+        datasets: [
+            {
+                label: title,
+                data: safeData,
+                backgroundColor: dynamicColors.map(color => color + '80'),
+                borderColor: dynamicColors,
+                borderWidth: 3,
+                hoverOffset: 15,
+                hoverBorderWidth: 4,
+            },
+        ],
+    }), [safeData, safeLabels, title, dynamicColors]);
+
+    const options = useMemo(() => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    color: '#fff',
+                    font: { size: 14, weight: '600' },
+                    padding: 20,
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                },
+            },
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                cornerRadius: 15,
+                padding: 20,
+                titleFont: { size: 16, weight: 'bold' },
+                bodyFont: { size: 14 },
+                displayColors: true,
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderWidth: 1,
+                callbacks: {
+                    label: function(context) {
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                        return `${context.label}: ${context.parsed} (${percentage}%)`;
+                    }
+                }
+            },
+        },
+        cutout: '65%',
+        animation: {
+            animateRotate: true,
+            animateScale: true,
+            duration: 2000,
+            easing: 'easeOutQuart',
+        },
+        elements: {
+            arc: {
+                borderJoinStyle: 'round',
+            }
+        }
+    }), []);
+
+    if (safeData.length === 0) {
+        return (
+            <div className="fleet-chart-placeholder">
+                <div className="placeholder-content">
+                    <div className="placeholder-icon">📊</div>
+                    <div className="placeholder-text">Aucune donnée disponible</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fleet-advanced-chart-container">
+            <h3 className="chart-title">{title}</h3>
+            <div className="chart-wrapper">
+                <Doughnut data={chartData} options={options} />
+                <div className="chart-center-info">
+                    <div className="center-number">{safeData.reduce((a, b) => a + b, 0)}</div>
+                    <div className="center-label">Total</div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Composant Graphique Line Avancé avec Gradients CORRIGÉ
+const AdvancedLineChart = ({ data, labels, title, color = '#00d4ff' }) => {
+    const chartRef = useRef(null);
+    const [gradient, setGradient] = useState(null);
+    const safeData = Array.isArray(data) ? data : [];
+    const safeLabels = Array.isArray(labels) ? labels : [];
+
+    // Créer le gradient après le montage du composant
+    useEffect(() => {
+        if (chartRef.current && chartRef.current.canvas) {
+            const canvas = chartRef.current.canvas;
+            const ctx = canvas.getContext('2d');
+            
+            if (ctx && typeof ctx.createLinearGradient === 'function') {
+                const newGradient = ctx.createLinearGradient(0, 0, 0, 400);
+                newGradient.addColorStop(0, color + '80');
+                newGradient.addColorStop(1, color + '00');
+                setGradient(newGradient);
+            }
+        }
+    }, [color]);
+
+    const chartData = useMemo(() => ({
+        labels: safeLabels,
+        datasets: [
+            {
+                label: title,
+                data: safeData,
+                borderColor: color,
+                backgroundColor: gradient || (color + '20'), // Fallback si gradient pas prêt
+                borderWidth: 4,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: color,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 3,
+                pointRadius: 8,
+                pointHoverRadius: 12,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: color,
+                pointHoverBorderWidth: 4,
+            },
+        ],
+    }), [safeData, safeLabels, title, color, gradient]);
+
+    const options = useMemo(() => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false,
+            },
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                cornerRadius: 15,
+                padding: 20,
+                titleFont: { size: 16, weight: 'bold' },
+                bodyFont: { size: 14 },
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                borderWidth: 1,
+                mode: 'index',
+                intersect: false,
+                position: 'nearest',
+            },
+        },
+        scales: {
+            x: {
+                ticks: { 
+                    color: 'rgba(255, 255, 255, 0.8)', 
+                    font: { size: 12, weight: '500' } 
+                },
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.1)',
+                    drawBorder: false,
+                },
+                border: {
+                    display: false,
+                }
+            },
+            y: {
+                ticks: { 
+                    color: 'rgba(255, 255, 255, 0.8)', 
+                    font: { size: 12, weight: '500' } 
+                },
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.1)',
+                    drawBorder: false,
+                },
+                border: {
+                    display: false,
+                }
+            },
+        },
+        animation: {
+            duration: 2500,
+            easing: 'easeOutQuart',
+            tension: {
+                duration: 2500,
+                easing: 'easeOutQuart',
+                from: 1,
+                to: 0.4,
+            }
+        },
+        interaction: {
+            intersect: false,
+            mode: 'index',
+        },
+        elements: {
+            line: {
+                borderCapStyle: 'round',
+                borderJoinStyle: 'round',
+            }
+        }
+    }), []);
+
+    if (safeData.length === 0) {
+        return (
+            <div className="fleet-chart-placeholder">
+                <div className="placeholder-content">
+                    <div className="placeholder-icon">📈</div>
+                    <div className="placeholder-text">Aucune donnée de tendance</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fleet-advanced-chart-container">
+            <h3 className="chart-title">{title}</h3>
+            <div className="chart-wrapper">
+                <Line ref={chartRef} data={chartData} options={options} />
+            </div>
+        </div>
+    );
+};
+
+// Composant Graphique Radar Avancé
+const AdvancedRadarChart = ({ data, labels, title, colors }) => {
+    const safeData = Array.isArray(data) ? data : [];
+    const safeLabels = Array.isArray(labels) ? labels : [];
+    const dynamicColors = colors || ['#00d4ff', '#8b5cf6', '#10b981'];
+
+    const chartData = useMemo(() => ({
+        labels: safeLabels,
+        datasets: safeData.map((dataset, index) => ({
+            label: dataset.label || `Dataset ${index + 1}`,
+            data: Array.isArray(dataset.data) ? dataset.data : dataset,
+            backgroundColor: (dynamicColors[index % dynamicColors.length] || '#00d4ff') + '20',
+            borderColor: dynamicColors[index % dynamicColors.length] || '#00d4ff',
+            borderWidth: 3,
+            pointBackgroundColor: dynamicColors[index % dynamicColors.length] || '#00d4ff',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: dynamicColors[index % dynamicColors.length] || '#00d4ff',
+            pointHoverBorderWidth: 3,
+        })),
+    }), [safeData, safeLabels, dynamicColors]);
+
+    const options = useMemo(() => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    font: { size: 14, weight: '600' },
+                    padding: 20,
+                    usePointStyle: true,
+                },
+            },
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                cornerRadius: 15,
+                padding: 20,
+                titleFont: { size: 16, weight: 'bold' },
+                bodyFont: { size: 14 },
+            },
+        },
+        scales: {
+            r: {
+                angleLines: {
+                    color: 'rgba(255, 255, 255, 0.2)',
+                    lineWidth: 2,
+                },
+                grid: {
+                    color: 'rgba(255, 255, 255, 0.2)',
+                    circular: true,
+                },
+                pointLabels: {
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    font: { size: 12, weight: '600' },
+                },
+                ticks: {
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    backdropColor: 'transparent',
+                    font: { size: 10 },
+                },
+                min: 0,
+            },
+        },
+        animation: {
+            duration: 2000,
+            easing: 'easeOutQuart',
+        },
+        elements: {
+            line: {
+                borderJoinStyle: 'round',
+            },
+            point: {
+                borderJoinStyle: 'round',
+            }
+        }
+    }), []);
+
+    if (safeData.length === 0) {
+        return (
+            <div className="fleet-chart-placeholder">
+                <div className="placeholder-content">
+                    <div className="placeholder-icon">🎯</div>
+                    <div className="placeholder-text">Aucune donnée radar</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fleet-advanced-chart-container">
+            <h3 className="chart-title">{title}</h3>
+            <div className="chart-wrapper">
+                <Radar data={chartData} options={options} />
+            </div>
+        </div>
+    );
+};
+
+// Composant Graphique Bubble pour analyses avancées
+const AdvancedBubbleChart = ({ data, title }) => {
+    const safeData = Array.isArray(data) ? data : [];
+
+    const chartData = useMemo(() => ({
+        datasets: safeData.map((dataset, index) => ({
+            label: dataset.label || `Dataset ${index + 1}`,
+            data: dataset.data || [],
+            backgroundColor: generateDynamicColors(1, 200 + index * 60)[0] + '80',
+            borderColor: generateDynamicColors(1, 200 + index * 60),
+            borderWidth: 2,
+            hoverRadius: 8,
+            hoverBorderWidth: 3,
+        })),
+    }), [safeData]);
+
+    const options = useMemo(() => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    font: { size: 14, weight: '600' },
+                    padding: 20,
+                    usePointStyle: true,
+                },
+            },
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                cornerRadius: 15,
+                padding: 20,
+                callbacks: {
+                    label: function(context) {
+                        const point = context.parsed;
+                        return `${context.dataset.label}: (${point.x}, ${point.y}, Taille: ${context.parsed.r})`;
+                    }
+                }
+            },
+        },
+        scales: {
+            x: {
+                type: 'linear',
+                position: 'bottom',
+                ticks: { 
+                    color: 'rgba(255, 255, 255, 0.8)', 
+                    font: { size: 12 } 
+                },
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.1)',
+                    drawBorder: false,
+                },
+                title: {
+                    display: true,
+                    text: 'Performance',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    font: { size: 14, weight: 'bold' }
+                }
+            },
+            y: {
+                ticks: { 
+                    color: 'rgba(255, 255, 255, 0.8)', 
+                    font: { size: 12 } 
+                },
+                grid: { 
+                    color: 'rgba(255, 255, 255, 0.1)',
+                    drawBorder: false,
+                },
+                title: {
+                    display: true,
+                    text: 'Utilisation',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    font: { size: 14, weight: 'bold' }
+                }
+            },
+        },
+        animation: {
+            duration: 2500,
+            easing: 'easeOutQuart',
+        },
+    }), []);
+
+    if (safeData.length === 0) {
+        return (
+            <div className="fleet-chart-placeholder">
+                <div className="placeholder-content">
+                    <div className="placeholder-icon">🫧</div>
+                    <div className="placeholder-text">Aucune donnée bubble</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fleet-advanced-chart-container">
+            <h3 className="chart-title">{title}</h3>
+            <div className="chart-wrapper">
+                <Bubble data={chartData} options={options} />
+            </div>
+        </div>
+    );
+};
 
 // Composant pour les particules flottantes
-const FloatingParticles = ({ animationsEnabled }) => {
+const FleetFloatingParticles = ({ animationsEnabled }) => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!animationsEnabled || reduceMotion) return null;
     
     const particles = useMemo(() => 
-        Array.from({ length: 30 }, (_, i) => ({
+        Array.from({ length: 25 }, (_, i) => ({
             id: i,
-            delay: Math.random() * 15,
+            delay: Math.random() * 20,
             left: Math.random() * 100,
-            size: Math.random() * 3 + 2,
+            size: Math.random() * 6 + 3,
+            color: i % 3 === 0 ? '#00d4ff' : i % 3 === 1 ? '#8b5cf6' : '#10b981',
         }))
     , []);
     
     return (
-        <div className="floating-particles">
+        <div className="fleet-floating-particles">
             {particles.map(particle => (
                 <div
                     key={particle.id}
-                    className="particle"
+                    className="fleet-particle"
                     style={{
                         left: `${particle.left}%`,
                         animationDelay: `${particle.delay}s`,
                         width: `${particle.size}px`,
                         height: `${particle.size}px`,
+                        background: `radial-gradient(circle, ${particle.color}80 0%, transparent 70%)`,
                     }}
                 />
             ))}
         </div>
     );
 };
-FloatingParticles.propTypes = {
-    animationsEnabled: PropTypes.bool.isRequired,
-};
 
-// Composant pour les étincelles
-const Sparkle = ({ top, left, delay, animationsEnabled }) => {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!animationsEnabled || reduceMotion) return null;
-    
-    return (
-        <div
-            className="sparkle"
-            style={{
-                top: `${top}%`,
-                left: `${left}%`,
-                animationDelay: `${delay}s`,
-            }}
-        />
-    );
-};
-Sparkle.propTypes = {
-    top: PropTypes.number.isRequired,
-    left: PropTypes.number.isRequired,
-    delay: PropTypes.number.isRequired,
-    animationsEnabled: PropTypes.bool.isRequired,
-};
-
-// Composant pour la barre de progression
-const ProgressBar = ({ percentage, color, label }) => {
-    const safePercentage = useMemo(() => {
-        const value = SafeNumber(percentage, 0);
-        return Math.min(Math.max(value, 0), 100);
-    }, [percentage]);
-    
-    return (
-        <div className="progress-bar" role="progressbar" aria-valuenow={safePercentage} aria-valuemin="0" aria-valuemax="100" aria-label={label}>
-            <div
-                className="progress-fill"
-                style={{
-                    width: `${safePercentage}%`,
-                    background: color,
-                }}
-            />
-        </div>
-    );
-};
-ProgressBar.propTypes = {
-    percentage: PropTypes.number,
-    color: PropTypes.string.isRequired,
-    label: PropTypes.string.isRequired,
-};
-
-// Composant pour le graphique interactif
-const InteractiveChart = ({ data, label, color }) => {
-    const safeData = useMemo(() => 
-        Array.isArray(data) ? data.map(d => SafeNumber(d, 0)) : []
-    , [data]);
-    
-    if (safeData.length === 0) {
-        return <div className="chart-placeholder">Pas de données disponibles</div>;
-    }
-    
-    const chartData = useMemo(() => ({
-        labels: safeData.map((_, index) => `Jour ${index + 1}`),
-        datasets: [
-            {
-                label,
-                data: safeData,
-                borderColor: color,
-                backgroundColor: `${color}33`,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-            },
-        ],
-    }), [safeData, label, color]);
-    
-    const options = useMemo(() => ({
-        responsive: true,
-        plugins: {
-            legend: {
-                position: 'top',
-                labels: { color: '#fff', font: { size: 14 } },
-            },
-            tooltip: {
-                enabled: true,
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: '#fff',
-                bodyColor: '#fff',
-            },
-            title: {
-                display: true,
-                text: label,
-                color: '#fff',
-                font: { size: 16 },
-            },
-        },
-        scales: {
-            x: { ticks: { color: '#fff' }, grid: { display: false } },
-            y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255, 255, 255, 0.2)' } },
-        },
-        maintainAspectRatio: false,
-    }), [label]);
-    
-    return (
-        <div className="chart-container" style={{ height: '150px' }} role="region" aria-label={`Graphique des tendances pour ${label}`}>
-            <Line data={chartData} options={options} />
-        </div>
-    );
-};
-InteractiveChart.propTypes = {
-    data: PropTypes.array,
-    label: PropTypes.string.isRequired,
-    color: PropTypes.string.isRequired,
-};
-
-// Composant pour les cartes de statistiques
-const StatCard = ({
+// Composant de carte statistique amélioré
+const EnhancedFleetStatCard = ({
     icon,
     number,
     label,
     description,
-    trend,
-    trendValue,
     color,
-    progress,
     chartData,
+    chartType,
+    trendData,
     index,
     animationsEnabled,
 }) => {
-    const isVisible = useAnimateOnMount(index * 150, animationsEnabled);
-    const safeNumber = useMemo(() => SafeNumber(number, 0), [number]);
-    const safeTrendValue = useMemo(() => SafeNumber(trendValue, 0), [trendValue]);
-    const safeProgress = useMemo(() => SafeNumber(progress, 0), [progress]);
+    const [elementRef, isVisible] = useAdvancedAnimateOnMount();
+    const [isHovered, setIsHovered] = useState(false);
     
-    const getTrendIcon = useCallback(() => {
-        if (trend === 'up') return '↗️';
-        if (trend === 'down') return '↘️';
-        return '→';
-    }, [trend]);
-    
-    const getTrendClass = useCallback(() => {
-        if (trend === 'up') return 'trend-up';
-        if (trend === 'down') return 'trend-down';
-        return 'trend-stable';
-    }, [trend]);
-    
-    const sparkles = useMemo(() => 
-        Array.from({ length: 5 }, (_, i) => ({
-            id: i,
-            top: Math.random() * 100,
-            left: Math.random() * 100,
-            delay: Math.random() * 3,
-        }))
-    , []);
-    
+    const safeNumber = useMemo(() => {
+        return typeof number === 'number' && !isNaN(number) ? number : 0;
+    }, [number]);
+
+    const renderAdvancedChart = () => {
+        if (!chartData || !Array.isArray(chartData) || chartData.length === 0) return null;
+
+        switch (chartType) {
+            case 'doughnut':
+                return (
+                    <AdvancedDoughnutChart
+                        data={chartData}
+                        labels={['Disponibles', 'En location', 'Maintenance']}
+                        title="Répartition"
+                        colors={['#10b981', '#f472b6', '#fbbf24']}
+                    />
+                );
+            case 'line':
+                return (
+                    <AdvancedLineChart
+                        data={trendData || chartData}
+                        labels={Array.from({length: (trendData || chartData).length}, (_, i) => `J${i+1}`)}
+                        title="Tendance 7 jours"
+                        color="#00d4ff"
+                    />
+                );
+            case 'radar':
+                return (
+                    <AdvancedRadarChart
+                        data={[{
+                            label: 'Métriques',
+                            data: chartData.slice(0, 6)
+                        }]}
+                        labels={['Total', 'Disponible', 'Loué', 'Maintenance', 'Revenus', 'Utilisation']}
+                        title="Vue d'ensemble"
+                        colors={['#00d4ff']}
+                    />
+                );
+            case 'bubble':
+                return (
+                    <AdvancedBubbleChart
+                        data={[{
+                            label: 'Performance',
+                            data: chartData.map((value, idx) => ({
+                                x: idx * 10,
+                                y: value,
+                                r: Math.max(5, value / 10)
+                            }))
+                        }]}
+                        title="Analyse Performance"
+                    />
+                );
+            default:
+                return null;
+        }
+    };
+
+    const animationDelay = useMemo(() => `${index * 150}ms`, [index]);
+
     return (
         <div
-            className={`stat-card ${isVisible ? 'animate-in' : ''}`}
+            ref={elementRef}
+            className={`enhanced-fleet-stat-card ${isVisible ? 'enhanced-animate-in' : ''} ${isHovered ? 'enhanced-hovered' : ''}`}
+            style={{ animationDelay }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             role="region"
-            aria-labelledby={`stat-card-${index}`}
-            aria-describedby={`stat-desc-${index}`}
+            aria-labelledby={`enhanced-fleet-stat-card-${index}`}
+            aria-describedby={`enhanced-fleet-stat-desc-${index}`}
         >
-            {sparkles.map(sparkle => (
-                <Sparkle key={sparkle.id} {...sparkle} animationsEnabled={animationsEnabled} />
-            ))}
-            <div className={`stat-trend ${getTrendClass()}`} aria-hidden="true">
-                {getTrendIcon()}
-            </div>
-            <div className={`stat-icon ${color}`} aria-hidden="true">
-                {icon}
-            </div>
-            <div className="stat-content">
-                <div className="stat-number" id={`stat-card-${index}`}>
-                    {safeNumber}
-                    {safeTrendValue !== 0 && (
-                        <span style={{ fontSize: '1rem', opacity: 0.8 }} aria-label={`Tendance: ${safeTrendValue}%`}>
-                            {safeTrendValue > 0 ? '+' : ''}{safeTrendValue.toFixed(1)}%
-                        </span>
-                    )}
+            <div className="enhanced-card-background"></div>
+            <div className="enhanced-card-content">
+                <div className={`enhanced-stat-icon ${color}`} aria-hidden="true">
+                    {icon}
                 </div>
-                <div className="stat-label">{label}</div>
-                <div className="stat-description" id={`stat-desc-${index}`}>{description}</div>
-                {safeProgress > 0 && (
-                    <ProgressBar
-                        percentage={safeProgress}
-                        color="linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4))"
-                        label={`Progression pour ${label}`}
-                    />
-                )}
-                {Array.isArray(chartData) && chartData.length > 0 && (
-                    <InteractiveChart
-                        data={chartData}
-                        label={label}
-                        color="rgba(255, 255, 255, 0.8)"
-                    />
-                )}
+                <div className="enhanced-stat-main">
+                    <div className="enhanced-stat-number" id={`enhanced-fleet-stat-card-${index}`}>
+                        <span className="number-animation">{safeNumber.toLocaleString()}</span>
+                    </div>
+                    <div className="enhanced-stat-label">{label}</div>
+                    <div className="enhanced-stat-description" id={`enhanced-fleet-stat-desc-${index}`}>
+                        {description}
+                    </div>
+                </div>
             </div>
+            {renderAdvancedChart()}
+            <div className="enhanced-card-glow"></div>
         </div>
     );
 };
-StatCard.propTypes = {
-    icon: PropTypes.element.isRequired,
-    number: PropTypes.number,
-    label: PropTypes.string.isRequired,
-    description: PropTypes.string.isRequired,
-    trend: PropTypes.string,
-    trendValue: PropTypes.number,
-    color: PropTypes.string.isRequired,
-    progress: PropTypes.number,
-    chartData: PropTypes.array,
-    index: PropTypes.number.isRequired,
-    animationsEnabled: PropTypes.bool.isRequired,
-};
 
-// Composant pour les cartes de métriques
-const MetricCard = ({ value, label, index, animationsEnabled }) => {
-    const isVisible = useAnimateOnMount(index * 100, animationsEnabled);
+// Composants pour les métriques secondaires et alertes
+const FleetMetricCard = ({ value, label, index, animationsEnabled }) => {
+    const isVisible = useFleetAnimateOnMount(index * 100, animationsEnabled);
     const displayValue = useMemo(() => 
         value !== undefined && value !== null ? value : 'N/A'
     , [value]);
     
     return (
         <div
-            className={`metric-card ${isVisible ? 'animate-in' : ''}`}
+            className={`fleet-metric-card ${isVisible ? 'fleet-animate-in' : ''}`}
             role="region"
-            aria-labelledby={`metric-card-${index}`}
+            aria-labelledby={`fleet-metric-card-${index}`}
         >
-            <div className="metric-value" id={`metric-card-${index}`}>
+            <div className="fleet-metric-value" id={`fleet-metric-card-${index}`}>
                 {displayValue}
             </div>
-            <div className="metric-label">{label}</div>
+            <div className="fleet-metric-label">{label}</div>
         </div>
     );
 };
-MetricCard.propTypes = {
-    value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-    label: PropTypes.string.isRequired,
-    index: PropTypes.number.isRequired,
-    animationsEnabled: PropTypes.bool.isRequired,
-};
 
-// Composant pour les alertes de maintenance
-const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }) => {
-    const isVisible = useAnimateOnMount(300, animationsEnabled);
+const FleetMaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }) => {
+    const isVisible = useFleetAnimateOnMount(300, animationsEnabled);
     
     const safeAlerts = useMemo(() => 
         Array.isArray(alerts) ? alerts : []
@@ -318,26 +721,26 @@ const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }
     }
     
     return (
-        <div className={`maintenance-alerts ${isVisible ? 'animate-in' : ''}`}>
-            <h2>Alertes de Maintenance</h2>
-            <div className="alerts-container">
+        <div className={`fleet-maintenance-alerts ${isVisible ? 'fleet-animate-in' : ''}`}>
+            <h2>🔧 Alertes de Maintenance</h2>
+            <div className="fleet-alerts-container">
                 {safeAlerts.map((alert) => (
-                    <div key={alert.id} className="alert-toast">
-                        <div className="alert-content">
+                    <div key={alert.id} className="fleet-alert-toast">
+                        <div className="fleet-alert-content">
                             <strong>{alert.vehicleName || 'Véhicule inconnu'}</strong>
                             <p>{alert.message || 'Maintenance requise'}</p>
                             <p>Prochaine maintenance: {alert.nextMaintenanceDate || 'À définir'}</p>
                         </div>
-                        <div className="alert-actions">
+                        <div className="fleet-alert-actions">
                             <button 
-                                className="send-email-button"
+                                className="fleet-send-email-button"
                                 onClick={() => onSendEmail(alert)}
                                 aria-label={`Envoyer un email pour ${alert.vehicleName || 'ce véhicule'}`}
                             >
                                 Envoyer un email
                             </button>
                             <button 
-                                className="dismiss-button"
+                                className="fleet-dismiss-button"
                                 onClick={() => onDismiss(alert.id)}
                                 aria-label={`Ignorer l'alerte pour ${alert.vehicleName || 'ce véhicule'}`}
                             >
@@ -350,36 +753,24 @@ const MaintenanceAlerts = ({ alerts, onDismiss, onSendEmail, animationsEnabled }
         </div>
     );
 };
-MaintenanceAlerts.propTypes = {
-    alerts: PropTypes.arrayOf(PropTypes.shape({
-        id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
-        vehicleName: PropTypes.string,
-        message: PropTypes.string,
-        nextMaintenanceDate: PropTypes.string,
-    })),
-    onDismiss: PropTypes.func.isRequired,
-    onSendEmail: PropTypes.func.isRequired,
-    animationsEnabled: PropTypes.bool.isRequired,
-};
 
-// Composant pour la section des revenus
-const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) => {
+const FleetRevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) => {
     const [selectedPeriod, setSelectedPeriod] = useState('month');
-    const isVisible = useAnimateOnMount(500, animationsEnabled);
+    const isVisible = useFleetAnimateOnMount(500, animationsEnabled);
     
     const handlePeriodChange = useCallback((e) => {
         setSelectedPeriod(e.target.value);
     }, []);
     
     const safeRevenueData = useMemo(() => revenueData || { total: 0, details: [] }, [revenueData]);
-    const safeTotal = useMemo(() => SafeNumber(safeRevenueData.total, 0), [safeRevenueData.total]);
+    const safeTotal = useMemo(() => fleetSafeNumber(safeRevenueData.total, 0), [safeRevenueData.total]);
     const safeDetails = useMemo(() => 
         Array.isArray(safeRevenueData.details) ? safeRevenueData.details : []
     , [safeRevenueData.details]);
     
     return (
-        <div className={`revenue-section ${isVisible ? 'animate-in' : ''}`}>
-            <h2>Revenus</h2>
+        <div className={`fleet-revenue-section ${isVisible ? 'fleet-animate-in' : ''}`}>
+            <h2>💰 Revenus</h2>
             <div>
                 <h3>Total: {safeTotal.toFixed(2)}€</h3>
                 <select value={selectedPeriod} onChange={handlePeriodChange} aria-label="Sélectionner la période pour les revenus">
@@ -390,7 +781,7 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
                 </select>
             </div>
             
-            <table className="revenue-table">
+            <table className="fleet-revenue-table">
                 <thead>
                     <tr>
                         <th>Véhicule</th>
@@ -405,8 +796,8 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
                             <tr key={index}>
                                 <td>{item.vehicleName || 'N/A'}</td>
                                 <td>{item.agenceName || 'N/A'}</td>
-                                <td>{SafeNumber(item.days, 0)}</td>
-                                <td>{SafeNumber(item.revenue, 0).toFixed(2)}€</td>
+                                <td>{fleetSafeNumber(item.days, 0)}</td>
+                                <td>{fleetSafeNumber(item.revenue, 0).toFixed(2)}€</td>
                             </tr>
                         ))
                     ) : (
@@ -418,33 +809,18 @@ const RevenueSection = ({ revenueData, onGenerateBilling, animationsEnabled }) =
             </table>
             
             <button 
-                className="billing-button"
+                className="fleet-billing-button"
                 onClick={() => onGenerateBilling(selectedPeriod)}
                 aria-label={`Générer une facture pour ${selectedPeriod}`}
             >
-                Générer une facture pour {selectedPeriod === 'day' ? 'aujourd\'hui' : 
-                  selectedPeriod === 'week' ? 'cette semaine' : 
-                  selectedPeriod === 'month' ? 'ce mois' : 'cette année'}
+                Générer une facture
             </button>
         </div>
     );
 };
-RevenueSection.propTypes = {
-    revenueData: PropTypes.shape({
-        total: PropTypes.number,
-        details: PropTypes.arrayOf(PropTypes.shape({
-            vehicleName: PropTypes.string,
-            agenceName: PropTypes.string,
-            days: PropTypes.number,
-            revenue: PropTypes.number,
-        })),
-    }),
-    onGenerateBilling: PropTypes.func.isRequired,
-    animationsEnabled: PropTypes.bool.isRequired,
-};
 
-// Composant principal du tableau de bord
-const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled: true } }) => {
+// COMPOSANT PRINCIPAL - FleetDashboard
+const FleetDashboard = ({ token, user, onLogout, settings = { animationsEnabled: true } }) => {
     const [stats, setStats] = useState({
         totalVehicles: 0,
         disponibles: 0,
@@ -472,7 +848,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState({ 
         period: 'week', 
-        agenceId: null  // Modification: Les agences voient maintenant toutes les agences par défaut
+        agenceId: null
     });
     
     // Utiliser des refs pour éviter les dépendances changeantes
@@ -492,7 +868,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         return <Navigate to="/login" replace />;
     }
     
-    // Modification: Autoriser les agences à accéder au tableau de bord
     if (!['admin', 'agence'].includes(user.role)) {
         return <Navigate to="/unauthorized" replace />;
     }
@@ -514,22 +889,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             return null;
         }
     }, [onLogout]);
-    
-    // Calcul des tendances dynamiques
-    const calculateTrend = useCallback((data) => {
-        if (!Array.isArray(data) || data.length < 2 || data.some(val => !Number.isFinite(val))) {
-            return { trend: 'stable', trendValue: 0 };
-        }
-        
-        const last = data[data.length - 1];
-        const secondLast = data[data.length - 2];
-        const change = secondLast !== 0 ? ((last - secondLast) / secondLast) * 100 : 0;
-        
-        return {
-            trend: Number.isFinite(change) && change > 0 ? 'up' : change < 0 ? 'down' : 'stable',
-            trendValue: Number.isFinite(change) ? Math.round(change * 10) / 10 : 0,
-        };
-    }, []);
     
     // Chargement des agences pour le filtre
     const fetchAgences = useCallback(async (accessToken) => {
@@ -588,12 +947,12 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                         : 'Véhicule inconnu',
                     agenceName: reservation.vehicule_display?.agence?.nom || 'Agence inconnue',
                     days,
-                    revenue: SafeNumber(reservation.montant_total, 0),
+                    revenue: fleetSafeNumber(reservation.montant_total, 0),
                 };
             });
             
             setRevenueData({
-                total: SafeNumber(reservationsData.revenus_total, 0),
+                total: fleetSafeNumber(reservationsData.revenus_total, 0),
                 details,
             });
         } catch (error) {
@@ -609,6 +968,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             let accessToken = tokenRef.current;
             const params = { period: filterRef.current.period };
             if (filterRef.current.agenceId) params.agence_id = filterRef.current.agenceId;
+            
             const defaultStats = {
                 total: 0,
                 disponibles: 0,
@@ -629,6 +989,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 moyenne_duree: 0,
                 taux_succes: 0,
             };
+            
             const vehiculesResponse = await axios.get(`${API_BASE_URL}/api/vehicules/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params,
@@ -640,6 +1001,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 }
                 return { data: defaultStats };
             });
+            
             const reservationsResponse = await axios.get(`${API_BASE_URL}/api/reservations/stats/`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params,
@@ -649,21 +1011,24 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             
             const vehiculesData = vehiculesResponse.data || defaultStats;
             const reservationsData = reservationsResponse.data.stats || defaultReservationStats;
+            
             setStats({
-                totalVehicles: SafeNumber(vehiculesData.total, 0),
-                disponibles: SafeNumber(vehiculesData.disponibles, 0),
-                loues: SafeNumber(vehiculesData.loues, 0),
-                maintenance: SafeNumber(vehiculesData.maintenance, 0),
-                reservations: SafeNumber(reservationsData.total, 0),
-                revenue: SafeNumber(reservationsData.revenus_total, 0),
-                utilisation: SafeNumber(vehiculesData.taux_utilisation, 0),
+                totalVehicles: fleetSafeNumber(vehiculesData.total, 0),
+                disponibles: fleetSafeNumber(vehiculesData.disponibles, 0),
+                loues: fleetSafeNumber(vehiculesData.loues, 0),
+                maintenance: fleetSafeNumber(vehiculesData.maintenance, 0),
+                reservations: fleetSafeNumber(reservationsData.total, 0),
+                revenue: fleetSafeNumber(reservationsData.revenus_total, 0),
+                utilisation: fleetSafeNumber(vehiculesData.taux_utilisation, 0),
             });
+            
             const generateTrendData = (baseValue, variance = 0.2) => {
-                const safeBaseValue = SafeNumber(baseValue, 10);
+                const safeBaseValue = fleetSafeNumber(baseValue, 10);
                 return Array(7).fill(0).map(() =>
                     Math.max(0, Math.round(safeBaseValue * (1 + (Math.random() - 0.5) * variance)))
                 );
             };
+            
             setTrends({
                 vehiclesTrend: generateTrendData(vehiculesData.total),
                 disponiblesTrend: generateTrendData(vehiculesData.disponibles),
@@ -672,10 +1037,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 revenueTrend: generateTrendData(reservationsData.revenus_total, 0.3),
                 utilizationTrend: generateTrendData(vehiculesData.taux_utilisation, 0.1),
             });
+            
             await Promise.all([
                 fetchMaintenanceAlerts(accessToken),
                 fetchRevenueData(accessToken, filterRef.current.period),
-                // Modification: Charger les agences pour les admins et les agences
                 ['admin', 'agence'].includes(userRef.current?.role) && agences.length === 0 ? fetchAgences(accessToken) : Promise.resolve(),
             ]);
         } catch (error) {
@@ -767,7 +1132,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     }, [token]);
     
     const FilterControls = useMemo(() => (
-        <div className="filter-controls">
+        <div className="fleet-filter-controls">
             <select
                 value={filter.period}
                 onChange={(e) => handleFilterChange({ period: e.target.value })}
@@ -778,7 +1143,6 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                 <option value="month">Dernier mois</option>
             </select>
             
-            {/* Modification: Autoriser les agences à sélectionner des agences */}
             {['admin', 'agence'].includes(user.role) && (
                 <select
                     value={filter.agenceId || ''}
@@ -802,10 +1166,17 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             number: stats.totalVehicles,
             label: 'Total Véhicules',
             description: 'Flotte complète disponible',
-            ...calculateTrend(trends.vehiclesTrend),
-            color: 'icon-vehicles',
-            progress: 100,
-            chartData: trends.vehiclesTrend,
+            color: 'fleet-icon-vehicles',
+            chartType: 'radar',
+            chartData: [
+                stats.totalVehicles,
+                stats.disponibles,
+                stats.loues,
+                stats.maintenance,
+                Math.floor(stats.revenue / 100),
+                stats.utilisation
+            ],
+            trendData: trends.vehiclesTrend,
         },
         {
             icon: <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -814,10 +1185,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             number: stats.disponibles,
             label: 'Disponibles',
             description: 'Prêts à être loués',
-            ...calculateTrend(trends.disponiblesTrend),
-            color: 'icon-available',
-            progress: stats.totalVehicles > 0 ? (stats.disponibles / stats.totalVehicles) * 100 : 0,
-            chartData: trends.disponiblesTrend,
+            color: 'fleet-icon-available',
+            chartType: 'doughnut',
+            chartData: [stats.disponibles, stats.loues, stats.maintenance],
+            trendData: trends.disponiblesTrend,
         },
         {
             icon: <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -826,10 +1197,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             number: stats.loues,
             label: 'En Location',
             description: 'Actuellement loués',
-            ...calculateTrend(trends.louesTrend),
-            color: 'icon-rented',
-            progress: stats.totalVehicles > 0 ? (stats.loues / stats.totalVehicles) * 100 : 0,
+            color: 'fleet-icon-rented',
+            chartType: 'line',
             chartData: trends.louesTrend,
+            trendData: trends.louesTrend,
         },
         {
             icon: <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -839,17 +1210,17 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
             number: stats.maintenance,
             label: 'Maintenance',
             description: 'En cours de réparation',
-            ...calculateTrend(trends.maintenanceTrend),
-            color: 'icon-maintenance',
-            progress: stats.totalVehicles > 0 ? (stats.maintenance / stats.totalVehicles) * 100 : 0,
+            color: 'fleet-icon-maintenance',
+            chartType: 'bubble',
             chartData: trends.maintenanceTrend,
+            trendData: trends.maintenanceTrend,
         },
-    ], [stats, trends, calculateTrend]);
+    ], [stats, trends]);
     
     const secondaryMetrics = useMemo(() => [
         { value: stats.reservations, label: 'Réservations' },
-        { value: `${SafeNumber(stats.revenue, 0).toFixed(2)}€`, label: 'Revenus' },
-        { value: `${SafeNumber(stats.utilisation, 0)}%`, label: "Taux d'utilisation" },
+        { value: `${fleetSafeNumber(stats.revenue, 0).toFixed(2)}€`, label: 'Revenus' },
+        { value: `${fleetSafeNumber(stats.utilisation, 0)}%`, label: "Taux d'utilisation" },
         { value: '4.8⭐', label: 'Note moyenne' },
         { value: '24h', label: 'Délai moyen' },
         { value: '98%', label: 'Satisfaction client' },
@@ -857,10 +1228,10 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     
     if (loading) {
         return (
-            <div className="dashboard-container">
-                <div className="stats-dashboard">
-                    <div className="dashboard-header">
-                        <div className="loading-spinner" role="status" aria-live="polite"></div>
+            <div className="fleet-dashboard-container">
+                <div className="fleet-stats-dashboard">
+                    <div className="fleet-dashboard-header">
+                        <div className="fleet-loading-spinner" role="status" aria-live="polite"></div>
                         <h1>Chargement des statistiques...</h1>
                     </div>
                 </div>
@@ -870,9 +1241,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     
     if (error) {
         return (
-            <div className="dashboard-container">
-                <div className="stats-dashboard">
-                    <div className="dashboard-header">
+            <div className="fleet-dashboard-container">
+                <div className="fleet-stats-dashboard">
+                    <div className="fleet-dashboard-header">
                         <h1>❌ Erreur</h1>
                         <p>{error}</p>
                         <button
@@ -881,7 +1252,7 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                                 fetchStats();
                             }}
                             aria-label="Réessayer le chargement des statistiques"
-                            className="retry-button"
+                            className="fleet-retry-button"
                         >
                             Réessayer
                         </button>
@@ -892,20 +1263,20 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
     }
     
     return (
-        <div className="dashboard-container" role="main">
-            <FloatingParticles animationsEnabled={settings.animationsEnabled} />
-            <div className="stats-dashboard">
-                <header className="dashboard-header">
-                    <h1 className="dashboard-title">📊 Statistiques Véhicules</h1>
-                    <p className="dashboard-subtitle">
-                        Tableau de bord moderne et interactif - Mise à jour en temps réel
+        <div className="fleet-dashboard-container" role="main">
+            <FleetFloatingParticles animationsEnabled={settings.animationsEnabled} />
+            <div className="fleet-stats-dashboard">
+                <header className="fleet-dashboard-header">
+                    <h1 className="fleet-dashboard-title">🚗 Tableau de Bord Flotte de Véhicules</h1>
+                    <p className="fleet-dashboard-subtitle">
+                        Gestion intelligente et analyse en temps réel de votre flotte automobile
                     </p>
                     {FilterControls}
                 </header>
                 
-                <div className="stats-grid">
+                <div className="fleet-stats-grid">
                     {mainStats.map((stat, index) => (
-                        <StatCard
+                        <EnhancedFleetStatCard
                             key={index}
                             {...stat}
                             index={index}
@@ -914,9 +1285,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                     ))}
                 </div>
                 
-                <div className="secondary-metrics">
+                <div className="fleet-secondary-metrics">
                     {secondaryMetrics.map((metric, index) => (
-                        <MetricCard
+                        <FleetMetricCard
                             key={index}
                             {...metric}
                             index={index}
@@ -925,14 +1296,14 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
                     ))}
                 </div>
                 
-                <MaintenanceAlerts 
+                <FleetMaintenanceAlerts 
                     alerts={maintenanceAlerts}
                     onDismiss={handleDismissAlert}
                     onSendEmail={handleSendEmail}
                     animationsEnabled={settings.animationsEnabled}
                 />
                 
-                <RevenueSection 
+                <FleetRevenueSection 
                     revenueData={revenueData}
                     onGenerateBilling={handleGenerateBilling}
                     animationsEnabled={settings.animationsEnabled}
@@ -941,7 +1312,9 @@ const StatsDashboard = ({ token, user, onLogout, settings = { animationsEnabled:
         </div>
     );
 };
-StatsDashboard.propTypes = {
+
+// PropTypes pour tous les composants
+FleetDashboard.propTypes = {
     token: PropTypes.string,
     user: PropTypes.shape({
         role: PropTypes.string,
@@ -955,4 +1328,92 @@ StatsDashboard.propTypes = {
         animationsEnabled: PropTypes.bool,
     }),
 };
-export default StatsDashboard;
+
+EnhancedFleetStatCard.propTypes = {
+    icon: PropTypes.element.isRequired,
+    number: PropTypes.number,
+    label: PropTypes.string.isRequired,
+    description: PropTypes.string.isRequired,
+    color: PropTypes.string.isRequired,
+    chartData: PropTypes.array,
+    chartType: PropTypes.oneOf(['doughnut', 'line', 'radar', 'bubble']),
+    trendData: PropTypes.array,
+    index: PropTypes.number.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
+FleetFloatingParticles.propTypes = {
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
+AdvancedDoughnutChart.propTypes = {
+    data: PropTypes.array,
+    labels: PropTypes.array,
+    title: PropTypes.string.isRequired,
+    colors: PropTypes.array,
+};
+
+AdvancedLineChart.propTypes = {
+    data: PropTypes.array,
+    labels: PropTypes.array,
+    title: PropTypes.string.isRequired,
+    color: PropTypes.string,
+};
+
+AdvancedRadarChart.propTypes = {
+    data: PropTypes.array,
+    labels: PropTypes.array,
+    title: PropTypes.string.isRequired,
+    colors: PropTypes.array,
+};
+
+AdvancedBubbleChart.propTypes = {
+    data: PropTypes.array,
+    title: PropTypes.string.isRequired,
+};
+
+FleetMetricCard.propTypes = {
+    value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    label: PropTypes.string.isRequired,
+    index: PropTypes.number.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
+FleetMaintenanceAlerts.propTypes = {
+    alerts: PropTypes.arrayOf(PropTypes.shape({
+        id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+        vehicleName: PropTypes.string,
+        message: PropTypes.string,
+        nextMaintenanceDate: PropTypes.string,
+    })),
+    onDismiss: PropTypes.func.isRequired,
+    onSendEmail: PropTypes.func.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
+FleetRevenueSection.propTypes = {
+    revenueData: PropTypes.shape({
+        total: PropTypes.number,
+        details: PropTypes.arrayOf(PropTypes.shape({
+            vehicleName: PropTypes.string,
+            agenceName: PropTypes.string,
+            days: PropTypes.number,
+            revenue: PropTypes.number,
+        })),
+    }),
+    onGenerateBilling: PropTypes.func.isRequired,
+    animationsEnabled: PropTypes.bool.isRequired,
+};
+
+// Export par défaut et exports nommés
+export {
+    AdvancedDoughnutChart,
+    AdvancedLineChart,
+    AdvancedRadarChart,
+    AdvancedBubbleChart,
+    EnhancedFleetStatCard,
+    useAdvancedAnimateOnMount,
+    generateDynamicColors
+};
+
+export default FleetDashboard;

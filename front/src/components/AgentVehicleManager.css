@@ -23,6 +23,9 @@
     overflow: hidden;
     font-family: var(--font);
 }
+header {
+    display: none !important;
+}
 
 /* Floating particles */
 .floating-particles {
