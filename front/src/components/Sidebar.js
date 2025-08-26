@@ -49,16 +49,28 @@ const Sidebar = ({ token, user, onLogout }) => {
     const isClient = user?.role === 'client';
     const isAdminOrAgence = isAdmin || isAgence;
 
-    // Hide sidebar on login and signup pages
-    const hideSidebar = ['/login', '/signup'].includes(location.pathname);
+    // ✅ MODIFICATION PRINCIPALE : 
+    // La sidebar est masquée SEULEMENT si l'utilisateur n'est PAS admin/agence 
+    // ET qu'il est sur les pages login/signup
+    const hideSidebar = !isAdminOrAgence && ['/login', '/signup'].includes(location.pathname);
+
+    // ✅ AMÉLIORATION : Forcer l'ouverture de la sidebar pour admin/agence
+    const [shouldAutoOpen, setShouldAutoOpen] = useState(false);
+    
+    React.useEffect(() => {
+        if (isAdminOrAgence && !shouldAutoOpen) {
+            setIsSidebarOpen(true);
+            setShouldAutoOpen(true);
+        }
+    }, [isAdminOrAgence, shouldAutoOpen]);
 
     if (hideSidebar) {
-        return null; // Don't render sidebar or toggle buttons on login/signup
+        return null;
     }
 
     return (
         <>
-            {/* General toggle button for mobile/small screens */}
+            {/* Bouton toggle général pour mobile/petits écrans */}
             <button
                 className={`sidebar-toggle ${isSidebarOpen ? 'active' : ''}`}
                 onClick={toggleSidebar}
@@ -66,7 +78,8 @@ const Sidebar = ({ token, user, onLogout }) => {
             >
                 <FaBars />
             </button>
-            {/* Client-specific toggle button */}
+
+            {/* Bouton toggle spécifique pour les clients */}
             {isClient && (
                 <button
                     className={`client-sidebar-toggle ${isSidebarOpen ? 'active' : ''}`}
@@ -76,7 +89,13 @@ const Sidebar = ({ token, user, onLogout }) => {
                     <FaBars />
                 </button>
             )}
-            <nav className={`sidebar ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`} role="navigation" aria-label="Menu principal">
+
+            {/* ✅ AMÉLIORATION : Classe CSS conditionnelle pour admin/agence */}
+            <nav 
+                className={`sidebar ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${isAdminOrAgence ? 'sidebar-admin-mode' : ''}`} 
+                role="navigation" 
+                aria-label="Menu principal"
+            >
                 <div className="sidebar-header">
                     <Link to="/" className="sidebar-brand" onClick={handleLinkClick} aria-label="Retour à l'accueil VitaRenta">
                         <div className="brand-logo">
@@ -89,8 +108,15 @@ const Sidebar = ({ token, user, onLogout }) => {
                         </div>
                         <div className="brand-text">
                             <span className="brand-name">VitaRenta</span>
+                            {/* ✅ AMÉLIORATION : Indicateur de mode admin/agence */}
+                            {isAdminOrAgence && (
+                                <span className="admin-mode-indicator">
+                                    {isAdmin ? '🛡️ Mode Admin' : '🏢 Mode Agence'}
+                                </span>
+                            )}
                         </div>
                     </Link>
+                    
                     {user && (
                         <div className="user-info">
                             <div className="user-avatar">
@@ -102,15 +128,26 @@ const Sidebar = ({ token, user, onLogout }) => {
                                     {user.role === 'admin' ? 'Administrateur' : 
                                      user.role === 'agence' ? 'Agence' : 'Client'}
                                 </span>
+                                {/* ✅ AMÉLIORATION : Statut de session pour admin/agence */}
+                                {isAdminOrAgence && (
+                                    <div className="session-status">
+                                        <span className="status-dot online"></span>
+                                        Session active
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
                 </div>
+
                 <div className="sidebar-menu">
                     {/* Lien Accueil pour tous les utilisateurs connectés */}
                     {token && (
                         <div className="sidebar-section">
-                            <h3 className="sidebar-section-title">Navigation</h3>
+                            <h3 className="sidebar-section-title">
+                                {isAdminOrAgence && <span className="admin-section-icon">⚡</span>}
+                                Navigation
+                            </h3>
                             <Link
                                 to="/"
                                 className={`sidebar-link ${isActive('/') ? 'sidebar-link-active' : ''}`}
@@ -122,6 +159,29 @@ const Sidebar = ({ token, user, onLogout }) => {
                                     <div className="icon-glow"></div>
                                 </div>
                                 <span className="link-text">Accueil</span>
+                            </Link>
+                        </div>
+                    )}
+                    
+                    {/* ✅ AMÉLIORATION : Section spéciale Admin/Agence Dashboard */}
+                    {isAdminOrAgence && (
+                        <div className="sidebar-section priority-section">
+                            <h3 className="sidebar-section-title admin-title">
+                                <span className="admin-section-icon">🎯</span>
+                                Tableau de Bord Prioritaire
+                            </h3>
+                            <Link
+                                to="/dashboard"
+                                className={`sidebar-link priority-link ${isActive('/dashboard') ? 'sidebar-link-active' : ''}`}
+                                onClick={handleLinkClick}
+                                aria-label="Tableau de bord"
+                            >
+                                <div className="icon-container">
+                                    <FaTachometerAlt />
+                                    <div className="icon-glow"></div>
+                                </div>
+                                <span className="link-text">Dashboard Principal</span>
+                                <div className="priority-indicator">⭐</div>
                             </Link>
                         </div>
                     )}
@@ -268,23 +328,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                     {isAdminOrAgence && (
                         <>
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Tableau de bord</h3>
-                                <Link
-                                    to="/dashboard"
-                                    className={`sidebar-link ${isActive('/dashboard') ? 'sidebar-link-active' : ''}`}
-                                    onClick={handleLinkClick}
-                                    aria-label="Tableau de bord"
-                                >
-                                    <div className="icon-container">
-                                        <FaTachometerAlt />
-                                        <div className="icon-glow"></div>
-                                    </div>
-                                    <span className="link-text">Tableau de Bord</span>
-                                </Link>
-                            </div>
-                            
-                            <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Gestion des véhicules</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">📊</span>
+                                    Gestion des véhicules
+                                </h3>
                                 <Link
                                     to="/vehicules"
                                     className={`sidebar-link ${isActive('/vehicules') ? 'sidebar-link-active' : ''}`}
@@ -340,7 +387,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             </div>
                             
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Réservations</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">📅</span>
+                                    Réservations
+                                </h3>
                                 <Link
                                     to="/reservations"
                                     className={`sidebar-link ${isActive('/reservations') ? 'sidebar-link-active' : ''}`}
@@ -357,7 +407,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             </div>
                             
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Analytique</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">📈</span>
+                                    Analytique
+                                </h3>
                                 <div className="sidebar-submenu">
                                     <button 
                                         className={`sidebar-link submenu-toggle ${openSubmenus.analytics ? 'open' : ''}`}
@@ -396,7 +449,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             </div>
                             
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Écologie</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">🌱</span>
+                                    Écologie
+                                </h3>
                                 <div className="sidebar-submenu">
                                     <button 
                                         className={`sidebar-link submenu-toggle ${openSubmenus.eco ? 'open' : ''}`}
@@ -435,7 +491,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             </div>
                             
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Support & Feedback</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">💬</span>
+                                    Support & Feedback
+                                </h3>
                                 <Link
                                     to="/feedback"
                                     className={`sidebar-link ${isActive('/feedback') ? 'sidebar-link-active' : ''}`}
@@ -465,7 +524,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             {/* Section Administration (uniquement pour les admins) */}
                             {isAdmin && (
                                 <div className="sidebar-section">
-                                    <h3 className="sidebar-section-title">Administration</h3>
+                                    <h3 className="sidebar-section-title admin-title">
+                                        <span className="admin-section-icon">🛡️</span>
+                                        Administration
+                                    </h3>
                                     <div className="sidebar-submenu">
                                         <button 
                                             className={`sidebar-link submenu-toggle ${openSubmenus.management ? 'open' : ''}`}
@@ -559,7 +621,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             )}
                             
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Agences</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">🏢</span>
+                                    Agences
+                                </h3>
                                 <Link
                                     to="/agencies-locator"
                                     className={`sidebar-link ${isActive('/agencies-locator') ? 'sidebar-link-active' : ''}`}
@@ -575,7 +640,10 @@ const Sidebar = ({ token, user, onLogout }) => {
                             </div>
                             
                             <div className="sidebar-section">
-                                <h3 className="sidebar-section-title">Compte</h3>
+                                <h3 className="sidebar-section-title admin-title">
+                                    <span className="admin-section-icon">👤</span>
+                                    Compte
+                                </h3>
                                 <Link
                                     to="/profile"
                                     className={`sidebar-link ${isActive('/profile') ? 'sidebar-link-active' : ''}`}

@@ -178,3 +178,45 @@ class IsAdminOrAgencyOrClientReadOnly(permissions.BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
         return request.user.role in ['admin', 'agence']
+# backend/users/permissions.py - NOUVEAU FICHIER
+from rest_framework import permissions
+
+class IsAdminOrAgencyForChallenges(permissions.BasePermission):
+    """
+    Permission pour admin ou agence pour gérer les défis
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        
+        # Les actions de lecture sont autorisées pour tous
+        if request.method in permissions.SAFE_METHODS:
+            return True
+            
+        # Les actions d'écriture pour admin et agence seulement
+        return hasattr(request.user, 'role') and request.user.role in ['admin', 'agence']
+
+class CanParticipateInChallenges(permissions.BasePermission):
+    """
+    Permission pour participer aux défis
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated
+
+class IsOwnerOrAdminOrAgency(permissions.BasePermission):
+    """
+    Permission pour propriétaire, admin ou agence
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        # Admin et agence ont tous les droits
+        if hasattr(request.user, 'role') and request.user.role in ['admin', 'agence']:
+            return True
+        
+        # Propriétaire a les droits sur ses objets
+        if hasattr(obj, 'user'):
+            return obj.user == request.user
+        
+        return False

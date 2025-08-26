@@ -6,6 +6,7 @@ from .models import (
     EcoChallengeProgress, EcoChallengeReward
 )
 
+
 class UserAdmin(BaseUserAdmin):
     list_display = ('email', 'nom', 'role', 'is_active', 'get_agence_display', 'date_joined')
     list_filter = ('role', 'is_active', 'date_joined')
@@ -58,6 +59,7 @@ class UserAdmin(BaseUserAdmin):
     get_agence_display.short_description = "Agence"
     get_agence_display.admin_order_field = 'agence__nom'
 
+
 @admin.register(Agence)
 class AgenceAdmin(admin.ModelAdmin):
     list_display = ('nom', 'email', 'adresse', 'telephone', 'date_creation')
@@ -82,6 +84,7 @@ class AgenceAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
 
 @admin.register(Vehicule)
 class VehiculeAdmin(admin.ModelAdmin):
@@ -193,6 +196,7 @@ class VehiculeAdmin(admin.ModelAdmin):
         self.message_user(request, f"{queryset.count()} véhicules marqués hors service.")
 
     make_unavailable.short_description = "Marquer hors service"
+
 
 @admin.register(Reservation)
 class ReservationAdmin(admin.ModelAdmin):
@@ -307,6 +311,7 @@ class ReservationAdmin(admin.ModelAdmin):
 
     cancel_reservations.short_description = "Annuler les réservations"
 
+
 # Admin pour les défis éco-responsables
 @admin.register(EcoChallenge)
 class EcoChallengeAdmin(admin.ModelAdmin):
@@ -352,6 +357,7 @@ class EcoChallengeAdmin(admin.ModelAdmin):
         )
     participants_count.short_description = 'Participants'
 
+
 @admin.register(UserEcoChallenge)
 class UserEcoChallengeAdmin(admin.ModelAdmin):
     list_display = [
@@ -361,33 +367,43 @@ class UserEcoChallengeAdmin(admin.ModelAdmin):
     ]
     list_filter = ['status', 'challenge__type', 'started_at', 'completed_at']
     search_fields = ['user__username', 'user__email', 'challenge__title']
-    readonly_fields = ['started_at', 'progress_percentage', 'days_remaining']
+    # ✅ CORRECTION : Supprimer les propriétés des readonly_fields
+    readonly_fields = ['started_at', 'completed_at']
     
     def challenge_title(self, obj):
-        return obj.challenge.title
+        return obj.challenge.title if obj.challenge else "Aucun défi"
     challenge_title.short_description = 'Défi'
     
     def progress_display(self, obj):
-        return f"{obj.progress} / {obj.challenge.target_value} {obj.challenge.unit}"
+        if obj.challenge:
+            return f"{obj.progress} / {obj.challenge.target_value} {obj.challenge.unit}"
+        return f"{obj.progress}"
     progress_display.short_description = 'Progression'
     
     def progress_percentage_display(self, obj):
-        percentage = obj.progress_percentage
-        color = 'green' if percentage >= 75 else 'orange' if percentage >= 50 else 'red'
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{:.1f}%</span>',
-            color, percentage
-        )
+        try:
+            percentage = obj.progress_percentage
+            color = 'green' if percentage >= 75 else 'orange' if percentage >= 50 else 'red'
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{:.1f}%</span>',
+                color, percentage
+            )
+        except Exception:
+            return format_html('<span style="color: gray;">N/A</span>')
     progress_percentage_display.short_description = 'Pourcentage'
     
     def days_remaining_display(self, obj):
-        days = obj.days_remaining
-        color = 'red' if days <= 3 else 'orange' if days <= 7 else 'green'
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{} jours</span>',
-            color, days
-        )
+        try:
+            days = obj.days_remaining
+            color = 'red' if days <= 3 else 'orange' if days <= 7 else 'green'
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{} jours</span>',
+                color, days
+            )
+        except Exception:
+            return format_html('<span style="color: gray;">N/A</span>')
     days_remaining_display.short_description = 'Jours restants'
+
 
 @admin.register(EcoChallengeProgress)
 class EcoChallengeProgressAdmin(admin.ModelAdmin):
@@ -404,6 +420,7 @@ class EcoChallengeProgressAdmin(admin.ModelAdmin):
             'user_challenge__user', 'user_challenge__challenge'
         )
 
+
 @admin.register(EcoChallengeReward)
 class EcoChallengeRewardAdmin(admin.ModelAdmin):
     list_display = [
@@ -415,7 +432,9 @@ class EcoChallengeRewardAdmin(admin.ModelAdmin):
     readonly_fields = ['awarded_at']
     
     def challenge_title(self, obj):
-        return obj.user_challenge.challenge.title
+        if obj.user_challenge and obj.user_challenge.challenge:
+            return obj.user_challenge.challenge.title
+        return "Aucun défi"
     challenge_title.short_description = 'Défi'
     
     def get_queryset(self, request):
@@ -423,7 +442,11 @@ class EcoChallengeRewardAdmin(admin.ModelAdmin):
             'user', 'user_challenge__challenge'
         )
 
+
+# Enregistrement de l'admin User
 admin.site.register(User, UserAdmin)
+
+# Configuration du site admin
 admin.site.site_header = "Administration VitaRenta"
 admin.site.site_title = "VitaRenta Admin"
 admin.site.index_title = "Gestion de la plateforme VitaRenta"

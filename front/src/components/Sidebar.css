@@ -518,3 +518,14 @@ header {
 .sidebar::-webkit-scrollbar-thumb:hover {
     background: var(--web3-accent);
 }
+/* Styles spéciaux pour le mode Admin/Agence */
+
+
+
+
+/* Forcer l'affichage pour admin/agence sur desktop */
+@media (min-width: 769px) {
+    .sidebar-admin-mode.sidebar-closed {
+        transform: translateX(0) !important;
+    }
+}

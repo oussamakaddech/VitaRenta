@@ -16,10 +16,12 @@ VEHICLE_IMAGES_DIR = MEDIA_ROOT / "vehicle_images"
 os.makedirs(PROFILE_PHOTOS_DIR, exist_ok=True)
 os.makedirs(VEHICLE_IMAGES_DIR, exist_ok=True)
 MEDIA_URL = "/media/"
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
 # Clé secrète et mode de débogage
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
+DEBUG = True  # ⚠️ Seulement en développement !
 
 # Liste des hôtes autorisés
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
@@ -167,7 +169,7 @@ else:
         }
         print(f"🔄 MongoDB sans auth: {MONGO_HOST}:{MONGO_PORT}/{MONGO_DB}")
 
-# Configuration de REST Framework
+# ✅ CORRECTION 3: Configuration REST Framework pour debugging
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -175,6 +177,11 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",  # Interface debug
+    ],
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",  # Handler par défaut
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
         "rest_framework.throttling.AnonRateThrottle",
@@ -242,60 +249,82 @@ USE_TZ = True
 
 # Configuration des logs
 LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
         },
-        # Formatter sans emojis pour la console Windows
-        "simple": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
+        'simple': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
         },
-    },
-    "handlers": {
-        "file": {
-            "level": os.getenv("LOG_LEVEL", "INFO"),
-            "class": "logging.FileHandler",
-            "filename": LOGS_DIR / "vitarenta.log",
-            "formatter": "verbose",
-            "encoding": "utf-8",  # ✅ Encodage UTF-8 pour le fichier
-        },
-        "console": {
-            "level": os.getenv("LOG_LEVEL", "DEBUG"),
-            "class": "logging.StreamHandler",
-            "formatter": "simple",
-            "stream": "ext://sys.stdout",  # Force l'utilisation de stdout
-        },
-        # Handler spécial pour erreurs Unicode
-        "safe_console": {
-            "level": "ERROR",
-            "class": "logging.StreamHandler",
-            "formatter": "simple",
+        'debug': {
+            'format': '[{asctime}] {levelname} {name} {funcName}:{lineno} - {message}',
+            'style': '{',
         },
     },
-    "loggers": {
-        "": {
-            "handlers": ["file", "safe_console"],
-            "level": os.getenv("LOG_LEVEL", "INFO"),
-            "propagate": False,
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'debug',
         },
-        "django": {
-            "handlers": ["file", "safe_console"],
-            "level": os.getenv("LOG_LEVEL", "INFO"),
-            "propagate": False,
+        'file': {
+            'level': 'DEBUG',  # Capturer tous les niveaux en développement
+            'class': 'logging.FileHandler',
+            'filename': LOGS_DIR / 'django_debug.log',
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
         },
-        "django.server": {
-            "handlers": ["file"],  # Pas de console pour éviter erreurs Unicode
-            "level": "INFO",
-            "propagate": False,
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': LOGS_DIR / 'django_errors.log',
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
         },
-        "users.views": {
-            "handlers": ["file"],  # Nos logs avec emojis vont que dans le fichier
-            "level": "INFO",
-            "propagate": False,
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'error_file'],
+            'level': 'DEBUG',  # Capturer toutes les requêtes
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',  # Voir les requêtes SQL
+            'propagate': False,
+        },
+        'users': {  # Votre app
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'users.views': {  # Spécifique aux views
+            'handlers': ['console', 'error_file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'users.models': {  # Spécifique aux modèles
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'users.serializers': {  # Spécifique aux serializers
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
         },
     },
 }

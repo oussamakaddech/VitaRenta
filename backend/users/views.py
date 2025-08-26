@@ -2,6 +2,7 @@ from datetime import timedelta
 import datetime
 import random
 import secrets
+import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -20,6 +21,19 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied
 import logging
 import os
+# ❌ INCORRECT - Évitez cette importation
+# import datetime
+
+# ✅ CORRECT - Utilisez une de ces méthodes :
+
+# Méthode 1 : Import direct de la classe
+from datetime import datetime, date, timedelta
+
+# Méthode 2 : Import du module complet
+import datetime as dt
+
+# Méthode 3 : Import spécifique
+from datetime import datetime
 
 from generate_eco_score_dataset import FUEL_TYPES
 from .permissions import IsAdminOrAgency, IsAdminOrAgencyOrClientReadOnly
@@ -30,7 +44,7 @@ from .models import  EcoScore, Feedback, IOTData, User, Vehicule, Agence, Reserv
 from .serializers import (
      AdvancedEcoChallengeSerializer, EcoChallengeBulkSerializer, FeedbackSerializer, LoginSerializer, PasswordResetConfirmSerializer, PasswordResetRequestSerializer, SignUpSerializer, UserSerializer, UserProfileSerializer,
     UserUpdateSerializer, VehiculeSerializer, AgenceSerializer, ReservationSerializer, EcoChallengeSerializer, UserEcoChallengeSerializer, 
-    EcoChallengeProgressSerializer, EcoChallengeStatsSerializer, CreateUserChallengeSerializer, EcoChallengeRewardSerializer
+    EcoChallengeProgressSerializer,ChallengeAnalyticsSerializer, CreateUserChallengeSerializer, EcoChallengeRewardSerializer
 )
 from rest_framework.permissions import BasePermission
 from .permissions import IsAdminUser, IsAgencyUser, IsClientUser, IsAdminOrAgency, IsClientOrAgencyOrAdmin
@@ -1002,6 +1016,8 @@ class UserViewSet(ModelViewSet):
                 },
                 'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+from datetime import datetime
+        
 class DemandForecastView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = [JSONWebTokenAuthentication]
@@ -1028,7 +1044,8 @@ class DemandForecastView(APIView):
             
             # Validate date format
             try:
-                parsed_date = datetime.datetime.strptime(date, '%Y-%m-%d')
+                parsed_date = datetime.strptime(date, '%Y-%m-%d')
+
             except ValueError as ve:
                 logger.error(f"Invalid date format: {date}, error: {str(ve)}")
                 return Response(
@@ -2107,252 +2124,328 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(f"Erreur lors de la suppression du feedback: {str(e)}")
 
-from rest_framework import viewsets, status
-from rest_framework.viewsets import ModelViewSet
+# views.py - PARTIE ECOCHALLENGE COMPLETE
+
+from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import PermissionDenied  # CORRECTION ICI
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.shortcuts import get_object_or_404
-from django.db.models import Q, Sum, Count, Avg
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
-from django.http import HttpResponse
-from datetime import timedelta
+from django.db.models import Sum, Count, Avg, Q, F
+from django.db import transaction
+from datetime import timedelta, datetime
 import logging
-import csv
+from decimal import Decimal
 
-# Imports de vos modèles (ajoutez le chemin correct)
 from .models import (
     EcoChallenge, UserEcoChallenge, EcoChallengeProgress, 
     EcoChallengeReward, ChallengeStatus, RewardType
 )
 from .serializers import (
-    EcoChallengeSerializer, UserEcoChallengeSerializer,
-    EcoChallengeProgressSerializer, EcoChallengeRewardSerializer
+    EcoChallengeSerializer, AdvancedEcoChallengeSerializer,
+    UserEcoChallengeSerializer, CreateUserChallengeSerializer,
+    EcoChallengeProgressSerializer, EcoChallengeRewardSerializer,
+    EcoChallengeBulkSerializer, ChallengeAnalyticsSerializer
+)
+from .permissions import (
+    IsAdminOrAgencyForChallenges, CanParticipateInChallenges,
+    IsOwnerOrAdminOrAgency
 )
 
 logger = logging.getLogger(__name__)
 
-
-class EcoChallengeViewSet(ModelViewSet):
-    """ViewSet principal pour les défis éco-responsables"""
+class EcoChallengeViewSet(viewsets.ModelViewSet):
+    """ViewSet complet pour la gestion des défis éco-responsables"""
+    
     queryset = EcoChallenge.objects.all()
-    serializer_class = EcoChallengeSerializer
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-    pagination_class = None
+    permission_classes = [IsAdminOrAgencyForChallenges]
+    
+    def get_serializer_class(self):
+        """Choisir le serializer selon l'action"""
+        if self.action in ['analytics', 'detailed_stats']:
+            return ChallengeAnalyticsSerializer
+        elif self.action in ['bulk_action']:
+            return EcoChallengeBulkSerializer
+        elif self.request.user.is_authenticated and self.request.user.role in ['admin', 'agence']:
+            return AdvancedEcoChallengeSerializer
+        return EcoChallengeSerializer
     
     def get_queryset(self):
-        try:
-            queryset = super().get_queryset()
-            
-            # Filtres de recherche
-            type_filter = self.request.query_params.get('type')
-            if type_filter:
-                queryset = queryset.filter(type=type_filter)
-                
-            difficulty_filter = self.request.query_params.get('difficulty')
-            if difficulty_filter:
-                queryset = queryset.filter(difficulty=difficulty_filter)
-                
-            is_active_filter = self.request.query_params.get('is_active')
-            if is_active_filter:
-                is_active = is_active_filter.lower() == 'true'
-                queryset = queryset.filter(is_active=is_active)
-                
-            return queryset.order_by('-created_at')
-        except Exception as e:
-            logger.error(f"Erreur lors de la récupération des défis: {str(e)}")
-            return EcoChallenge.objects.none()
+        """Filtrage intelligent des défis"""
+        queryset = super().get_queryset()
+        user = self.request.user
+        
+        # Filtrage par utilisateur
+        if user.is_authenticated:
+            if user.role == 'agence' and hasattr(user, 'agence'):
+                # Les agences voient leurs défis + les défis généraux
+                queryset = queryset.filter(
+                    Q(created_by=user) | Q(created_by__isnull=True)
+                )
+        
+        # Filtres de requête
+        params = self.request.query_params
+        
+        if params.get('type'):
+            queryset = queryset.filter(type=params.get('type'))
+        
+        if params.get('difficulty'):
+            queryset = queryset.filter(difficulty=params.get('difficulty'))
+        
+        if params.get('is_active') is not None:
+            is_active = params.get('is_active').lower() == 'true'
+            queryset = queryset.filter(is_active=is_active)
+        
+        if params.get('featured') is not None:
+            featured = params.get('featured').lower() == 'true'
+            queryset = queryset.filter(featured=featured)
+        
+        if params.get('category'):
+            queryset = queryset.filter(category=params.get('category'))
+        
+        if params.get('search'):
+            search_term = params.get('search')
+            queryset = queryset.filter(
+                Q(title__icontains=search_term) |
+                Q(description__icontains=search_term)
+            )
+        
+        return queryset.order_by('-featured', '-created_at')
     
-    def list(self, request, *args, **kwargs):
+    def perform_create(self, serializer):
+        """Création d'un défi avec gestion des permissions"""
         try:
-            queryset = self.get_queryset()
-            serializer = self.get_serializer(queryset, many=True)
+            with transaction.atomic():
+                # Définir le créateur
+                if self.request.user.is_authenticated:
+                    serializer.save(created_by=self.request.user)
+                else:
+                    serializer.save()
+                
+                logger.info(f"Défi créé: {serializer.instance.title} par {self.request.user.email}")
+        except Exception as e:
+            logger.error(f"Erreur création défi: {str(e)}")
+            raise
+    
+    def perform_update(self, serializer):
+        """Mise à jour avec logs"""
+        try:
+            challenge = serializer.save()
+            logger.info(f"Défi mis à jour: {challenge.title} par {self.request.user.email}")
+        except Exception as e:
+            logger.error(f"Erreur mise à jour défi: {str(e)}")
+            raise
+    
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def available(self, request):
+        """Récupérer les défis disponibles pour participation"""
+        try:
+            now = timezone.now()
+            available_challenges = self.get_queryset().filter(
+                is_active=True,
+                valid_from__lte=now
+            ).filter(
+                Q(valid_until__isnull=True) | Q(valid_until__gt=now)
+            )
+            
+            # Exclure les défis complets
+            for challenge in available_challenges:
+                if challenge.max_participants:
+                    current_participants = UserEcoChallenge.objects.filter(
+                        challenge=challenge,
+                        status__in=[ChallengeStatus.ACTIVE, ChallengeStatus.COMPLETED]
+                    ).count()
+                    if current_participants >= challenge.max_participants:
+                        available_challenges = available_challenges.exclude(id=challenge.id)
+            
+            serializer = self.get_serializer(available_challenges, many=True)
             return Response({
-                'results': serializer.data,
+                'challenges': serializer.data,
+                'count': len(serializer.data),
+                'message': 'Défis disponibles récupérés avec succès'
+            })
+        except Exception as e:
+            logger.error(f"Erreur récupération défis disponibles: {str(e)}")
+            return Response({
+                'error': 'Erreur lors de la récupération des défis'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Récupérer les défis en vedette"""
+        try:
+            featured_challenges = self.get_queryset().filter(
+                featured=True,
+                is_active=True
+            )[:6]  # Limiter à 6 défis vedettes
+            
+            serializer = self.get_serializer(featured_challenges, many=True)
+            return Response({
+                'challenges': serializer.data,
                 'count': len(serializer.data)
             })
         except Exception as e:
-            logger.error(f"Erreur dans list(): {str(e)}")
-            return Response({
-                'results': [],
-                'count': 0,
-                'error': 'Erreur lors du chargement des défis'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def update(self, request, *args, **kwargs):
-        try:
-            instance = self.get_object()
-            logger.info(f"=== MISE À JOUR DU DÉFI {instance.id} ===")
-            logger.info(f"Données reçues: {request.data}")
-            
-            serializer = self.get_serializer(instance, data=request.data, partial=True)
-            
-            if not serializer.is_valid():
-                logger.error(f"Erreurs de validation: {serializer.errors}")
-                return Response({
-                    'error': 'Données invalides',
-                    'details': serializer.errors,
-                    'received_data': request.data
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-            self.perform_update(serializer)
-            logger.info(f"Défi {instance.id} mis à jour avec succès")
-            return Response(serializer.data)
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de la mise à jour: {str(e)}")
-            return Response({
-                'error': f'Erreur serveur lors de la mise à jour: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def partial_update(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
-    
-    @action(detail=False, methods=['get'])
-    def templates(self, request):
-        """Récupérer les templates de défis"""
-        try:
-            templates = [
-                {
-                    'id': 'template_1',
-                    'title': 'Réduction CO₂ Hebdomadaire',
-                    'description': 'Réduisez vos émissions de CO₂ de 10% cette semaine',
-                    'type': 'co2_reduction',
-                    'difficulty': 'beginner',
-                    'target_value': 10,
-                    'unit': 'percentage',
-                    'duration_days': 7,
-                    'reward_points': 50,
-                    'reward_credit_euros': 2.5
-                },
-                {
-                    'id': 'template_2',
-                    'title': 'Eco-conduite du Mois',
-                    'description': 'Améliorez votre score d\'eco-conduite pendant 30 jours',
-                    'type': 'eco_driving',
-                    'difficulty': 'intermediate',
-                    'target_value': 85,
-                    'unit': 'score',
-                    'duration_days': 30,
-                    'reward_points': 150,
-                    'reward_credit_euros': 7.5
-                }
-            ]
-            return Response(templates)
-        except Exception as e:
-            logger.error(f"Erreur templates: {str(e)}")
-            return Response([], status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Erreur défis vedettes: {str(e)}")
+            return Response({'error': 'Erreur serveur'}, status=500)
     
     @action(detail=False, methods=['get'])
     def analytics(self, request):
-        """Récupérer les analytics des défis"""
+        """Analytics complètes des défis"""
         try:
-            total_challenges = EcoChallenge.objects.count()
-            active_challenges = EcoChallenge.objects.filter(is_active=True).count()
+            queryset = self.get_queryset()
             
-            # Calculer les statistiques des participants
-            try:
-                total_participants = UserEcoChallenge.objects.count()
-                completed_challenges = UserEcoChallenge.objects.filter(
-                    status=ChallengeStatus.COMPLETED
-                ).count()
-            except:
-                # Si les modèles n'existent pas encore
-                total_participants = 0
-                completed_challenges = 0
+            # Statistiques de base
+            total_challenges = queryset.count()
+            active_challenges = queryset.filter(is_active=True).count()
             
-            completion_rate = (completed_challenges / total_participants * 100) if total_participants > 0 else 0
+            # Statistiques de participation
+            total_participants = UserEcoChallenge.objects.filter(
+                challenge__in=queryset
+            ).count()
             
-            # Répartition par catégorie
-            challenges_by_category = {}
-            for challenge in EcoChallenge.objects.all():
-                category = getattr(challenge, 'category', 'other') or 'other'
-                challenges_by_category[category] = challenges_by_category.get(category, 0) + 1
+            completed_participants = UserEcoChallenge.objects.filter(
+                challenge__in=queryset,
+                status=ChallengeStatus.COMPLETED
+            ).count()
             
-            return Response({
+            completion_rate = (completed_participants / total_participants * 100) if total_participants > 0 else 0
+            
+            # Impact environnemental
+            total_co2_saved = EcoChallengeProgress.objects.filter(
+                user_challenge__challenge__in=queryset,
+                co2_saved__isnull=False
+            ).aggregate(total=Sum('co2_saved'))['total'] or 0
+            
+            # Récompenses distribuées
+            total_points = EcoChallengeReward.objects.filter(
+                challenge__in=queryset
+            ).aggregate(total=Sum('points_awarded'))['total'] or 0
+            
+            total_credits = EcoChallengeReward.objects.filter(
+                challenge__in=queryset
+            ).aggregate(total=Sum('credit_awarded'))['total'] or 0
+            
+            # Distribution par catégorie
+            challenges_by_category = dict(
+                queryset.values('category')
+                .annotate(count=Count('id'))
+                .values_list('category', 'count')
+            )
+            
+            # Distribution par difficulté
+            challenges_by_difficulty = dict(
+                queryset.values('difficulty')
+                .annotate(count=Count('id'))
+                .values_list('difficulty', 'count')
+            )
+            
+            # Tendances mensuelles (3 derniers mois)
+            monthly_trends = []
+            for i in range(3):
+                start_date = timezone.now().replace(day=1) - timedelta(days=i*30)
+                end_date = start_date + timedelta(days=30)
+                
+                month_data = {
+                    'month': start_date.strftime('%Y-%m'),
+                    'new_challenges': queryset.filter(
+                        created_at__range=[start_date, end_date]
+                    ).count(),
+                    'new_participants': UserEcoChallenge.objects.filter(
+                        started_at__range=[start_date, end_date],
+                        challenge__in=queryset
+                    ).count()
+                }
+                monthly_trends.append(month_data)
+            
+            # Meilleurs performers
+            top_performers = UserEcoChallenge.objects.filter(
+                challenge__in=queryset,
+                status=ChallengeStatus.COMPLETED
+            ).values(
+                'user__nom', 'user__email'
+            ).annotate(
+                completed_challenges=Count('id'),
+                total_points=Sum('challenge__reward_points')
+            ).order_by('-completed_challenges')[:10]
+            
+            analytics_data = {
                 'total_challenges': total_challenges,
                 'active_challenges': active_challenges,
                 'total_participants': total_participants,
-                'completion_rate': round(completion_rate, 1),
-                'total_co2_saved': 0,
-                'challenges_by_category': challenges_by_category
-            })
+                'completion_rate': round(completion_rate, 2),
+                'total_co2_saved': float(total_co2_saved),
+                'total_points_awarded': total_points,
+                'total_credits_awarded': float(total_credits),
+                'challenges_by_category': challenges_by_category,
+                'challenges_by_difficulty': challenges_by_difficulty,
+                'monthly_trends': monthly_trends,
+                'top_performers': list(top_performers)
+            }
+            
+            return Response(analytics_data)
+        
         except Exception as e:
             logger.error(f"Erreur analytics: {str(e)}")
             return Response({
-                'total_challenges': 0,
-                'active_challenges': 0,
-                'total_participants': 0,
-                'completion_rate': 0,
-                'total_co2_saved': 0,
-                'challenges_by_category': {}
+                'error': 'Erreur lors du calcul des analytics'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['get'])
     def participants(self, request, pk=None):
-        """Récupérer les participants d'un défi"""
+        """Liste des participants d'un défi"""
         try:
             challenge = self.get_object()
-            # Protection si UserEcoChallenge n'existe pas encore
-            try:
-                participants = UserEcoChallenge.objects.filter(challenge=challenge).select_related('user')
-                participants_data = []
-                for participant in participants:
-                    participants_data.append({
-                        'id': participant.id,
-                        'user': {
-                            'id': participant.user.id,
-                            'email': participant.user.email,
-                            'first_name': getattr(participant.user, 'first_name', ''),
-                            'last_name': getattr(participant.user, 'last_name', '')
-                        },
-                        'status': participant.status,
-                        'progress': getattr(participant, 'progress', 0),
-                        'started_at': getattr(participant, 'started_at', None),
-                        'completed_at': getattr(participant, 'completed_at', None)
-                    })
-                return Response(participants_data)
-            except:
-                # Si le modèle n'existe pas encore
-                return Response([])
+            participants = UserEcoChallenge.objects.filter(
+                challenge=challenge
+            ).select_related('user').order_by('-started_at')
+            
+            serializer = UserEcoChallengeSerializer(participants, many=True)
+            return Response({
+                'participants': serializer.data,
+                'count': participants.count(),
+                'challenge_title': challenge.title
+            })
         except Exception as e:
             logger.error(f"Erreur participants: {str(e)}")
-            return Response([], status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                'error': 'Erreur lors de la récupération des participants'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['post'])
     def bulk_action(self, request):
         """Actions en lot sur les défis"""
         try:
-            challenge_ids = request.data.get('challenge_ids', [])
-            action_type = request.data.get('action')
+            serializer = EcoChallengeBulkSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=400)
             
-            if not challenge_ids or not action_type:
-                return Response({
-                    'error': 'challenge_ids et action sont requis'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            challenge_ids = serializer.validated_data['challenge_ids']
+            action_type = serializer.validated_data['action']
             
-            challenges = EcoChallenge.objects.filter(id__in=challenge_ids)
-            affected_count = challenges.count()
+            challenges = self.get_queryset().filter(id__in=challenge_ids)
             
             if action_type == 'activate':
                 challenges.update(is_active=True)
+                message = f"{challenges.count()} défis activés"
             elif action_type == 'deactivate':
                 challenges.update(is_active=False)
+                message = f"{challenges.count()} défis désactivés"
+            elif action_type == 'feature':
+                challenges.update(featured=True)
+                message = f"{challenges.count()} défis mis en vedette"
+            elif action_type == 'unfeature':
+                challenges.update(featured=False)
+                message = f"{challenges.count()} défis retirés de la vedette"
             elif action_type == 'delete':
+                count = challenges.count()
                 challenges.delete()
-            else:
-                return Response({
-                    'error': f'Action non supportée: {action_type}'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                message = f"{count} défis supprimés"
             
-            return Response({
-                'message': f'Action {action_type} appliquée avec succès sur {affected_count} défi(s)'
-            })
+            logger.info(f"Action bulk {action_type} sur {len(challenge_ids)} défis par {request.user.email}")
+            return Response({'message': message})
+        
         except Exception as e:
-            logger.error(f"Erreur bulk_action: {str(e)}")
+            logger.error(f"Erreur bulk action: {str(e)}")
             return Response({
                 'error': 'Erreur lors de l\'action groupée'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -2363,588 +2456,446 @@ class EcoChallengeViewSet(ModelViewSet):
         try:
             original = self.get_object()
             
-            # Créer une copie avec les champs disponibles
+            # Créer une copie
             duplicate_data = {
-                'title': f"{original.title} (copie)",
-                'description': getattr(original, 'description', ''),
-                'type': getattr(original, 'type', 'eco_driving'),
-                'difficulty': getattr(original, 'difficulty', 'beginner'),
-                'target_value': getattr(original, 'target_value', 100),
-                'unit': getattr(original, 'unit', 'points'),
-                'duration_days': getattr(original, 'duration_days', 14),
-                'reward_points': getattr(original, 'reward_points', 100),
-                'reward_credit_euros': getattr(original, 'reward_credit_euros', 5),
-                'is_active': False
+                'title': f"{original.title} (Copie)",
+                'description': original.description,
+                'type': original.type,
+                'difficulty': original.difficulty,
+                'target_value': original.target_value,
+                'unit': original.unit,
+                'duration_days': original.duration_days,
+                'reward_points': original.reward_points,
+                'reward_credit_euros': original.reward_credit_euros,
+                'reward_badge': original.reward_badge,
+                'category': original.category,
+                'priority': original.priority,
+                'tags': original.tags,
+                'requirements': original.requirements,
+                'success_criteria': original.success_criteria,
+                'is_active': False  # Créer inactif par défaut
             }
             
-            # Ajouter les champs optionnels s'ils existent
-            optional_fields = ['category', 'priority', 'tags', 'requirements', 'success_criteria',
-                             'featured', 'auto_approve_participants', 'max_participants',
-                             'bonus_multiplier', 'seasonal_bonus']
-            
-            for field in optional_fields:
-                if hasattr(original, field):
-                    duplicate_data[field] = getattr(original, field)
-            
-            duplicate = EcoChallenge.objects.create(**duplicate_data)
-            serializer = self.get_serializer(duplicate)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-            
+            serializer = self.get_serializer(data=duplicate_data)
+            if serializer.is_valid():
+                duplicate = serializer.save(created_by=request.user)
+                logger.info(f"Défi dupliqué: {original.title} -> {duplicate.title}")
+                return Response(
+                    self.get_serializer(duplicate).data,
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                return Response(serializer.errors, status=400)
+        
         except Exception as e:
-            logger.error(f"Erreur duplicate: {str(e)}")
+            logger.error(f"Erreur duplication: {str(e)}")
             return Response({
-                'error': f'Erreur lors de la duplication: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=True, methods=['get'])
-    def export_data(self, request, pk=None):
-        """Exporter les données d'un défi en CSV"""
-        try:
-            challenge = self.get_object()
-            
-            response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = f'attachment; filename="challenge_{pk}_data.csv"'
-            
-            writer = csv.writer(response)
-            writer.writerow([
-                'ID', 'Titre', 'Type', 'Difficulté', 'Valeur Cible', 
-                'Unité', 'Durée (jours)', 'Statut'
-            ])
-            
-            writer.writerow([
-                str(challenge.id),
-                challenge.title,
-                getattr(challenge, 'type', 'N/A'),
-                getattr(challenge, 'difficulty', 'N/A'),
-                getattr(challenge, 'target_value', 'N/A'),
-                getattr(challenge, 'unit', 'N/A'),
-                getattr(challenge, 'duration_days', 'N/A'),
-                'Actif' if getattr(challenge, 'is_active', False) else 'Inactif'
-            ])
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Erreur export_data: {str(e)}")
-            return Response({
-                'error': 'Erreur lors de l\'export'
+                'error': 'Erreur lors de la duplication'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class UserEcoChallengeViewSet(ModelViewSet):
-    """ViewSet pour les défis des utilisateurs"""
+# views.py - Version avec debugging maximum
+
+import logging
+import uuid
+from django.db import transaction
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+logger = logging.getLogger(__name__)
+
+class UserEcoChallengeViewSet(viewsets.ModelViewSet):
     queryset = UserEcoChallenge.objects.all()
     serializer_class = UserEcoChallengeSerializer
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-    
     def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-    
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-    
-    @action(detail=True, methods=['post'])
-    def add_progress(self, request, pk=None):
-        """Ajouter de la progression à un défi"""
-        user_challenge = self.get_object()
-        serializer = EcoChallengeProgressSerializer(data=request.data)
+        """
+        Personnaliser le queryset selon l'utilisateur authentifié
+        Chaque utilisateur ne voit que ses propres défis
+        """
+        user = self.request.user
+        if user.is_authenticated:
+            # Filtrer les défis par utilisateur avec optimisation
+            return self.queryset.select_related('challenge', 'user').filter(user=user)
+        else:
+            # Utilisateur non authentifié : aucun défi
+            return self.queryset.none()
+    @action(detail=False, methods=['post'], url_path='join_challenge')
+    def join_challenge(self, request):
+        """Permet à un utilisateur de rejoindre un défi éco-responsable"""
         
-        if serializer.is_valid():
-            progress = serializer.save(user_challenge=user_challenge)
-            
-            # Mettre à jour la progression totale
-            total_progress = EcoChallengeProgress.objects.filter(
-                user_challenge=user_challenge
-            ).aggregate(total=Sum('value'))['total'] or 0
-            
-            user_challenge.progress = total_progress
-            
-            # Vérifier si le défi est terminé
-            if total_progress >= user_challenge.challenge.target_value:
-                user_challenge.status = ChallengeStatus.COMPLETED
-                user_challenge.completed_at = timezone.now()
-            
-            user_challenge.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # ✅ DEBUGGING: Log de début de requête
+        logger.info(f"🔄 DEBUG join_challenge - START")
+        logger.info(f"   User: {request.user.id if request.user.is_authenticated else 'Anonymous'}")
+        logger.info(f"   User role: {getattr(request.user, 'role', 'No role')}")
+        logger.info(f"   Request data: {request.data}")
+        logger.info(f"   Request method: {request.method}")
+        logger.info(f"   Request headers: {dict(request.headers)}")
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def claim_reward(self, request, pk=None):
-        """Réclamer la récompense d'un défi terminé"""
-        user_challenge = self.get_object()
-        
-        if user_challenge.status != ChallengeStatus.COMPLETED:
-            return Response({
-                'error': 'Le défi doit être terminé pour réclamer la récompense'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if getattr(user_challenge, 'reward_claimed', False):
-            return Response({
-                'error': 'Récompense déjà réclamée'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Créer la récompense
-        challenge = user_challenge.challenge
-        reward = EcoChallengeReward.objects.create(
-            user=user_challenge.user,
-            user_challenge=user_challenge,
-            challenge=challenge,
-            title=f"Récompense: {challenge.title}",
-            reward_type=RewardType.POINTS,
-            points=getattr(challenge, 'reward_points', 0),
-            credit_awarded=getattr(challenge, 'reward_credit_euros', 0),
-            badge_awarded=getattr(challenge, 'reward_badge', None)
-        )
-        
-        user_challenge.reward_claimed = True
-        user_challenge.save()
-        
-        return Response(
-            EcoChallengeRewardSerializer(reward).data, 
-            status=status.HTTP_201_CREATED
-        )
+        try:
+            # ✅ STEP 1: Vérification de l'authentification
+            logger.info("🔍 STEP 1: Checking authentication")
+            if not request.user or not request.user.is_authenticated:
+                logger.error("❌ User not authenticated")
+                return Response(
+                    {'detail': 'Authentification requise'}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            logger.info("✅ User authenticated")
 
+            # ✅ STEP 2: Validation du payload
+            logger.info("🔍 STEP 2: Validating payload")
+            challenge_id = request.data.get('challenge_id')
+            logger.info(f"   challenge_id received: {challenge_id} (type: {type(challenge_id)})")
+            
+            if not challenge_id:
+                logger.error("❌ challenge_id missing")
+                return Response(
+                    {'detail': 'challenge_id est requis'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
+            # ✅ STEP 3: Validation UUID
+            logger.info("🔍 STEP 3: Validating UUID")
+            try:
+                challenge_uuid = uuid.UUID(str(challenge_id))
+                logger.info(f"✅ UUID valid: {challenge_uuid}")
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Invalid UUID: {challenge_id}, error: {str(e)}")
+                return Response(
+                    {'detail': f'Format d\'ID de défi invalide: {str(e)}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ✅ STEP 4: Import des modèles (avec debugging)
+            logger.info("🔍 STEP 4: Importing models")
+            try:
+                from .models import EcoChallenge, UserEcoChallenge, ChallengeStatus
+                logger.info("✅ Models imported successfully")
+            except ImportError as e:
+                logger.error(f"❌ Failed to import models: {str(e)}")
+                return Response(
+                    {'detail': 'Erreur d\'import des modèles'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # ✅ STEP 5: Récupération du défi
+            logger.info(f"🔍 STEP 5: Fetching challenge {challenge_uuid}")
+            try:
+                challenge = EcoChallenge.objects.get(id=challenge_uuid)
+                logger.info(f"✅ Challenge found: {challenge.title} (active: {challenge.is_active})")
+            except EcoChallenge.DoesNotExist:
+                logger.error(f"❌ Challenge not found: {challenge_uuid}")
+                return Response(
+                    {'detail': 'Défi non trouvé'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            except Exception as e:
+                logger.error(f"❌ Database error fetching challenge: {str(e)}")
+                return Response(
+                    {'detail': 'Erreur base de données lors de la recherche du défi'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # ✅ STEP 6: Vérifications métier
+            logger.info("🔍 STEP 6: Business logic validation")
+            if not challenge.is_active:
+                logger.warning(f"❌ Challenge inactive: {challenge_uuid}")
+                return Response(
+                    {'detail': 'Ce défi n\'est plus actif'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ✅ STEP 7: Vérifier participation existante
+            logger.info("🔍 STEP 7: Checking existing participation")
+            try:
+                existing_participation = UserEcoChallenge.objects.filter(
+                    user=request.user, 
+                    challenge=challenge
+                ).first()
+                
+                if existing_participation:
+                    logger.info(f"🔍 Existing participation found: {existing_participation.status}")
+                    if existing_participation.status == ChallengeStatus.ACTIVE:
+                        return Response(
+                            {'detail': 'Vous participez déjà à ce défi'}, 
+                            status=status.HTTP_409_CONFLICT
+                        )
+                    elif existing_participation.status == ChallengeStatus.COMPLETED:
+                        return Response(
+                            {'detail': 'Vous avez déjà terminé ce défi'}, 
+                            status=status.HTTP_409_CONFLICT
+                        )
+                else:
+                    logger.info("✅ No existing participation")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error checking existing participation: {str(e)}")
+                return Response(
+                    {'detail': 'Erreur lors de la vérification des participations existantes'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # ✅ STEP 8: Création de la participation
+            logger.info("🔍 STEP 8: Creating participation")
+            try:
+                with transaction.atomic():
+                    logger.info("🔄 Starting database transaction")
+                    
+                    user_challenge = UserEcoChallenge.objects.create(
+                        user=request.user,
+                        challenge=challenge,
+                        status=ChallengeStatus.ACTIVE,
+                        progress=0
+                    )
+                    
+                    logger.info(f"✅ UserEcoChallenge created: {user_challenge.id}")
+
+                    response_data = {
+                        'message': 'Participation enregistrée avec succès',
+                        'user_challenge_id': str(user_challenge.id),
+                        'status': 'active',
+                        'challenge': {
+                            'id': str(challenge.id),
+                            'title': challenge.title,
+                            'target_value': str(challenge.target_value),
+                            'duration_days': challenge.duration_days,
+                            'reward_points': challenge.reward_points,
+                        }
+                    }
+                    
+                    logger.info(f"✅ SUCCESS: Response data prepared: {response_data}")
+                    
+                    return Response(response_data, status=status.HTTP_201_CREATED)
+                    
+            except Exception as db_error:
+                logger.error(f"❌ DATABASE ERROR during creation:")
+                logger.error(f"   Error type: {type(db_error).__name__}")
+                logger.error(f"   Error message: {str(db_error)}")
+                logger.error(f"   Full traceback:", exc_info=True)
+                
+                return Response(
+                    {
+                        'detail': 'Erreur lors de la création de la participation',
+                        'error_type': type(db_error).__name__,
+                        'error_message': str(db_error)
+                    }, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        except Exception as e:
+            # ✅ GLOBAL ERROR HANDLER
+            logger.error(f"❌ GLOBAL ERROR in join_challenge:")
+            logger.error(f"   User: {request.user.id if request.user.is_authenticated else 'Anonymous'}")
+            logger.error(f"   Data: {request.data}")
+            logger.error(f"   Exception type: {type(e).__name__}")
+            logger.error(f"   Exception message: {str(e)}")
+            logger.error(f"   Full stack trace:", exc_info=True)
+            
+            return Response(
+                {
+                    'detail': 'Une erreur inattendue s\'est produite',
+                    'error_type': type(e).__name__,
+                    'error_message': str(e)
+                }, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+# Ajouter cette classe dans views.py
 class EcoChallengeProgressViewSet(viewsets.ModelViewSet):
     """ViewSet pour la progression des défis"""
     queryset = EcoChallengeProgress.objects.all()
     serializer_class = EcoChallengeProgressSerializer
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-    
+    permission_classes = [IsAuthenticated, CanParticipateInChallenges]
+
     def get_queryset(self):
-        return self.queryset.filter(user_challenge__user=self.request.user)
-    
+        """Filtrer par utilisateur"""
+        user = self.request.user
+        if user.role == 'client':
+            return self.queryset.filter(user_challenge__user=user)
+        elif user.role == 'agence' and hasattr(user, 'agence'):
+            return self.queryset.filter(user_challenge__user__agence=user.agence)
+        elif user.role == 'admin':
+            return self.queryset
+        return self.queryset.none()
+
     def perform_create(self, serializer):
-        user_challenge_id = serializer.validated_data.get('user_challenge').id
-        user_challenge = UserEcoChallenge.objects.get(id=user_challenge_id)
+        """Création d'une entrée de progression de défi - VERSION CORRIGÉE"""
+        logger.info("🔄 Création d'une entrée de progression")
         
-        if user_challenge.user != self.request.user:
-            raise PermissionDenied(
-                "Vous ne pouvez ajouter de la progression qu'à vos propres défis"
+        try:
+            # Sauvegarder l'entrée de progression
+            progress_entry = serializer.save()
+            logger.info(f"✅ Entrée de progression créée: {progress_entry.id}")
+            
+            # Récupérer le défi utilisateur associé
+            user_challenge = progress_entry.user_challenge
+            if not user_challenge:
+                logger.warning("Pas de défi utilisateur associé")
+                return
+            
+            # ✅ CORRECTION: Calculer le total de progression de manière sécurisée
+            def safe_aggregate_sum(queryset, field_name):
+                """Agrégation sécurisée pour éviter les erreurs Decimal128"""
+                try:
+                    # Calculer manuellement pour éviter l'agrégation Django
+                    entries = list(queryset.values_list(field_name, flat=True))
+                    total = Decimal('0.00')
+                    
+                    for entry_value in entries:
+                        if entry_value is not None:
+                            # Conversion sécurisée de tous les types vers Decimal
+                            if hasattr(entry_value, 'to_decimal'):
+                                total += entry_value.to_decimal()
+                            elif isinstance(entry_value, (int, float)):
+                                total += Decimal(str(entry_value))
+                            elif isinstance(entry_value, str):
+                                total += Decimal(entry_value)
+                            else:
+                                total += Decimal(str(entry_value))
+                    
+                    return total
+                except Exception as e:
+                    logger.error(f"Erreur lors du calcul de somme: {str(e)}")
+                    return Decimal('0.00')
+            
+            # Calculer le total de progression
+            total_progress = safe_aggregate_sum(
+                EcoChallengeProgress.objects.filter(user_challenge=user_challenge),
+                'value'
             )
-        
-        serializer.save()
-        
-        # Mettre à jour la progression du défi
-        total_progress = EcoChallengeProgress.objects.filter(
-            user_challenge=user_challenge
-        ).aggregate(total=Sum('value'))['total'] or 0
-        
-        user_challenge.progress = total_progress
-        user_challenge.save()
-    
-    @action(detail=False, methods=['get'])
-    def my_progress(self, request):
-        """Récupérer toute la progression de l'utilisateur"""
-        user_progress = self.get_queryset()
-        serializer = self.get_serializer(user_progress, many=True)
-        return Response(serializer.data)
+            
+            # Mettre à jour la progression de l'utilisateur
+            user_challenge.progress = total_progress
+            user_challenge.save()
+            
+            logger.info(f"✅ Progression mise à jour: {total_progress} pour le défi {user_challenge.id}")
+            
+            # Vérifier la complétion du défi
+            if user_challenge.is_completed and user_challenge.status == ChallengeStatus.ACTIVE:
+                user_challenge.status = ChallengeStatus.COMPLETED
+                user_challenge.completed_at = timezone.now()
+                user_challenge.save()
+                
+                logger.info(f"🏆 Défi complété: {user_challenge.challenge.title}")
+                
+                # Créer automatiquement la récompense
+                self._create_reward(user_challenge)
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la création de progression: {str(e)}")
+            raise
+
+
+    def _create_reward(self, user_challenge):
+        """Créer une récompense pour un défi terminé"""
+        try:
+            challenge = user_challenge.challenge
+            
+            EcoChallengeReward.objects.create(
+                user=user_challenge.user,
+                user_challenge=user_challenge,
+                challenge=challenge,
+                title=f"Récompense - {challenge.title}",
+                description=f"Félicitations ! Vous avez terminé le défi {challenge.title}",
+                reward_type=RewardType.POINTS,
+                points=challenge.reward_points,
+                points_awarded=challenge.reward_points,
+                credit_awarded=challenge.reward_credit_euros,
+                badge_awarded=challenge.reward_badge,
+                awarded_by=None  # Système automatique
+            )
+            
+            logger.info(f"Récompense créée pour {user_challenge.user.email} - {challenge.title}")
+            
+        except Exception as e:
+            logger.error(f"Erreur création récompense: {str(e)}")
+
 
 
 class EcoChallengeRewardViewSet(viewsets.ModelViewSet):
-    """ViewSet pour les récompenses des défis"""
+    """ViewSet pour les récompenses"""
+    
     queryset = EcoChallengeReward.objects.all()
     serializer_class = EcoChallengeRewardSerializer
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
     
     def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-    
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        """Filtrer selon l'utilisateur"""
+        queryset = super().get_queryset()
+        user = self.request.user
+        
+        if user.role == 'client':
+            queryset = queryset.filter(user=user)
+        elif user.role == 'agence' and hasattr(user, 'agence'):
+            queryset = queryset.filter(user__agence=user.agence)
+        
+        return queryset.select_related('user', 'challenge', 'user_challenge')
     
     @action(detail=True, methods=['post'])
     def claim(self, request, pk=None):
         """Réclamer une récompense"""
-        reward = self.get_object()
-        
-        if getattr(reward, 'claimed', False):
+        try:
+            reward = self.get_object()
+            
+            # Vérifier les permissions
+            if reward.user != request.user:
+                return Response({
+                    'error': 'Permission refusée'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            if reward.claimed:
+                return Response({
+                    'error': 'Récompense déjà réclamée'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Marquer comme réclamée
+            reward.claimed = True
+            reward.claimed_at = timezone.now()
+            reward.applied_to_account = True
+            reward.save()
+            
+            logger.info(f"Récompense réclamée: {reward.title} par {reward.user.email}")
+            
             return Response({
-                'error': 'Récompense déjà réclamée'
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': 'Récompense réclamée avec succès',
+                'reward': EcoChallengeRewardSerializer(reward).data
+            })
         
-        reward.claimed = True
-        reward.claimed_at = timezone.now()
-        reward.save()
-        
-        return Response({'message': 'Récompense réclamée avec succès'})
+        except Exception as e:
+            logger.error(f"Erreur réclamation récompense: {str(e)}")
+            return Response({
+                'error': 'Erreur lors de la réclamation'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['get'])
     def my_rewards(self, request):
-        """Récupérer toutes les récompenses de l'utilisateur"""
-        user_rewards = self.get_queryset()
-        serializer = self.get_serializer(user_rewards, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def unclaimed_rewards(self, request):
-        """Récupérer les récompenses non réclamées"""
-        unclaimed_rewards = self.get_queryset().filter(claimed=False)
-        serializer = self.get_serializer(unclaimed_rewards, many=True)
-        return Response(serializer.data)
-from rest_framework import viewsets, status
-from rest_framework.viewsets import ModelViewSet
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import PermissionDenied  # CORRECTION
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.shortcuts import get_object_or_404
-from django.db.models import Q, Sum, Count, Avg
-from django.utils import timezone
-from django.http import HttpResponse
-from datetime import timedelta
-import logging
-import csv
-
-# Ajoutez vos imports de modèles (remplacez par les vrais chemins)
-# from .models import (
-#     EcoChallenge, UserEcoChallenge, EcoChallengeProgress, 
-#     EcoChallengeReward, ChallengeStatus, RewardType
-# )
-# from .serializers import (
-#     EcoChallengeSerializer, UserEcoChallengeSerializer,
-#     EcoChallengeProgressSerializer, EcoChallengeRewardSerializer
-# )
-
-logger = logging.getLogger(__name__)
-
-class EcoChallengeViewSet(ModelViewSet):
-    """ViewSet COMPLET pour les défis éco-responsables"""
-    # queryset = EcoChallenge.objects.all()
-    # serializer_class = EcoChallengeSerializer
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-    pagination_class = None
-    
-    def get_queryset(self):
+        """Mes récompenses"""
         try:
-            # queryset = super().get_queryset()
-            # Pour l'instant, retourner un queryset vide pour éviter l'erreur
-            queryset = []
+            user = request.user
+            rewards = self.get_queryset().filter(user=user).order_by('-awarded_at')
             
-            # Filtres de recherche (une fois que vous avez le modèle)
-            # type_filter = self.request.query_params.get('type')
-            # if type_filter:
-            #     queryset = queryset.filter(type=type_filter)
+            # Statistiques
+            total_points = rewards.aggregate(total=Sum('points_awarded'))['total'] or 0
+            total_credits = rewards.aggregate(total=Sum('credit_awarded'))['total'] or 0
+            unclaimed_count = rewards.filter(claimed=False).count()
             
-            return queryset
-        except Exception as e:
-            logger.error(f"Erreur lors de la récupération des défis: {str(e)}")
-            return []
-    
-    def list(self, request, *args, **kwargs):
-        """Lister les défis"""
-        try:
-            # Pour l'instant, retourner des données de test
-            test_data = [
-                {
-                    'id': 1,
-                    'title': 'Défi test 1',
-                    'description': 'Description test',
-                    'type': 'eco_driving',
-                    'difficulty': 'beginner',
-                    'target_value': 100,
-                    'unit': 'points',
-                    'duration_days': 14,
-                    'reward_points': 50,
-                    'reward_credit_euros': 5.0,
-                    'is_active': True,
-                    'featured': False
-                },
-                {
-                    'id': 2,
-                    'title': 'Défi test 2',
-                    'description': 'Description test 2',
-                    'type': 'co2_reduction',
-                    'difficulty': 'intermediate',
-                    'target_value': 200,
-                    'unit': 'kg',
-                    'duration_days': 30,
-                    'reward_points': 100,
-                    'reward_credit_euros': 10.0,
-                    'is_active': True,
-                    'featured': True
-                }
-            ]
+            serializer = self.get_serializer(rewards, many=True)
             
             return Response({
-                'results': test_data,
-                'count': len(test_data)
+                'rewards': serializer.data,
+                'stats': {
+                    'total_rewards': rewards.count(),
+                    'total_points': total_points,
+                    'total_credits': float(total_credits),
+                    'unclaimed_count': unclaimed_count
+                }
             })
+        
         except Exception as e:
-            logger.error(f"Erreur dans list(): {str(e)}")
+            logger.error(f"Erreur mes récompenses: {str(e)}")
             return Response({
-                'results': [],
-                'count': 0,
-                'error': 'Erreur lors du chargement des défis'
+                'error': 'Erreur lors de la récupération des récompenses'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def create(self, request, *args, **kwargs):
-        """Créer un nouveau défi"""
-        try:
-            logger.info(f"=== CRÉATION D'UN NOUVEAU DÉFI ===")
-            logger.info(f"Données reçues: {request.data}")
-            
-            # Validation basique
-            required_fields = ['title', 'target_value', 'duration_days']
-            for field in required_fields:
-                if not request.data.get(field):
-                    return Response({
-                        'error': f'Le champ {field} est requis'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Simuler la création pour l'instant
-            created_challenge = {
-                'id': 999,  # ID simulé
-                'title': request.data.get('title'),
-                'description': request.data.get('description', ''),
-                'type': request.data.get('type', 'eco_driving'),
-                'difficulty': request.data.get('difficulty', 'beginner'),
-                'target_value': float(request.data.get('target_value', 0)),
-                'unit': request.data.get('unit', 'points'),
-                'duration_days': int(request.data.get('duration_days', 14)),
-                'reward_points': int(request.data.get('reward_points', 100)),
-                'reward_credit_euros': float(request.data.get('reward_credit_euros', 5.0)),
-                'is_active': request.data.get('is_active', True),
-                'featured': request.data.get('featured', False),
-                'created_at': timezone.now().isoformat(),
-                'updated_at': timezone.now().isoformat()
-            }
-            
-            logger.info(f"Défi créé avec succès: {created_challenge}")
-            return Response(created_challenge, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de la création: {str(e)}")
-            return Response({
-                'error': f'Erreur serveur lors de la création: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def retrieve(self, request, pk=None, *args, **kwargs):
-        """Récupérer un défi par ID"""
-        try:
-            # Simuler la récupération
-            challenge = {
-                'id': int(pk),
-                'title': f'Défi {pk}',
-                'description': 'Description simulée',
-                'type': 'eco_driving',
-                'difficulty': 'beginner',
-                'target_value': 100,
-                'unit': 'points',
-                'duration_days': 14,
-                'reward_points': 50,
-                'reward_credit_euros': 5.0,
-                'is_active': True,
-                'featured': False
-            }
-            return Response(challenge)
-        except Exception as e:
-            logger.error(f"Erreur retrieve: {str(e)}")
-            return Response({
-                'error': 'Défi non trouvé'
-            }, status=status.HTTP_404_NOT_FOUND)
-    
-    def update(self, request, pk=None, *args, **kwargs):
-        """Mettre à jour un défi"""
-        try:
-            logger.info(f"=== MISE À JOUR DU DÉFI {pk} ===")
-            logger.info(f"Données reçues: {request.data}")
-            
-            # Simuler la mise à jour
-            updated_challenge = {
-                'id': int(pk),
-                **request.data,
-                'updated_at': timezone.now().isoformat()
-            }
-            
-            logger.info(f"Défi {pk} mis à jour avec succès")
-            return Response(updated_challenge)
-            
-        except Exception as e:
-            logger.error(f"Erreur lors de la mise à jour: {str(e)}")
-            return Response({
-                'error': f'Erreur serveur lors de la mise à jour: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def partial_update(self, request, pk=None, *args, **kwargs):
-        """Mise à jour partielle"""
-        return self.update(request, pk, *args, **kwargs)
-    
-    def destroy(self, request, pk=None, *args, **kwargs):
-        """Supprimer un défi"""
-        try:
-            logger.info(f"Suppression du défi {pk}")
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except Exception as e:
-            logger.error(f"Erreur suppression: {str(e)}")
-            return Response({
-                'error': f'Erreur lors de la suppression: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=False, methods=['get'])
-    def templates(self, request):
-        """Récupérer les templates de défis"""
-        try:
-            templates = [
-                {
-                    'id': 'template_1',
-                    'title': 'Réduction CO₂ Hebdomadaire',
-                    'description': 'Réduisez vos émissions de CO₂ de 10% cette semaine',
-                    'type': 'co2_reduction',
-                    'difficulty': 'beginner',
-                    'target_value': 10,
-                    'unit': 'percentage',
-                    'duration_days': 7,
-                    'reward_points': 50,
-                    'reward_credit_euros': 2.5
-                },
-                {
-                    'id': 'template_2',
-                    'title': 'Eco-conduite du Mois',
-                    'description': 'Améliorez votre score d\'eco-conduite pendant 30 jours',
-                    'type': 'eco_driving',
-                    'difficulty': 'intermediate',
-                    'target_value': 85,
-                    'unit': 'score',
-                    'duration_days': 30,
-                    'reward_points': 150,
-                    'reward_credit_euros': 7.5
-                }
-            ]
-            return Response(templates)
-        except Exception as e:
-            logger.error(f"Erreur templates: {str(e)}")
-            return Response([], status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=False, methods=['get'])
-    def analytics(self, request):
-        """Récupérer les analytics des défis"""
-        try:
-            analytics = {
-                'total_challenges': 10,
-                'active_challenges': 7,
-                'total_participants': 45,
-                'completion_rate': 68.5,
-                'total_co2_saved': 125.7,
-                'challenges_by_category': {
-                    'eco_driving': 5,
-                    'co2_reduction': 3,
-                    'fuel_efficiency': 2
-                }
-            }
-            return Response(analytics)
-        except Exception as e:
-            logger.error(f"Erreur analytics: {str(e)}")
-            return Response({
-                'total_challenges': 0,
-                'active_challenges': 0,
-                'total_participants': 0,
-                'completion_rate': 0,
-                'total_co2_saved': 0,
-                'challenges_by_category': {}
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=True, methods=['get'])
-    def participants(self, request, pk=None):
-        """Récupérer les participants d'un défi"""
-        try:
-            participants = [
-                {
-                    'id': 1,
-                    'user': {'email': 'user1@example.com', 'id': 1},
-                    'status': 'active',
-                    'progress': 65.5,
-                    'started_at': timezone.now().isoformat()
-                },
-                {
-                    'id': 2,
-                    'user': {'email': 'user2@example.com', 'id': 2},
-                    'status': 'completed',
-                    'progress': 100.0,
-                    'started_at': timezone.now().isoformat()
-                }
-            ]
-            return Response(participants)
-        except Exception as e:
-            logger.error(f"Erreur participants: {str(e)}")
-            return Response([], status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_action(self, request):
-        """Actions en lot sur les défis"""
-        try:
-            challenge_ids = request.data.get('challenge_ids', [])
-            action_type = request.data.get('action')
-            
-            if not challenge_ids or not action_type:
-                return Response({
-                    'error': 'challenge_ids et action sont requis'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            logger.info(f"Action {action_type} sur les défis {challenge_ids}")
-            
-            return Response({
-                'message': f'Action {action_type} appliquée avec succès sur {len(challenge_ids)} défi(s)'
-            })
-        except Exception as e:
-            logger.error(f"Erreur bulk_action: {str(e)}")
-            return Response({
-                'error': 'Erreur lors de l\'action groupée'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=True, methods=['post'])
-    def duplicate(self, request, pk=None):
-        """Dupliquer un défi"""
-        try:
-            logger.info(f"Duplication du défi {pk}")
-            
-            duplicate = {
-                'id': 9999,  # ID simulé
-                'title': f'Défi {pk} (copie)',
-                'description': 'Copie simulée',
-                'type': 'eco_driving',
-                'difficulty': 'beginner',
-                'target_value': 100,
-                'unit': 'points',
-                'duration_days': 14,
-                'reward_points': 50,
-                'reward_credit_euros': 5.0,
-                'is_active': False,
-                'featured': False
-            }
-            
-            return Response(duplicate, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            logger.error(f"Erreur duplicate: {str(e)}")
-            return Response({
-                'error': f'Erreur lors de la duplication: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=True, methods=['get'])
-    def export_data(self, request, pk=None):
-        """Exporter les données d'un défi en CSV"""
-        try:
-            response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = f'attachment; filename="challenge_{pk}_data.csv"'
-            
-            writer = csv.writer(response)
-            writer.writerow(['ID', 'Titre', 'Type', 'Difficulté', 'Valeur Cible', 'Durée'])
-            writer.writerow([pk, f'Défi {pk}', 'eco_driving', 'beginner', 100, 14])
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Erreur export_data: {str(e)}")
-            return Response({
-                'error': 'Erreur lors de l\'export'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-# SUPPRIMER COMPLÈTEMENT AdvancedEcoChallengeViewSet
-# SUPPRIMER TOUS LES AUTRES VIEWSETS pour l'instant (UserEcoChallenge, etc.)

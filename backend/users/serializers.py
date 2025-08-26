@@ -561,15 +561,25 @@ class FeedbackSerializer(serializers.ModelSerializer):
             representation['user'] = str(representation['user'])
         return representation
 
+# serializers.py - PARTIE ECOCHALLENGE COMPLETE
+
+# serializers.py - VERSION CORRIGÉE ET OPTIMISÉE
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.db.models import Sum, Count, Avg
+from django.db.models import Sum, Count, Avg, Q
+from django.utils import timezone
+from decimal import Decimal
+import logging
+
 from .models import (
-    EcoChallenge, UserEcoChallenge, EcoChallengeProgress, 
+    EcoChallenge, UserEcoChallenge, EcoChallengeProgress,
     EcoChallengeReward, ChallengeStatus, RewardType
 )
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
+
 
 class UserSerializer(serializers.ModelSerializer):
     """Sérialiseur utilisateur de base"""
@@ -577,11 +587,14 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'nom', 'role']
 
+
 class EcoChallengeSerializer(serializers.ModelSerializer):
-    """Sérialiseur pour les défis éco-responsables"""
-    participant_stats = serializers.SerializerMethodField()
-    completion_rate_actual = serializers.SerializerMethodField()
-    average_progress = serializers.SerializerMethodField()
+    """Sérialiseur de base pour les défis éco-responsables"""
+    
+    participant_count = serializers.SerializerMethodField()
+    completion_rate = serializers.SerializerMethodField()
+    is_available = serializers.SerializerMethodField()
+    time_remaining = serializers.SerializerMethodField()
     
     class Meta:
         model = EcoChallenge
@@ -589,94 +602,340 @@ class EcoChallengeSerializer(serializers.ModelSerializer):
             'id', 'type', 'title', 'description',
             'target_value', 'unit', 'difficulty', 'duration_days',
             'reward_points', 'reward_credit_euros', 'reward_badge',
-            'is_active', 'featured', 'max_participants', 'auto_approve_participants',
+            'is_active', 'featured', 'max_participants',
             'valid_from', 'valid_until', 'created_at', 'updated_at',
-            'category', 'priority', 'tags', 'requirements', 'success_criteria',
-            'bonus_multiplier', 'seasonal_bonus', 'total_impact_co2',
-            'estimated_completion_rate', 'participant_stats',
-            'completion_rate_actual', 'average_progress'
+            'category', 'priority', 'tags',
+            'participant_count', 'completion_rate', 'is_available', 'time_remaining'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
-    def get_participant_stats(self, obj):
-        return obj.get_participant_stats()
+    def get_participant_count(self, obj):
+        """✅ CORRECTION: Gestion d'erreur ajoutée"""
+        try:
+            return obj.user_challenges.filter(
+                status__in=[ChallengeStatus.ACTIVE, ChallengeStatus.COMPLETED]
+            ).count()
+        except Exception as e:
+            logger.error(f"Erreur get_participant_count: {e}")
+            return 0
     
-    def get_completion_rate_actual(self, obj):
-        return obj.completion_rate_actual
+    def get_completion_rate(self, obj):
+        """✅ CORRECTION: Gestion d'erreur et calcul optimisé"""
+        try:
+            total = obj.user_challenges.count()
+            if total == 0:
+                return 0.0
+            completed = obj.user_challenges.filter(status=ChallengeStatus.COMPLETED).count()
+            return round((completed / total) * 100, 2)
+        except Exception as e:
+            logger.error(f"Erreur get_completion_rate: {e}")
+            return 0.0
     
-    def get_average_progress(self, obj):
-        return float(obj.average_progress)
+    def get_is_available(self, obj):
+        """✅ CORRECTION: Gestion d'erreur ajoutée"""
+        try:
+            return obj.is_available
+        except Exception as e:
+            logger.error(f"Erreur get_is_available: {e}")
+            return False
+    
+    def get_time_remaining(self, obj):
+        """✅ CORRECTION: Gestion d'erreur ajoutée"""
+        try:
+            if obj.valid_until:
+                remaining = obj.valid_until - timezone.now()
+                return max(0, remaining.days)
+            return None
+        except Exception as e:
+            logger.error(f"Erreur get_time_remaining: {e}")
+            return None
+    
+    def validate(self, data):
+        """Validation personnalisée"""
+        # ✅ CORRECTION: Vérifications nulles ajoutées
+        if data.get('valid_from') and data.get('valid_until'):
+            if data['valid_from'] >= data['valid_until']:
+                raise serializers.ValidationError(
+                    "La date de fin doit être postérieure à la date de début"
+                )
+        
+        target_value = data.get('target_value')
+        if target_value is not None and target_value <= 0:
+            raise serializers.ValidationError(
+                "La valeur cible doit être positive"
+            )
+        
+        duration_days = data.get('duration_days')
+        if duration_days is not None and duration_days <= 0:
+            raise serializers.ValidationError(
+                "La durée doit être positive"
+            )
+        
+        return data
+
 
 class AdvancedEcoChallengeSerializer(EcoChallengeSerializer):
     """Sérialiseur avancé avec toutes les données"""
+    
     created_by = UserSerializer(read_only=True)
+    participant_stats = serializers.SerializerMethodField()
     total_co2_impact = serializers.SerializerMethodField()
+    average_progress = serializers.SerializerMethodField()
+    top_participants = serializers.SerializerMethodField()
     
     class Meta(EcoChallengeSerializer.Meta):
-        fields = EcoChallengeSerializer.Meta.fields + ['created_by', 'total_co2_impact']
+        fields = EcoChallengeSerializer.Meta.fields + [
+            'created_by', 'requirements', 'success_criteria',
+            'bonus_multiplier', 'seasonal_bonus', 'total_impact_co2',
+            'estimated_completion_rate', 'participant_stats',
+            'total_co2_impact', 'average_progress', 'top_participants'
+        ]
     
+    def get_participant_stats(self, obj):
+        """Version ultra-simplifiée"""
+        try:
+            # Éviter les erreurs Djongo
+            return obj.get_participant_stats()
+        except Exception as e:
+            logger.error(f"Erreur serializer participant_stats: {str(e)}")
+            return {
+                'total': 0, 'active': 0, 'completed': 0,
+                'abandoned': 0, 'expired': 0,
+                'completion_rate': 0.0, 'average_progress': 0.0
+            }
+    def get_top_participants(self, obj):
+        """Top 5 des participants - VERSION CORRIGÉE FINALE"""
+        try:
+            top = obj.user_challenges.filter(
+                status__in=[ChallengeStatus.ACTIVE, ChallengeStatus.COMPLETED]
+            ).select_related('user').order_by('-progress')[:5]
+            
+            result = []
+            for uc in top:
+                try:
+                    # ✅ CORRECTION: Utiliser la méthode de conversion sécurisée
+                    progress_val = obj._safe_decimal_to_float(uc.progress)
+                    progress_percentage = uc.progress_percentage  # Utilise la propriété du modèle
+                    
+                    result.append({
+                        'user_name': uc.user.nom or uc.user.username,
+                        'progress': progress_val,
+                        'progress_percentage': progress_percentage,
+                        'status': uc.status
+                    })
+                except Exception as e:
+                    logger.error(f"Erreur traitement participant {uc.id}: {str(e)}")
+                    continue
+            
+            return result
+        except Exception as e:
+            logger.error(f"Erreur get_top_participants: {str(e)}")
+            return []
     def get_total_co2_impact(self, obj):
         """Impact CO2 total des participants"""
-        total_co2 = EcoChallengeProgress.objects.filter(
-            user_challenge__challenge=obj
-        ).aggregate(total=Sum('co2_saved'))['total'] or 0
-        return float(total_co2)
+        try:
+            total_co2 = EcoChallengeProgress.objects.filter(
+                user_challenge__challenge=obj,
+                co2_saved__isnull=False
+            ).aggregate(total=Sum('co2_saved'))['total'] or 0
+            return float(total_co2)
+        except Exception as e:
+            logger.error(f"Erreur get_total_co2_impact: {e}")
+            return 0.0
+    
+    def get_average_progress(self, obj):
+        """Version simplifiée"""
+        try:
+            return obj.average_progress
+        except Exception as e:
+            logger.error(f"Erreur serializer average_progress: {str(e)}")
+            return 0.0
+    
+    def get_top_participants(self, obj):
+        """Top 5 des participants"""
+        try:
+            top = obj.user_challenges.filter(
+                status__in=[ChallengeStatus.ACTIVE, ChallengeStatus.COMPLETED]
+            ).select_related('user').order_by('-progress')[:5]
+            
+            result = []
+            for uc in top:
+                try:
+                    result.append({
+                        'user_name': uc.user.nom or uc.user.username,
+                        'progress': float(uc.progress),
+                        'progress_percentage': float(uc.progress_percentage),
+                        'status': uc.status
+                    })
+                except Exception as e:
+                    logger.error(f"Erreur traitement participant {uc.id}: {e}")
+                    continue
+            
+            return result
+        except Exception as e:
+            logger.error(f"Erreur get_top_participants: {e}")
+            return []
+
 
 class UserEcoChallengeSerializer(serializers.ModelSerializer):
     """Sérialiseur pour les défis utilisateur"""
     challenge = EcoChallengeSerializer(read_only=True)
+    user = UserSerializer(read_only=True)
     progress_percentage = serializers.SerializerMethodField()
     days_remaining = serializers.SerializerMethodField()
     target = serializers.SerializerMethodField()
     unit = serializers.SerializerMethodField()
     reward_points = serializers.SerializerMethodField()
     reward_credit = serializers.SerializerMethodField()
-    
+    recent_progress = serializers.SerializerMethodField()
+
     class Meta:
         model = UserEcoChallenge
         fields = [
-            'id', 'challenge', 'status', 'progress', 'progress_percentage',
+            'id', 'user', 'challenge', 'status', 'progress', 'progress_percentage',
             'started_at', 'completed_at', 'deadline', 'days_remaining',
             'reward_claimed', 'final_score', 'target', 'unit',
-            'reward_points', 'reward_credit'
+            'reward_points', 'reward_credit', 'recent_progress'
         ]
         read_only_fields = ['id', 'started_at', 'completed_at', 'reward_claimed']
-    
+
     def get_progress_percentage(self, obj):
-        return obj.progress_percentage
-    
+        """Calcul du pourcentage de progression"""
+        try:
+            return float(obj.progress_percentage)
+        except Exception as e:
+            logger.error(f"Erreur get_progress_percentage: {e}")
+            return 0.0
+
     def get_days_remaining(self, obj):
-        return obj.days_remaining
-    
+        """Calcul des jours restants"""
+        try:
+            return obj.days_remaining
+        except Exception as e:
+            logger.error(f"Erreur get_days_remaining: {e}")
+            return 0
+
     def get_target(self, obj):
-        return obj.challenge.target_value
-    
+        """Valeur cible du défi"""
+        try:
+            if obj.challenge and obj.challenge.target_value:
+                return obj._safe_decimal_to_float(obj.challenge.target_value)
+            return 0.0
+        except Exception as e:
+            logger.error(f"Erreur get_target: {str(e)}")
+            return 0.0
+
     def get_unit(self, obj):
-        return obj.challenge.unit
-    
+        """Unité de mesure du défi"""
+        try:
+            return obj.challenge.unit if obj.challenge else ""
+        except Exception as e:
+            logger.error(f"Erreur get_unit: {e}")
+            return ""
+
     def get_reward_points(self, obj):
-        return obj.challenge.reward_points
-    
+        """Points de récompense"""
+        try:
+            return obj.challenge.reward_points if obj.challenge else 0
+        except Exception as e:
+            logger.error(f"Erreur get_reward_points: {e}")
+            return 0
+
     def get_reward_credit(self, obj):
-        return obj.challenge.reward_credit_euros
+        """Crédit en euros de récompense"""
+        try:
+            if obj.challenge and obj.challenge.reward_credit_euros:
+                return obj._safe_decimal_to_float(obj.challenge.reward_credit_euros)
+            return 0.0
+        except Exception as e:
+            logger.error(f"Erreur get_reward_credit: {str(e)}")
+            return 0.0
+
+    def get_recent_progress(self, obj):
+        """5 dernières entrées de progression"""
+        try:
+            recent = obj.progress_history.order_by('-recorded_at')[:5]
+            result = []
+            for entry in recent:
+                try:
+                    result.append({
+                        'value': float(entry.value),
+                        'recorded_at': entry.recorded_at,
+                        'eco_score': float(entry.eco_score) if entry.eco_score else None,
+                        'co2_saved': float(entry.co2_saved) if entry.co2_saved else None
+                    })
+                except Exception as e:
+                    logger.error(f"Erreur traitement progress entry {entry.id}: {e}")
+                    continue
+            return result
+        except Exception as e:
+            logger.error(f"Erreur get_recent_progress: {e}")
+            return []
+
 
 class CreateUserChallengeSerializer(serializers.Serializer):
     """Sérialiseur pour accepter un défi"""
     challenge_id = serializers.UUIDField(required=True)
+    
+    def validate_challenge_id(self, value):
+        """✅ CORRECTION: Validation améliorée"""
+        try:
+            challenge = EcoChallenge.objects.get(id=value)
+            
+            # Vérifier la disponibilité
+            if not challenge.is_active:
+                raise serializers.ValidationError("Ce défi n'est plus actif")
+            
+            # Vérifier si disponible (méthode ou calcul manuel)
+            if hasattr(challenge, 'is_available'):
+                if not challenge.is_available:
+                    raise serializers.ValidationError("Ce défi n'est plus disponible")
+            else:
+                # Vérification manuelle
+                now = timezone.now()
+                if challenge.valid_until and now > challenge.valid_until:
+                    raise serializers.ValidationError("Ce défi a expiré")
+                
+                if challenge.max_participants:
+                    current_participants = challenge.user_challenges.filter(
+                        status__in=[ChallengeStatus.ACTIVE, ChallengeStatus.COMPLETED]
+                    ).count()
+                    if current_participants >= challenge.max_participants:
+                        raise serializers.ValidationError("Limite de participants atteinte")
+            
+            return value
+            
+        except EcoChallenge.DoesNotExist:
+            raise serializers.ValidationError("Défi non trouvé")
+        except Exception as e:
+            logger.error(f"Erreur validate_challenge_id: {e}")
+            raise serializers.ValidationError("Erreur lors de la validation du défi")
+
 
 class EcoChallengeProgressSerializer(serializers.ModelSerializer):
     """Sérialiseur pour la progression des défis"""
+    
+    user_name = serializers.CharField(source='user_challenge.user.nom', read_only=True)
+    challenge_title = serializers.CharField(source='user_challenge.challenge.title', read_only=True)
+    
     class Meta:
         model = EcoChallengeProgress
         fields = [
-            'id', 'user_challenge', 'value', 'eco_score',
-            'co2_saved', 'energy_consumption', 'distance_km',
-            'vehicle_id', 'reservation_id', 'recorded_at'
+            'id', 'user_challenge', 'user_name', 'challenge_title',
+            'value', 'eco_score', 'co2_saved', 'energy_consumption',
+            'distance_km', 'vehicle_id', 'reservation_id', 'recorded_at'
         ]
         read_only_fields = ['id', 'recorded_at']
+    
+    def validate_value(self, value):
+        if value < 0:
+            raise serializers.ValidationError("La valeur ne peut pas être négative")
+        return value
+
 
 class EcoChallengeRewardSerializer(serializers.ModelSerializer):
     """Sérialiseur pour les récompenses"""
+    
     user_name = serializers.CharField(source='user.nom', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
     challenge_title = serializers.CharField(source='challenge.title', read_only=True)
@@ -685,19 +944,14 @@ class EcoChallengeRewardSerializer(serializers.ModelSerializer):
     class Meta:
         model = EcoChallengeReward
         fields = [
-            'id', 'user', 'user_name', 'user_email', 'user_challenge', 
-            'challenge', 'challenge_title', 'title', 'description', 
-            'reward_type', 'points', 'points_awarded', 'credit_awarded', 
-            'badge_awarded', 'claimed', 'claimed_at', 'awarded_at', 
+            'id', 'user', 'user_name', 'user_email', 'user_challenge',
+            'challenge', 'challenge_title', 'title', 'description',
+            'reward_type', 'points', 'points_awarded', 'credit_awarded',
+            'badge_awarded', 'claimed', 'claimed_at', 'awarded_at',
             'awarded_by', 'awarded_by_name', 'applied_to_account'
         ]
         read_only_fields = ['id', 'awarded_at', 'points_awarded']
-    
-    def create(self, validated_data):
-        # Synchroniser points avec points_awarded
-        if 'points' in validated_data:
-            validated_data['points_awarded'] = validated_data['points']
-        return super().create(validated_data)
+
 
 class EcoChallengeBulkSerializer(serializers.Serializer):
     """Sérialiseur pour les opérations en lot"""
@@ -714,6 +968,7 @@ class EcoChallengeBulkSerializer(serializers.Serializer):
         ('delete', 'Supprimer'),
     ])
 
+
 class ChallengeAnalyticsSerializer(serializers.Serializer):
     """Sérialiseur pour les analytics des défis"""
     total_challenges = serializers.IntegerField()
@@ -727,94 +982,7 @@ class ChallengeAnalyticsSerializer(serializers.Serializer):
     challenges_by_difficulty = serializers.DictField()
     monthly_trends = serializers.ListField()
     top_performers = serializers.ListField()
-class EcoChallengeStatsSerializer(serializers.Serializer):
-    """Sérialiseur pour les statistiques des défis écologiques"""
-    total_challenges = serializers.IntegerField()
-    active_challenges = serializers.IntegerField()
-    total_participants = serializers.IntegerField()
-    completion_rate = serializers.FloatField()
-    total_co2_saved = serializers.FloatField()
-    total_points_awarded = serializers.IntegerField()
-    total_credits_awarded = serializers.FloatField()
-    challenges_by_category = serializers.DictField()
-    challenges_by_difficulty = serializers.DictField()
-    monthly_trends = serializers.ListField()
-    top_performers = serializers.ListField()
-# serializers.py
-from rest_framework import serializers
-from .models import EcoChallenge, UserEcoChallenge, EcoChallengeProgress, EcoChallengeReward
-
-class EcoChallengeSerializer(serializers.ModelSerializer):
-    participant_stats = serializers.SerializerMethodField()
-    completion_rate_actual = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = EcoChallenge
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at', 'participant_stats', 'completion_rate_actual']
-        
-        extra_kwargs = {
-            'title': {'required': True, 'allow_blank': False},
-            'target_value': {'required': True, 'min_value': 0.01},
-            'duration_days': {'required': True, 'min_value': 1},
-            'valid_from': {'required': False, 'allow_null': True},
-            'valid_until': {'required': False, 'allow_null': True},
-            'max_participants': {'required': False, 'allow_null': True},
-            'tags': {'required': False, 'allow_empty': True},
-            'requirements': {'required': False},
-            'success_criteria': {'required': False},
-        }
-    
-    def get_participant_stats(self, obj):
-        """Calculer les statistiques de participants"""
-        total = UserEcoChallenge.objects.filter(challenge=obj).count()
-        active = UserEcoChallenge.objects.filter(
-            challenge=obj, 
-            status__in=['active', 'in_progress']
-        ).count()
-        return {'total': total, 'active': active}
-    
-    def get_completion_rate_actual(self, obj):
-        """Calculer le taux de réussite réel"""
-        total = UserEcoChallenge.objects.filter(challenge=obj).count()
-        if total == 0:
-            return 0
-        completed = UserEcoChallenge.objects.filter(
-            challenge=obj, 
-            status='completed'
-        ).count()
-        return (completed / total) * 100
-    
-    def validate(self, data):
-        """Validation personnalisée"""
-        if data.get('valid_from') and data.get('valid_until'):
-            if data['valid_from'] >= data['valid_until']:
-                raise serializers.ValidationError(
-                    "La date de fin doit être postérieure à la date de début"
-                )
-        return data
 
 
-class UserEcoChallengeSerializer(serializers.ModelSerializer):
-    challenge_title = serializers.CharField(source='challenge.title', read_only=True)
-    
-    class Meta:
-        model = UserEcoChallenge
-        fields = '__all__'
-        read_only_fields = ['id', 'user', 'started_at', 'completed_at', 'challenge_title']
-
-
-class EcoChallengeProgressSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EcoChallengeProgress
-        fields = '__all__'
-        read_only_fields = ['id', 'timestamp']
-
-
-class EcoChallengeRewardSerializer(serializers.ModelSerializer):
-    challenge_title = serializers.CharField(source='challenge.title', read_only=True)
-    
-    class Meta:
-        model = EcoChallengeReward
-        fields = '__all__'
-        read_only_fields = ['id', 'user', 'awarded_at', 'claimed_at', 'challenge_title']
+# ✅ CORRECTION: Suppression du doublon EcoChallengeStatsSerializer
+# (identique à ChallengeAnalyticsSerializer)

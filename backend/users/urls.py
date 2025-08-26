@@ -31,7 +31,8 @@ router.register(r'eco-challenges', EcoChallengeViewSet, basename='eco-challenges
 router.register(r'user-eco-challenges', UserEcoChallengeViewSet, basename='user-eco-challenges')
 router.register(r'eco-challenge-progress', EcoChallengeProgressViewSet, basename='eco-challenge-progress')
 router.register(r'eco-challenge-rewards', EcoChallengeRewardViewSet, basename='eco-challenge-rewards')
-
+router.register(r'user-eco-challenges', UserEcoChallengeViewSet, basename='user-eco-challenge')
+router.register(r'eco-challenges', EcoChallengeViewSet, basename='eco-challenge')
 urlpatterns = [
     # Authentication routes
     path('login/', LoginView.as_view(), name='login'),
@@ -65,7 +66,12 @@ urlpatterns = [
     path('api/iot-data/check_data_status/', IOTDataViewSet.as_view({'get': 'check_data_status'}), name='iot-data-check-status'),
     path('api/iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='iot-data-generate-test-data'),
     path('api/iot-data/test_prediction_request/', IOTDataViewSet.as_view({'post': 'test_prediction_request'}), name='iot-data-test-prediction'),
-    
+    # Ajouter ces routes dans urlpatterns
+    path('api/user-eco-challenges/join_challenge/', UserEcoChallengeViewSet.as_view({'post': 'join_challenge'}), name='join-challenge'),
+    path('api/eco-challenge-progress/update/', EcoChallengeProgressViewSet.as_view({'post': 'create'}), name='update-progress'),
+    # Corriger la route join_challenge dans urlpatterns :
+path('api/user-eco-challenges/join_challenge/', UserEcoChallengeViewSet.as_view({'post': 'join_challenge'}), name='join-challenge'),
+
     # Routes pour l'éco-score
     path('api/eco-score/calculate_eco_score/', EcoScoreViewSet.as_view({'post': 'calculate_eco_score'}), name='eco-score-calculate'),
     path('api/eco-score/distribution/', EcoScoreViewSet.as_view({'get': 'distribution'}), name='eco-score-distribution'),
@@ -73,7 +79,14 @@ urlpatterns = [
     # Routes pour la réinitialisation du mot de passe
     path('password-reset-request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),  
+    path('api/eco-challenges/available/', EcoChallengeViewSet.as_view({'get': 'available'}), name='challenges-available'),
+    path('api/eco-challenges/featured/', EcoChallengeViewSet.as_view({'get': 'featured'}), name='challenges-featured'),
+    path('api/eco-challenges/analytics/', EcoChallengeViewSet.as_view({'get': 'analytics'}), name='challenges-analytics'),
+    path('api/eco-challenges/bulk-action/', EcoChallengeViewSet.as_view({'post': 'bulk_action'}), name='challenges-bulk-action'),
     
+    # Routes pour les défis utilisateur
+    path('api/user-eco-challenges/join/', UserEcoChallengeViewSet.as_view({'post': 'join_challenge'}), name='join-challenge'),
+    path('api/user-eco-challenges/my-rewards/', EcoChallengeRewardViewSet.as_view({'get': 'my_rewards'}), name='my-rewards'),
     
     # Router routes (doit être en dernier pour éviter les conflits)
     path('api/', include(router.urls)),

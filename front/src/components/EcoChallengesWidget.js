@@ -1,26 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { ecoChallengesService } from '../services/apiService';
 import './EcoChallengesWidget.css';
-
-// Configuration axios pour le widget
-const neuralApi = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
-
-// Intercepteur pour ajouter le token JWT
-neuralApi.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
 
 const NeuralEcoWidget = ({
   maxChallenges = 3,
@@ -29,15 +9,16 @@ const NeuralEcoWidget = ({
   className = ''
 }) => {
   const [challenges, setChallenges] = useState([]);
+  const [userChallenges, setUserChallenges] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [particleSystem, setParticleSystem] = useState([]);
 
-  // Système de particules neural pour le widget
+  // Système de particules visuel (décoratif)
   useEffect(() => {
-    const generateMicroParticles = () => {
-      const particles = Array.from({ length: 8 }, (_, i) => ({
+    const generateParticles = () => {
+      const arr = Array.from({ length: 8 }, (_, i) => ({
         id: i,
         x: Math.random() * 100,
         y: Math.random() * 100,
@@ -45,87 +26,113 @@ const NeuralEcoWidget = ({
         color: i % 3 === 0 ? '#00d4ff' : i % 3 === 1 ? '#8b5cf6' : '#10b981',
         opacity: Math.random() * 0.6 + 0.4,
       }));
-      setParticleSystem(particles);
+      setParticleSystem(arr);
     };
-
-    generateMicroParticles();
-    const interval = setInterval(generateMicroParticles, 8000);
+    generateParticles();
+    const interval = setInterval(generateParticles, 8000);
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    loadNeuralWidgetData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Récupération des challenges/APIs
   const loadNeuralWidgetData = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      const [challengesRes, statsRes] = await Promise.all([
-        neuralApi.get('/api/eco-challenges/available/'),
-        showStats ? neuralApi.get('/api/eco-challenges/stats/') : Promise.resolve({ data: null })
+      const [available, user] = await Promise.all([
+        ecoChallengesService.getAvailable(),
+        ecoChallengesService.getUserChallenges({ status: 'active' })
       ]);
 
-      // Limiter le nombre de défis affichés
-      const limitedChallenges = Array.isArray(challengesRes.data)
-        ? challengesRes.data.slice(0, maxChallenges)
-        : [];
+      // Gestion des différents formats possibles (backend)
+      const availableList = Array.isArray(available.data.challenges)
+        ? available.data.challenges
+        : Array.isArray(available.data)
+          ? available.data
+          : [];
+      setChallenges(availableList.slice(0, maxChallenges));
+      
+      const userList = Array.isArray(user.data.results)
+        ? user.data.results
+        : Array.isArray(user.data)
+          ? user.data
+          : [];
+      setUserChallenges(userList);
 
-      setChallenges(limitedChallenges);
-
-      if (showStats && statsRes.data) {
-        setStats(statsRes.data);
+      // Statistiques utilisateur
+      if (showStats) {
+        const completed = userList.filter(uc => uc.status === 'completed').length;
+        const totalPoints = userList.reduce((sum, uc) => sum + (uc.reward_points || 0), 0);
+        const active = userList.filter(uc => uc.status === 'active').length;
+        setStats({
+          completed_challenges: completed,
+          total_points_earned: totalPoints,
+          active_challenges: active,
+        });
       }
-
-    } catch (error) {
-      console.error('Erreur widget neural eco-challenges:', error);
-      if (error.response?.status !== 401) {
-        setError('Neural connection failed');
+    } catch (err) {
+      // Gestion d’erreur détaillée :
+      if (err.response?.status === 401) {
+        setError('Vous devez être connecté pour voir les éco-missions.');
+      } else {
+        setError('Connexion neural impossible.');
       }
     } finally {
       setLoading(false);
     }
   };
 
+  // Accepter un défi
   const acceptNeuralChallenge = async (challengeId) => {
     try {
-      await neuralApi.post(`/api/eco-challenges/${challengeId}/accept/`);
-      // Recharger les données après acceptation
+      await ecoChallengesService.joinChallenge({ challenge_id: challengeId });
       await loadNeuralWidgetData();
-    } catch (error) {
-      console.error('Erreur acceptation défi neural:', error);
-      setError('Neural challenge acceptance failed');
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setError('Connexion requise pour accepter un défi.');
+      } else {
+        setError('Échec de l’acceptation du défi.');
+      }
     }
   };
 
-  const formatNeuralChallengeType = (type) => {
-    const types = {
-      'eco_driving': '🧠 Neural Drive',
-      'co2_reduction': '⚛️ Carbon Zero',
-      'fuel_efficiency': '🔮 Energy Matrix',
-      'eco_score': '📊 Quantum Score'
+  // Formatage des types pour affichage
+  const formatChallengeType = (type) => {
+    const text = {
+      eco_driving: '🧠 Neural Drive',
+      co2_reduction: '⚛️ Carbon Zero',
+      fuel_efficiency: '🔮 Energy Matrix',
+      eco_score: '📊 Quantum Score',
+      low_emission: '💨 Clean Air',
+      distance_reduction: '📏 Distance Opt',
+      alternative_transport: '🚲 Alt Mode',
     };
-    return types[type] || type;
+    return text[type] || type;
   };
+
+  // Chargement initial
+  useEffect(() => {
+    loadNeuralWidgetData();
+    // eslint-disable-next-line
+  }, []);
+
+  // --- Rendu UI ---
 
   if (loading) {
     return (
       <div className={`neural-eco-widget ${className}`}>
         <div className="neural-particle-background">
-          {particleSystem.map(particle => (
+          {particleSystem.map(p => (
             <div
-              key={particle.id}
+              key={p.id}
               className="neural-micro-particle"
               style={{
-                left: `${particle.x}%`,
-                top: `${particle.y}%`,
-                width: `${particle.size}px`,
-                height: `${particle.size}px`,
-                background: particle.color,
-                opacity: particle.opacity,
-                animationDelay: `${particle.id * 0.2}s`
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: `${p.size}px`,
+                height: `${p.size}px`,
+                background: p.color,
+                opacity: p.opacity,
+                animationDelay: `${p.id * 0.2}s`
               }}
             />
           ))}
@@ -160,26 +167,26 @@ const NeuralEcoWidget = ({
 
   return (
     <div className={`neural-eco-widget ${className}`}>
-      {/* Système de particules en arrière-plan */}
+      {/* Particules décoratives */}
       <div className="neural-particle-background">
-        {particleSystem.map(particle => (
+        {particleSystem.map(p => (
           <div
-            key={particle.id}
+            key={p.id}
             className="neural-micro-particle"
             style={{
-              left: `${particle.x}%`,
-              top: `${particle.y}%`,
-              width: `${particle.size}px`,
-              height: `${particle.size}px`,
-              background: particle.color,
-              opacity: particle.opacity,
-              animationDelay: `${particle.id * 0.2}s`
+              left: `${p.x}%`,
+              top: `${p.y}%`,
+              width: `${p.size}px`,
+              height: `${p.size}px`,
+              background: p.color,
+              opacity: p.opacity,
+              animationDelay: `${p.id * 0.2}s`
             }}
           />
         ))}
       </div>
 
-      {/* Header du widget neural */}
+      {/* Header */}
       <div className="neural-widget-header">
         <div className="neural-header-glow">
           <h3 className="neural-title-gradient">🧠 Neural Eco</h3>
@@ -193,7 +200,7 @@ const NeuralEcoWidget = ({
         )}
       </div>
 
-      {/* Statistiques rapides neurales */}
+      {/* Statistiques */}
       {showStats && stats && (
         <div className="neural-widget-stats">
           <div className="neural-quick-stat">
@@ -220,7 +227,7 @@ const NeuralEcoWidget = ({
         </div>
       )}
 
-      {/* Liste des défis neuraux */}
+      {/* Liste des challenges */}
       <div className="neural-widget-challenges">
         {challenges.length === 0 ? (
           <div className="neural-no-challenges">
@@ -243,7 +250,7 @@ const NeuralEcoWidget = ({
                 </div>
                 <div className="neural-challenge-meta">
                   <span className="neural-challenge-type-badge">
-                    {formatNeuralChallengeType(challenge.challenge_type || challenge.type)}
+                    {formatChallengeType(challenge.type)}
                   </span>
                   <span className="neural-challenge-reward">
                     🏆 {challenge.reward_points}pts
@@ -263,7 +270,32 @@ const NeuralEcoWidget = ({
         )}
       </div>
 
-      {/* Footer du widget neural */}
+      {/* Défis actifs */}
+      {userChallenges.length > 0 && (
+        <div className="neural-widget-active">
+          <div className="neural-section-header">
+            <span>⚡ Active Missions</span>
+          </div>
+          {userChallenges.slice(0, 2).map(userChallenge => (
+            <div key={userChallenge.id} className="neural-active-challenge">
+              <div className="neural-active-info">
+                <span className="neural-active-title">{userChallenge.challenge?.title}</span>
+                <div className="neural-progress-bar">
+                  <div
+                    className="neural-progress-fill"
+                    style={{ width: `${Math.min(userChallenge.progress_percentage || 0, 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+              <span className="neural-progress-text">
+                {(userChallenge.progress_percentage || 0).toFixed(0)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Footer du widget */}
       {challenges.length > 0 && (
         <div className="neural-widget-footer">
           <button onClick={loadNeuralWidgetData} className="neural-refresh-btn">
