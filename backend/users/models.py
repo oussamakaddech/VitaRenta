@@ -763,6 +763,12 @@ class UserEcoChallenge(models.Model):
         on_delete=models.CASCADE,
         related_name='user_challenges'
     )
+    calculated_reward = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
     
     # Statut et progression
     status = models.CharField(
@@ -774,7 +780,7 @@ class UserEcoChallenge(models.Model):
         max_digits=10,
         decimal_places=2,
         default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]  # ✅ CORRECTION
+        validators=[MinValueValidator(Decimal('0.00'))]
     )
     
     # Dates importantes
@@ -789,7 +795,7 @@ class UserEcoChallenge(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))]  # ✅ CORRECTION
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))]
     )
     
     class Meta:
@@ -802,7 +808,7 @@ class UserEcoChallenge(models.Model):
         return f"{self.user.username} - {self.challenge.title}"
     
     def _safe_decimal_to_float(self, value):
-        """Conversion sécurisée identique à EcoChallenge"""
+        """Conversion sécurisée Decimal vers float"""
         if value is None:
             return 0.0
         
@@ -818,7 +824,7 @@ class UserEcoChallenge(models.Model):
     
     @property
     def is_completed(self):
-        """Version simplifiée"""
+        """Vérifie si le défi est terminé"""
         try:
             progress_val = self._safe_decimal_to_float(self.progress)
             target_val = self._safe_decimal_to_float(self.challenge.target_value) if self.challenge else 0.0
@@ -828,7 +834,7 @@ class UserEcoChallenge(models.Model):
     
     @property
     def progress_percentage(self):
-        """Version simplifiée"""
+        """Calcule le pourcentage de progression"""
         try:
             progress_val = self._safe_decimal_to_float(self.progress)
             target_val = self._safe_decimal_to_float(self.challenge.target_value) if self.challenge else 0.0
@@ -841,37 +847,37 @@ class UserEcoChallenge(models.Model):
         except Exception:
             return 0.0
     
-@property
-def days_remaining(self):
-    """Jours restants"""
-    try:
-        if self.status != ChallengeStatus.ACTIVE or not self.deadline:
+    @property
+    def days_remaining(self):
+        """Retourne le nombre de jours restants avant expiration"""
+        try:
+            if self.status != ChallengeStatus.ACTIVE or not self.deadline:
+                return 0
+            
+            remaining = (self.deadline - timezone.now()).days
+            return max(0, remaining)
+        except Exception:
             return 0
-        
-        remaining = (self.deadline - timezone.now()).days
-        return max(0, remaining)
-    except Exception:
-        return 0
-
-@property
-def target(self):
-    """Valeur cible du défi"""
-    try:
-        return self._safe_decimal_to_float(self.challenge.target_value) if self.challenge else 0.0
-    except Exception:
-        return 0.0
-
-@property  
-def unit(self):
-    """Unité du défi"""
-    try:
-        return self.challenge.unit if self.challenge else ""
-    except Exception:
-        return ""
-
+    
+    @property
+    def target(self):
+        """Valeur cible du défi"""
+        try:
+            return self._safe_decimal_to_float(self.challenge.target_value) if self.challenge else 0.0
+        except Exception:
+            return 0.0
+    
+    @property
+    def unit(self):
+        """Unité de mesure du défi"""
+        try:
+            return self.challenge.unit if self.challenge else ""
+        except Exception:
+            return ""
+    
     @property
     def is_expired(self):
-        """Vérifie si le défi a expiré - VERSION CORRIGÉE"""
+        """Vérifie si le défi a expiré"""
         try:
             if not self.deadline:
                 return False
@@ -884,64 +890,104 @@ def unit(self):
             logger.error(f"Erreur dans is_expired: {str(e)}")
             return False
     
-def save(self, *args, **kwargs):
-    """Version simplifiée du save"""
-    try:
-        # Auto-calcul deadline
-        if not self.deadline and self.challenge:
-            if not self.started_at:
-                self.started_at = timezone.now()
-            self.deadline = self.started_at + timedelta(days=self.challenge.duration_days)
-        
-        # Auto-completion simple
+    def update_reward(self):
+        """Recalcule la récompense basée sur le système configuré"""
         try:
+            config = ChallengeRewardConfig.objects.get(challenge=self.challenge)
+            progress = self.progress
+            
+            # Obtenir le système de récompenses
+            reward_system = config.reward_system
+            
+            # Calculer la récompense brute
+            raw_reward = reward_system.calculate_reward(self.challenge, progress)
+            
+            # Appliquer le multiplicateur
+            multiplied_reward = raw_reward * float(config.multiplier)
+            
+            # Appliquer le seuil de bonus
+            if config.bonus_threshold and progress >= config.bonus_threshold:
+                multiplied_reward *= 1.5  # Bonus de 50%
+            
+            # Appliquer le plafond
+            if config.reward_cap:
+                multiplied_reward = min(multiplied_reward, float(config.reward_cap))
+            
+            self.calculated_reward = multiplied_reward
+            self.save(update_fields=['calculated_reward'])
+            
+        except Exception as e:
+            logger.error(f"Erreur dans update_reward: {str(e)}")
+    
+    def claim_reward(self):
+        """Revendique la récompense et l'applique au compte utilisateur"""
+        if self.claimed:
+            return False
+        
+        # Récupérer la récompense calculée
+        reward_amount = self.calculated_reward
+        
+        if reward_amount <= 0:
+            return False
+        
+        # Appliquer la récompense au compte utilisateur
+        user = self.user
+        
+        # Selon le type de récompense configuré
+        config = ChallengeRewardConfig.objects.get(challenge=self.challenge)
+        
+        if config.reward_system.type == 'exchange_system':
+            # Pour un système d'échange, ajouter des crédits
+            user.budget_journalier += reward_amount
+            user.save()
+        else:
+            # Pour d'autres systèmes, ajouter des points
+            user.eco_points += int(reward_amount)
+            user.save()
+        
+        # Enregistrer la récompense
+        self.reward_amount = reward_amount
+        self.reward_description = f"Récompense pour le défi '{self.challenge.title}'"
+        self.claimed = True
+        self.claimed_at = timezone.now()
+        self.save()
+        
+        return True
+    
+    def save(self, *args, **kwargs):
+        """Sauvegarde avec logique supplémentaire"""
+        try:
+            # Auto-calcul du deadline
+            if not self.deadline and self.challenge:
+                if not self.started_at:
+                    self.started_at = timezone.now()
+                self.deadline = self.started_at + timedelta(days=self.challenge.duration_days)
+            
+            # Auto-complétion si nécessaire
             if self.is_completed and self.status == ChallengeStatus.ACTIVE:
                 self.status = ChallengeStatus.COMPLETED
                 self.completed_at = timezone.now()
+            
+            super().save(*args, **kwargs)
+            
+        except Exception as e:
+            logger.error(f"Erreur save UserEcoChallenge: {str(e)}")
+            raise
+    
+    def manual_entries_count(self):
+        """Compte le nombre de saisies manuelles"""
+        try:
+            return self.progress_history.filter(manual=True).count()
         except Exception:
-            pass
-        
-        super().save(*args, **kwargs)
-        
-    except Exception as e:
-        logger.error(f"Erreur save UserEcoChallenge: {str(e)}")
-        raise
-
-@property
-def manual_entries_count(self):
-    """Nombre de saisies manuelles"""
-    try:
-        return self.progress_history.filter(
-            # Assumant qu'on peut identifier les saisies manuelles
-        ).count()
-    except Exception:
-        return 0
-
-@property 
-def last_entry_type(self):
-    """Type de la dernière saisie"""
-    try:
-        last_entry = self.progress_history.order_by('-recorded_at').first()
-        return 'manual' if last_entry else None
-    except Exception:
-        return None
-
-@property
-def target(self):
-    """Valeur cible du défi"""
-    try:
-        return self._safe_decimal_to_float(self.challenge.target_value) if self.challenge else 0.0
-    except Exception:
-        return 0.0
-
-@property  
-def unit(self):
-    """Unité du défi"""
-    try:
-        return self.challenge.unit if self.challenge else ""
-    except Exception:
-        return ""
-
+            return 0
+    
+    def last_entry_type(self):
+        """Retourne le type de la dernière entrée"""
+        try:
+            last_entry = self.progress_history.order_by('-recorded_at').first()
+            return 'manual' if last_entry and last_entry.manual else None
+        except Exception:
+            return None
 class EcoChallengeProgress(models.Model):
     """Modèle pour tracer la progression des défis"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -1076,7 +1122,122 @@ class EcoChallengeReward(models.Model):
     def __str__(self):
         return f"{self.title} - {getattr(self.user, 'nom', None) or self.user.username} ({self.points}pts)"
 
+# Nouveau modèle pour les systèmes de récompenses flexibles
+class RewardSystem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    type = models.CharField(
+        max_length=20,
+        choices=[
+            ('points_based', 'Basé sur les points'),
+            ('level_based', 'Basé sur les niveaux'),
+            ('milestone_based', 'Basé sur les jalons'),
+            ('exchange_system', 'Système d\'échange'),
+            ('custom_formula', 'Formule personnalisée')
+        ],
+        default='points_based'
+    )
+    
+    # Configuration spécifique au type
+    points_per_unit = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Points accordés par unité accomplie'
+    )
+    level_thresholds = models.JSONField(null=True, blank=True)
+    milestone_targets = models.JSONField(null=True, blank=True)
+    exchange_rates = models.JSONField(null=True, blank=True)
+    custom_formula = models.TextField(blank=True)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Système de Récompense"
+        verbose_name_plural = "Systèmes de Récompenses"
+    
+    def calculate_reward(self, challenge, user_progress):
+        """
+        Calcule la récompense selon le type de système
+        """
+        if self.type == 'points_based':
+            return self.calculate_points(challenge, user_progress)
+        elif self.type == 'level_based':
+            return self.calculate_level(user_progress)
+        elif self.type == 'milestone_based':
+            return self.calculate_milestone(user_progress)
+        elif self.type == 'exchange_system':
+            return self.calculate_exchange(user_progress)
+        elif self.type == 'custom_formula':
+            return self.calculate_custom(challenge, user_progress)
+        return 0
+    
+    def calculate_points(self, challenge, user_progress):
+        if not self.points_per_unit:
+            return 0
+        return float(user_progress) * float(self.points_per_unit)
+    
+    def calculate_level(self, user_progress):
+        if not self.level_thresholds:
+            return 0
+        thresholds = sorted([float(t) for t in self.level_thresholds.values()])
+        for level, threshold in enumerate(thresholds, start=1):
+            if user_progress < threshold:
+                return (level - 1) * 100  # Exemple: niveau 1 = 100 pts, niveau 2 = 200 pts, etc.
+        return len(thresholds) * 100
+    
+    def calculate_milestone(self, user_progress):
+        if not self.milestone_targets:
+            return 0
+        milestones = sorted([float(t) for t in self.milestone_targets.values()])
+        earned = 0
+        for milestone in milestones:
+            if user_progress >= milestone:
+                earned += 100  # Chaque jalon rapporte 100 points
+        return earned
+    
+    def calculate_exchange(self, user_progress):
+        if not self.exchange_rates:
+            return 0
+        # Logique d'échange personnalisée
+        return user_progress * 10  # Exemple simple
+    
+    def calculate_custom(self, challenge, user_progress):
+        if not self.custom_formula:
+            return 0
+        # Évaluation de formule personnalisée (simplifié)
+        try:
+            # Remplacer les variables dans la formule
+            formula = self.custom_formula.replace('progress', str(user_progress))
+            return eval(formula, {'__builtins__': {}}, {})
+        except:
+            return 0
 
+# Modèle de configuration de récompense pour chaque défi
+class ChallengeRewardConfig(models.Model):
+    challenge = models.OneToOneField(EcoChallenge, on_delete=models.CASCADE)
+    reward_system = models.ForeignKey(RewardSystem, on_delete=models.CASCADE)
+    multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.00')
+    )
+    bonus_threshold = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    reward_cap = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
 class Feedback(models.Model):
     # Utiliser ObjectIdField pour MongoDB avec Djongo
     try:
@@ -1092,3 +1253,24 @@ class Feedback(models.Model):
     
     def __str__(self):
         return f"Feedback de {self.user.email} - {self.rating}/5"
+    
+class ChallengeRewardConfig(models.Model):
+    challenge = models.OneToOneField(EcoChallenge, on_delete=models.CASCADE)
+    reward_system = models.ForeignKey(RewardSystem, on_delete=models.CASCADE)
+    multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.00')
+    )
+    bonus_threshold = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    reward_cap = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )    

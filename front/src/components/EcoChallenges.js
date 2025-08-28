@@ -4,7 +4,8 @@ import {
   Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Select, MenuItem, FormControl, InputLabel, Grid, Tabs, Tab,
   Checkbox, FormControlLabel, Alert, Snackbar, Card, CardContent, CardActions,
-  Chip, IconButton, Tooltip, TablePagination
+  Chip, IconButton, Tooltip, TablePagination, List, ListItem, ListItemText,
+  ListItemIcon, LinearProgress, Paper, Divider
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -18,18 +19,23 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import HistoryIcon from '@mui/icons-material/History';
+import RedeemIcon from '@mui/icons-material/Redeem';
 
 import { ecoChallengesService, errorUtils, authService } from '../services/apiService';
 import './EcoChallenges.css';
 
+const POINTS_STORAGE_KEY = 'eco_points_data';
+
 const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
   const navigate = useNavigate();
 
-  // ✅ États d'authentification
+  // ===== ÉTATS D'AUTHENTIFICATION =====
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [authData, setAuthData] = useState({ token: null, user: null });
 
-  // États du composant
+  // ===== ÉTATS DU COMPOSANT =====
   const [challenges, setChallenges] = useState([]);
   const [userChallenges, setUserChallenges] = useState([]);
   const [rewards, setRewards] = useState([]);
@@ -45,7 +51,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
   const [rowsPerPage, setRowsPerPage] = useState(12);
   const [showFilters, setShowFilters] = useState(false);
 
-  // 🆕 États pour la saisie manuelle
+  // ===== ÉTATS POUR LA SAISIE MANUELLE =====
   const [manualEntry, setManualEntry] = useState({ 
     open: false, 
     challengeId: null, 
@@ -55,13 +61,186 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ Vérification d'authentification améliorée
+  // ===== ÉTATS POUR POINTS & COUPONS =====
+  const [pointsData, setPointsData] = useState(() => {
+    try {
+      const saved = localStorage.getItem(POINTS_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {
+        points: 0,
+        totalEarned: 0,
+        coupons: [],
+        history: []
+      };
+    } catch (e) {
+      return { points: 0, totalEarned: 0, coupons: [], history: [] };
+    }
+  });
+
+  const [pointsTab, setPointsTab] = useState(0);
+  const [couponExchangeDialog, setCouponExchangeDialog] = useState(false);
+  const [selectedCouponType, setSelectedCouponType] = useState(null);
+
+  // ===== SAUVEGARDE AUTOMATIQUE DES POINTS =====
+  useEffect(() => {
+    localStorage.setItem(POINTS_STORAGE_KEY, JSON.stringify(pointsData));
+  }, [pointsData]);
+
+  // ===== COUPONS DISPONIBLES =====
+  const availableCoupons = useMemo(() => [
+    {
+      id: 'discount_5',
+      name: 'Réduction 5€',
+      description: 'Réduction de 5€ sur votre prochaine location',
+      cost: 100,
+      value: 5,
+      icon: '💰'
+    },
+    {
+      id: 'discount_10',
+      name: 'Réduction 10€',
+      description: 'Réduction de 10€ sur votre prochaine location',
+      cost: 180,
+      value: 10,
+      icon: '💰'
+    },
+    {
+      id: 'free_day',
+      name: 'Jour Gratuit',
+      description: 'Une journée de location gratuite',
+      cost: 300,
+      value: 'free_day',
+      icon: '🎁'
+    },
+    {
+      id: 'upgrade',
+      name: 'Surclassement',
+      description: 'Surclassement gratuit vers catégorie supérieure',
+      cost: 250,
+      value: 'upgrade',
+      icon: '⬆️'
+    },
+    {
+      id: 'eco_bonus',
+      name: 'Bonus Éco',
+      description: 'Crédit éco de 15€ pour véhicules électriques',
+      cost: 200,
+      value: 15,
+      icon: '🌱'
+    }
+  ], []);
+
+  // ===== GÉNÉRATEUR DE CODE COUPON =====
+  const generateCouponCode = useCallback(() => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = 'ECO';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }, []);
+
+  // ===== AJOUTER DES POINTS =====
+  const addPoints = useCallback((amount, source = 'challenge', description = '') => {
+    setPointsData(prev => ({
+      points: prev.points + amount,
+      totalEarned: prev.totalEarned + amount,
+      coupons: prev.coupons,
+      history: [
+        {
+          id: Date.now(),
+          type: 'earn',
+          amount,
+          source,
+          description,
+          date: new Date().toISOString()
+        },
+        ...prev.history
+      ]
+    }));
+    showSnackbar(`+${amount} points gagnés !`, 'success');
+  }, []);
+
+  // ===== ÉCHANGER POINTS CONTRE COUPON =====
+  const exchangeCoupon = useCallback(() => {
+    if (!selectedCouponType) return;
+    
+    const coupon = availableCoupons.find(c => c.id === selectedCouponType);
+    if (!coupon) return;
+
+    if (pointsData.points < coupon.cost) {
+      showSnackbar('Points insuffisants pour cet échange', 'error');
+      setCouponExchangeDialog(false);
+      return;
+    }
+
+    const newCoupon = {
+      id: Date.now(),
+      code: generateCouponCode(),
+      name: coupon.name,
+      description: coupon.description,
+      value: coupon.value,
+      icon: coupon.icon,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      used: false
+    };
+
+    setPointsData(prev => ({
+      points: prev.points - coupon.cost,
+      totalEarned: prev.totalEarned,
+      coupons: [newCoupon, ...prev.coupons],
+      history: [
+        {
+          id: Date.now() + 1,
+          type: 'spend',
+          amount: coupon.cost,
+          source: 'coupon',
+          description: `Échange contre ${coupon.name}`,
+          date: new Date().toISOString(),
+          couponId: newCoupon.id
+        },
+        ...prev.history
+      ]
+    }));
+
+    showSnackbar(`Coupon "${coupon.name}" obtenu avec succès !`, 'success');
+    setCouponExchangeDialog(false);
+    setSelectedCouponType(null);
+  }, [selectedCouponType, availableCoupons, pointsData.points, generateCouponCode]);
+
+  // ===== UTILISER UN COUPON =====
+  const useCoupon = useCallback((couponId) => {
+    setPointsData(prev => ({
+      ...prev,
+      coupons: prev.coupons.map(c =>
+        c.id === couponId
+          ? { ...c, used: true, usedAt: new Date().toISOString() }
+          : c
+      )
+    }));
+    showSnackbar('Coupon marqué comme utilisé', 'info');
+  }, []);
+
+  // ===== COPIER CODE COUPON =====
+  const copyCouponCode = useCallback((code) => {
+    navigator.clipboard.writeText(code);
+    showSnackbar('Code coupon copié !', 'success');
+  }, []);
+
+  // ===== CALCUL DU NIVEAU UTILISATEUR =====
+  const userLevel = useMemo(() => {
+    const level = Math.floor(pointsData.totalEarned / 500) + 1;
+    const progress = ((pointsData.totalEarned % 500) / 500) * 100;
+    const nextLevelPoints = level * 500;
+    return { level, progress, nextLevelPoints };
+  }, [pointsData.totalEarned]);
+
+  // ===== VÉRIFICATION D'AUTHENTIFICATION =====
   useEffect(() => {
     const checkAuthentication = async () => {
       try {
         console.log('🔍 Checking authentication...', { token: !!token, user: !!user });
 
-        // 1. Vérifier d'abord les props
         if (token && user) {
           console.log('✅ Auth via props');
           setAuthData({ token, user });
@@ -71,7 +250,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
           return;
         }
 
-        // 2. Vérifier localStorage
         const storedToken = localStorage.getItem('access_token');
         const storedUser = localStorage.getItem('user_data');
 
@@ -93,7 +271,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
           }
         }
 
-        // 3. Vérifier token avec le serveur
         if (storedToken) {
           try {
             console.log('🔍 Validating token with server...');
@@ -114,7 +291,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
           }
         }
 
-        // 4. Aucune authentification valide
         console.log('❌ No valid authentication found, redirecting to login');
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -131,7 +307,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     checkAuthentication();
   }, [token, user, navigate]);
 
-  // Fonctions utilitaires pour les permissions
+  // ===== FONCTIONS UTILITAIRES POUR LES PERMISSIONS =====
   const canManageChallenges = useCallback(() => {
     return authData.user?.role === 'admin' || authData.user?.role === 'agence';
   }, [authData.user]);
@@ -148,11 +324,10 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     return false;
   }, [authData.user]);
 
-  // Gestion des erreurs API améliorée
+  // ===== GESTION DES ERREURS API =====
   const handleApiError = useCallback((error, defaultMessage) => {
     console.error('API Error:', error);
     
-    // Gestion spécifique des codes d'erreur
     const errorHandlers = {
       401: () => {
         localStorage.clear();
@@ -196,7 +371,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     setSnackbar({ open: true, message, severity });
   }, []);
 
-  // ✅ ORDRE CORRIGÉ : Charger les défis utilisateur EN PREMIER
+  // ===== CHARGER LES DÉFIS UTILISATEUR =====
   const loadUserChallenges = useCallback(async () => {
     if (!canParticipate()) return;
     
@@ -214,7 +389,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [handleApiError, canParticipate]);
 
-  // Charger les défis
+  // ===== CHARGER LES DÉFIS =====
   const loadChallenges = useCallback(async () => {
     console.log('🔄 Loading challenges...');
     try {
@@ -234,7 +409,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [filters, handleApiError]);
 
-  // Charger les récompenses
+  // ===== CHARGER LES RÉCOMPENSES =====
   const loadRewards = useCallback(async () => {
     try {
       setLoading(true);
@@ -250,45 +425,50 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [handleApiError]);
 
-  // 🆕 Fonction de soumission des kilomètres manuels
+  // ===== FONCTION DE SOUMISSION DES KILOMÈTRES MANUELS =====
   const handleSubmitProgress = useCallback(async (userChallengeId, value, unit = 'km') => {
     if (!value || value <= 0) {
       showSnackbar('Veuillez entrer une valeur valide', 'error');
       return;
     }
-    
+
     try {
       setSubmitting(true);
-      
       const payload = {
         user_challenge_id: userChallengeId,
         progress_value: parseFloat(value),
         unit: unit,
         entry_type: 'manual'
       };
-      
+
       console.log('📊 Soumission progress:', payload);
-      
-      // Appel API pour mettre à jour le progrès
       await ecoChallengesService.updateProgress(payload);
       
-      showSnackbar('✅ Progrès mis à jour avec succès !', 'success');
-      
-      // Recharger les données utilisateur
+      const pointsEarned = Math.floor(parseFloat(value) / 10) * 5;
+      if (pointsEarned > 0) {
+        addPoints(pointsEarned, 'progress', `Progression défi: +${value}${unit}`);
+        showSnackbar(`✅ Progrès mis à jour ! +${pointsEarned} points gagnés !`, 'success');
+      } else {
+        showSnackbar('✅ Progrès mis à jour avec succès !', 'success');
+      }
+
       await loadUserChallenges();
-      
-      // Fermer le dialog
-      setManualEntry({ open: false, challengeId: null, challengeTitle: '', value: '', unit: 'km' });
-      
+      setManualEntry({
+        open: false,
+        challengeId: null,
+        challengeTitle: '',
+        value: '',
+        unit: 'km'
+      });
     } catch (error) {
       console.error('❌ Erreur mise à jour progrès:', error);
       handleApiError(error, 'Erreur lors de la mise à jour du progrès');
     } finally {
       setSubmitting(false);
     }
-  }, [showSnackbar, handleApiError, loadUserChallenges]);
+  }, [addPoints, handleApiError, loadUserChallenges, showSnackbar]);
 
-  // Effect pour charger les données selon l'onglet
+  // ===== EFFECT POUR CHARGER LES DONNÉES =====
   useEffect(() => {
     if (isAuthChecking || !authData.token) return;
 
@@ -303,26 +483,24 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
           setCurrentTab(0);
         }
         break;
-      case 2: // Récompenses
-        loadRewards();
+      case 2:
         break;
       default:
         break;
     }
-  }, [currentTab, loadChallenges, loadUserChallenges, loadRewards, canParticipate, isAuthChecking, authData.token]);
+  }, [currentTab, loadChallenges, loadUserChallenges, canParticipate, isAuthChecking, authData.token]);
 
-  // Gestionnaire de changement d'onglet
+  // ===== GESTIONNAIRE DE CHANGEMENT D'ONGLET =====
   const handleTabChange = useCallback((event, newValue) => {
     if (newValue === 1 && !canParticipate()) {
       showSnackbar('Vous n\'avez pas accès à cette section', 'warning');
       return;
     }
-    
     setCurrentTab(newValue);
     setPage(0);
   }, [canParticipate, showSnackbar]);
 
-  // Créer un défi
+  // ===== CRÉER UN DÉFI =====
   const handleCreateChallenge = useCallback(() => {
     if (!canManageChallenges()) {
       showSnackbar('Vous n\'avez pas les permissions pour créer des défis', 'warning');
@@ -346,7 +524,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     setOpenDialog(true);
   }, [canManageChallenges, showSnackbar]);
 
-  // Modifier un défi
+  // ===== MODIFIER UN DÉFI =====
   const handleEditChallenge = useCallback((challenge) => {
     if (!canEditChallenge(challenge)) {
       showSnackbar('Vous ne pouvez pas modifier ce défi', 'warning');
@@ -358,7 +536,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     setOpenDialog(true);
   }, [canEditChallenge, showSnackbar]);
 
-  // Sauvegarder un défi
+  // ===== SAUVEGARDER UN DÉFI =====
   const handleSaveChallenge = useCallback(async () => {
     if (!currentChallenge?.title || currentChallenge?.target_value <= 0 || currentChallenge?.duration_days <= 0) {
       showSnackbar('Veuillez remplir tous les champs obligatoires correctement', 'error');
@@ -393,7 +571,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [currentChallenge, dialogMode, handleApiError, showSnackbar, canManageChallenges]);
 
-  // Rejoindre un défi
+  // ===== REJOINDRE UN DÉFI =====
   const handleJoinChallenge = useCallback(async (challengeId) => {
     if (!canParticipate()) {
       showSnackbar('Vous ne pouvez pas participer aux défis', 'warning');
@@ -419,7 +597,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
       
       showSnackbar('✅ Défi rejoint avec succès !', 'success');
       
-      // Recharger les données
       if (currentTab === 1) {
         await loadUserChallenges();
       }
@@ -447,7 +624,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [canParticipate, showSnackbar, currentTab, loadUserChallenges, loadChallenges]);
 
-  // Abandonner un défi
+  // ===== ABANDONNER UN DÉFI =====
   const handleAbandonChallenge = useCallback(async (userChallengeId) => {
     try {
       setLoading(true);
@@ -461,23 +638,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [handleApiError, showSnackbar, loadUserChallenges]);
 
-  // Réclamer une récompense
-  const handleClaimReward = useCallback(async (rewardId) => {
-    try {
-      setLoading(true);
-      await ecoChallengesService.claimReward(rewardId);
-      setRewards(prev => prev.map(reward =>
-        reward.id === rewardId ? { ...reward, claimed: true } : reward
-      ));
-      showSnackbar('Récompense réclamée avec succès !', 'success');
-    } catch (error) {
-      handleApiError(error, 'Erreur lors de la réclamation');
-    } finally {
-      setLoading(false);
-    }
-  }, [handleApiError, showSnackbar]);
-
-  // Dupliquer un défi
+  // ===== DUPLIQUER UN DÉFI =====
   const handleDuplicateChallenge = useCallback(async (challengeId) => {
     if (!canManageChallenges()) {
       showSnackbar('Permissions insuffisantes pour dupliquer', 'warning');
@@ -496,7 +657,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [handleApiError, showSnackbar, canManageChallenges]);
 
-  // Actions en lot
+  // ===== ACTIONS EN LOT =====
   const handleBulkAction = useCallback(async (action) => {
     if (!canManageChallenges()) {
       showSnackbar('Permissions insuffisantes pour les actions groupées', 'warning');
@@ -524,7 +685,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [selectedChallenges, handleApiError, showSnackbar, loadChallenges, canManageChallenges]);
 
-  // Exporter les données
+  // ===== EXPORTER LES DONNÉES =====
   const handleExportData = useCallback(async (challengeId) => {
     if (!canManageChallenges()) {
       showSnackbar('Permissions insuffisantes pour l\'export', 'warning');
@@ -550,7 +711,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, [handleApiError, showSnackbar, canManageChallenges]);
 
-  // Fonctions utilitaires mémorisées
+  // ===== FONCTIONS UTILITAIRES MÉMORISÉES =====
   const formatChallengeType = useMemo(() => (type) => {
     const types = {
       'eco_driving': '🚗 Éco-conduite',
@@ -584,16 +745,15 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     }
   }, []);
 
-  // Données mémorisées pour les performances
+  // ===== DONNÉES MÉMORISÉES POUR LES PERFORMANCES =====
   const paginatedChallenges = useMemo(() => {
     return challenges.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   }, [challenges, page, rowsPerPage]);
 
-  // État de chargement pendant la vérification d'auth avec design Web3
+  // ===== RENDU PENDANT LA VÉRIFICATION D'AUTH =====
   if (isAuthChecking) {
     return (
       <div className="eco-challenges-main-container">
-        {/* Particules neurales */}
         <div className="eco-challenges-floating-particles">
           {[...Array(15)].map((_, i) => (
             <div
@@ -652,7 +812,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     );
   }
 
-  // Vérification finale après chargement
+  // ===== VÉRIFICATION FINALE APRÈS CHARGEMENT =====
   if (!authData.token || !authData.user) {
     return (
       <div className="eco-challenges-main-container">
@@ -671,6 +831,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     );
   }
 
+  // ===== RENDU PRINCIPAL =====
   return (
     <div className="eco-challenges-main-container">
       {/* Particules neurales flottantes */}
@@ -791,13 +952,13 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                 }
               }}
             >
-              <Tab label="🌐 Réseau de Défis" className="eco-challenges-tab" />
-              {canParticipate() && <Tab label="⚡ Mes Missions" className="eco-challenges-tab" />}
-              <Tab label="🏆 Récompenses Cyber" className="eco-challenges-tab" />
+              <Tab icon={<EmojiEventsIcon />} label="Défis Disponibles" />
+              {canParticipate() && <Tab icon={<CheckCircleIcon />} label="Mes Défis" />}
+              <Tab icon={<StarIcon />} label="Points & Coupons" />
             </Tabs>
           </Box>
 
-          {/* Contenu des onglets */}
+          {/* ===== ONGLET DÉFIS DISPONIBLES ===== */}
           {currentTab === 0 && (
             <Box>
               {/* Filtres Web3 */}
@@ -1092,7 +1253,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
             </Box>
           )}
 
-          {/* Onglet Mes Défis avec design Web3 et saisie manuelle */}
+          {/* ===== ONGLET MES DÉFIS ===== */}
           {currentTab === 1 && canParticipate() && (
             <Box>
               {loading ? (
@@ -1138,13 +1299,13 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                       {/* Points de statut */}
                       <div className="eco-challenges-data-points">
                         <div className={`eco-challenges-data-point ${userChallenge.status === 'active' ? '' : 'inactive'}`} />
-                        <div className={`eco-challenges-data-point ${userChallenge.progress_percentage > 50 ? '' : 'inactive'}`} />
+                        <div className={`eco-challenges-data-point ${(userChallenge.progress_percentage || 0) > 50 ? '' : 'inactive'}`} />
                         <div className={`eco-challenges-data-point ${userChallenge.status === 'completed' ? '' : 'inactive'}`} />
                       </div>
 
                       <div className="eco-challenge-header">
                         <h3 className="eco-challenge-title-web3">
-                          {userChallenge.challenge?.title}
+                          {userChallenge.challenge?.title || 'Défi sans nom'}
                         </h3>
                         <div className="eco-challenge-badges">
                           <span className={`eco-challenge-badge-web3 ${
@@ -1159,10 +1320,9 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
 
                       <div style={{ marginBottom: '16px' }}>
                         <Typography variant="body2" sx={{ color: 'rgba(0, 212, 255, 0.8)', mb: 1, fontWeight: 600 }}>
-                          🧠 Progression Neural: {userChallenge.progress_percentage?.toFixed(1)}%
+                          🧠 Progression Neural: {((userChallenge.progress_percentage || 0)).toFixed(1)}%
                         </Typography>
                         
-                        {/* 🆕 Indication du type de saisie */}
                         {userChallenge.last_entry_type === 'manual' && (
                           <Typography variant="caption" sx={{ color: 'rgba(0, 255, 136, 0.6)', display: 'block', mb: 0.5 }}>
                             📝 Dernière saisie manuelle
@@ -1180,8 +1340,8 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                       </div>
 
                       <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 1 }}>
-                        📊 Données: {userChallenge.progress} / {userChallenge.target} {userChallenge.unit}
-                        {userChallenge.manual_entries_count > 0 && (
+                        📊 Données: {userChallenge.progress || 0} / {userChallenge.target || 0} {userChallenge.unit || ''}
+                        {(userChallenge.manual_entries_count || 0) > 0 && (
                           <Typography component="span" sx={{ color: 'rgba(0, 255, 136, 0.7)', ml: 1 }}>
                             ({userChallenge.manual_entries_count} saisies manuelles)
                           </Typography>
@@ -1205,7 +1365,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           {userChallenge.status === 'active' && (
                             <>
-                              {/* 🆕 Bouton saisie manuelle */}
                               <button
                                 className="eco-challenge-btn-secondary web3-button-secondary"
                                 onClick={() => setManualEntry({
@@ -1226,7 +1385,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                                 📊 Saisir {userChallenge.unit || 'données'}
                               </button>
                               
-                              {/* Bouton abandon existant */}
                               <Button
                                 size="small"
                                 onClick={() => handleAbandonChallenge(userChallenge.id)}
@@ -1266,124 +1424,367 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
             </Box>
           )}
 
-          {/* Onglet Récompenses avec design Web3 */}
+          {/* ===== ONGLET POINTS & COUPONS ===== */}
           {currentTab === 2 && (
             <Box>
-              {loading ? (
-                <div className="eco-challenges-loading-container-web3">
-                  <div className="eco-challenges-ai-loader">
-                    <div className="eco-challenges-brain-core" />
-                    <div className="eco-challenges-brain-waves">
-                      <div className="eco-challenges-wave eco-challenges-wave-1" />
-                      <div className="eco-challenges-wave eco-challenges-wave-2" />
-                      <div className="eco-challenges-wave eco-challenges-wave-3" />
-                    </div>
-                  </div>
-                  <Typography className="eco-challenges-loading-text">
-                    💎 Scan des récompenses cyber
-                    <div className="web3-loading-dots">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-                  </Typography>
-                </div>
-              ) : rewards.length === 0 ? (
-                <div className="web3-empty-state eco-challenges-empty-state">
-                  <div className="web3-hologram-icon">
-                    <EmojiEventsIcon className="eco-challenges-empty-icon" sx={{ fontSize: 64 }} />
-                    <div className="web3-icon-rings">
-                      <div className="ring ring-1" />
-                      <div className="ring ring-2" />
-                      <div className="ring ring-3" />
-                    </div>
-                  </div>
-                  <Typography variant="h5" className="eco-challenges-empty-title web3-gradient-text">
-                    Coffre-Fort Cyber Vide
-                  </Typography>
-                  <Typography className="eco-challenges-empty-text">
-                    💎 Participez aux défis neuraux pour débloquer des récompenses exclusives !
-                  </Typography>
-                </div>
-              ) : (
-                <div className="eco-challenges-grid">
-                  {rewards.map((reward) => (
-                    <div key={reward.id} className="eco-challenge-item-web3 web3-metric-card">
-                      {/* Points de données pour récompenses */}
-                      <div className="eco-challenges-data-points">
-                        <div className={`eco-challenges-data-point ${reward.claimed ? '' : 'inactive'}`} />
-                        <div className="eco-challenges-data-point" />
-                        <div className={`eco-challenges-data-point ${reward.points_awarded > 0 ? '' : 'inactive'}`} />
-                      </div>
-
-                      <div className="eco-challenge-header">
-                        <h3 className="eco-challenge-title-web3">
-                          {reward.title || '💎 Récompense Cyber'}
-                        </h3>
-                        <div className="eco-challenge-badges">
-                          <span className={`eco-challenge-badge-web3 ${reward.claimed ? 'success' : 'warning'}`}>
-                            {reward.claimed ? '✅ Réclamée' : '⚡ Disponible'}
-                          </span>
-                          <span className="eco-challenge-badge-web3 primary">
-                            {reward.reward_type || '🎁 Bonus'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{ marginBottom: '16px' }}>
-                        {reward.points_awarded > 0 && (
-                          <Typography sx={{ color: 'rgba(0, 255, 136, 0.9)', fontWeight: 600 }}>
-                            💎 {reward.points_awarded} points neuraux
-                          </Typography>
-                        )}
-                        {reward.credit_awarded > 0 && (
-                          <Typography sx={{ color: 'rgba(0, 212, 255, 0.9)', fontWeight: 600 }}>
-                            💰 {reward.credit_awarded}€ cyber-crédits
-                          </Typography>
-                        )}
-                        {reward.badge_awarded && (
-                          <Typography sx={{ color: 'rgba(255, 0, 110, 0.9)', fontWeight: 600 }}>
-                            🏅 {reward.badge_awarded}
-                          </Typography>
-                        )}
-                      </div>
-
-                      {reward.description && (
-                        <Typography variant="body2" className="eco-challenge-description">
-                          {reward.description}
+              {/* En-tête avec statistiques */}
+              <Paper elevation={3} sx={{ 
+                p: 3, 
+                mb: 3, 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                borderRadius: '16px'
+              }}>
+                <Grid container spacing={3} alignItems="center">
+                  <Grid item xs={12} md={4}>
+                    <Box textAlign="center">
+                      <Typography variant="h3" sx={{ fontWeight: 'bold', textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+                        {pointsData.points || 0}
+                      </Typography>
+                      <Typography variant="h6">
+                        Points disponibles
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={4}>
+                    <Box textAlign="center">
+                      <Box display="flex" alignItems="center" justifyContent="center" mb={1}>
+                        <StarIcon sx={{ color: '#ffd700' }} />
+                        <Typography variant="h5" ml={1}>
+                          Niveau {userLevel.level}
                         </Typography>
-                      )}
+                      </Box>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={userLevel.progress}
+                        sx={{ 
+                          height: 8, 
+                          borderRadius: 4,
+                          backgroundColor: 'rgba(255,255,255,0.2)',
+                          '& .MuiLinearProgress-bar': {
+                            backgroundColor: '#ffd700'
+                          }
+                        }}
+                      />
+                      <Typography variant="caption">
+                        {500 - (pointsData.totalEarned % 500)} points jusqu'au niveau {userLevel.level + 1}
+                      </Typography>
+                    </Box>
+                  </Grid>
 
-                      <div style={{ marginTop: '16px' }}>
-                        {!reward.claimed ? (
-                          <button
-                            className="eco-challenge-btn-primary-web3"
-                            onClick={() => handleClaimReward(reward.id)}
-                            disabled={loading}
-                          >
-                            <span>🔓 Déverrouiller</span>
-                          </button>
-                        ) : (
-                          <Chip 
-                            icon={<CheckCircleIcon />} 
-                            label="🎉 Déverrouillée !" 
-                            sx={{
-                              background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-                              color: 'black',
-                              fontWeight: 'bold'
-                            }}
-                            size="small" 
-                          />
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                  <Grid item xs={12} md={4}>
+                    <Box textAlign="center">
+                      <Typography variant="h5" sx={{ color: '#00ff88' }}>
+                        {pointsData.totalEarned || 0}
+                      </Typography>
+                      <Typography variant="h6">
+                        Points totaux gagnés
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+
+                {/* Boutons de démo */}
+                <Box mt={2} textAlign="center">
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => addPoints(50, 'challenge', 'Défi complété')}
+                    sx={{ 
+                      mr: 1, 
+                      color: 'white', 
+                      borderColor: 'white',
+                      '&:hover': { 
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        borderColor: 'white'
+                      }
+                    }}
+                  >
+                    +50 pts (Démo)
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => addPoints(100, 'bonus', 'Bonus quotidien')}
+                    sx={{ 
+                      color: 'white', 
+                      borderColor: 'white',
+                      '&:hover': { 
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        borderColor: 'white'
+                      }
+                    }}
+                  >
+                    +100 pts (Bonus)
+                  </Button>
+                </Box>
+              </Paper>
+
+              {/* Onglets Points */}
+              <Box sx={{ mb: 3 }}>
+                <Tabs 
+                  value={pointsTab} 
+                  onChange={(e, v) => setPointsTab(v)} 
+                  centered
+                  sx={{
+                    '& .MuiTab-root': { 
+                      color: 'rgba(0, 212, 255, 0.7)',
+                      fontWeight: 600
+                    },
+                    '& .MuiTab-root.Mui-selected': { 
+                      color: '#00d4ff'
+                    },
+                    '& .MuiTabs-indicator': { 
+                      backgroundColor: '#00d4ff'
+                    }
+                  }}
+                >
+                  <Tab icon={<RedeemIcon />} label="Échanger" />
+                  <Tab icon={<EmojiEventsIcon />} label="Mes Coupons" />
+                  <Tab icon={<HistoryIcon />} label="Historique" />
+                </Tabs>
+              </Box>
+
+              {/* Contenu des sous-onglets */}
+              {pointsTab === 0 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom sx={{ color: '#00d4ff', mb: 3 }}>
+                    🎯 Coupons disponibles
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {availableCoupons.map((coupon) => {
+                      const canAfford = pointsData.points >= coupon.cost;
+                      return (
+                        <Grid item xs={12} sm={6} md={4} key={coupon.id}>
+                          <Card sx={{ 
+                            height: '100%',
+                            opacity: canAfford ? 1 : 0.5,
+                            border: canAfford ? '2px solid #4caf50' : '2px solid #e0e0e0',
+                            borderRadius: '12px',
+                            background: canAfford ? 'linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(0, 212, 255, 0.1))' : 'rgba(255, 255, 255, 0.05)',
+                            transition: 'all 0.3s ease',
+                            '&:hover': canAfford ? {
+                              transform: 'translateY(-4px)',
+                              boxShadow: '0 8px 20px rgba(76, 175, 80, 0.3)'
+                            } : {}
+                          }}>
+                            <CardContent>
+                              <Box display="flex" alignItems="center" mb={2}>
+                                <Typography variant="h4" mr={1}>
+                                  {coupon.icon}
+                                </Typography>
+                                <Box>
+                                  <Typography variant="h6" sx={{ color: '#00d4ff' }}>
+                                    {coupon.name}
+                                  </Typography>
+                                  <Chip 
+                                    label={`${coupon.cost} points`}
+                                    color={canAfford ? "primary" : "default"}
+                                    size="small"
+                                  />
+                                </Box>
+                              </Box>
+                              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                {coupon.description}
+                              </Typography>
+                              {!canAfford && (
+                                <Typography variant="caption" sx={{ color: '#f44336', display: 'block', mt: 1 }}>
+                                  Il vous manque {coupon.cost - pointsData.points} points
+                                </Typography>
+                              )}
+                            </CardContent>
+                            <CardActions>
+                              <Button
+                                fullWidth
+                                variant="contained"
+                                disabled={!canAfford}
+                                onClick={() => {
+                                  setSelectedCouponType(coupon.id);
+                                  setCouponExchangeDialog(true);
+                                }}
+                                sx={{
+                                  backgroundColor: canAfford ? '#00d4ff' : undefined,
+                                  '&:hover': {
+                                    backgroundColor: canAfford ? '#0099cc' : undefined
+                                  }
+                                }}
+                              >
+                                {canAfford ? 'Échanger' : 'Indisponible'}
+                              </Button>
+                            </CardActions>
+                          </Card>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                </Box>
+              )}
+
+              {pointsTab === 1 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom sx={{ color: '#00d4ff', mb: 3 }}>
+                    🎁 Mes coupons ({(pointsData.coupons || []).length})
+                  </Typography>
+                  {(!pointsData.coupons || pointsData.coupons.length === 0) ? (
+                    <Alert severity="info" sx={{ backgroundColor: 'rgba(33, 150, 243, 0.1)', color: '#00d4ff' }}>
+                      Vous n'avez pas encore de coupons. Échangez vos points dans l'onglet "Échanger" !
+                    </Alert>
+                  ) : (
+                    <Grid container spacing={2}>
+                      {pointsData.coupons.map((coupon) => (
+                        <Grid item xs={12} sm={6} md={4} key={coupon.id}>
+                          <Card sx={{
+                            height: '100%',
+                            border: coupon.used ? '2px solid #9e9e9e' : '2px solid #2196f3',
+                            borderRadius: '12px',
+                            opacity: coupon.used ? 0.7 : 1,
+                            background: coupon.used 
+                              ? 'rgba(158, 158, 158, 0.1)' 
+                              : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1), rgba(0, 212, 255, 0.1))',
+                            transition: 'all 0.3s ease',
+                            '&:hover': !coupon.used ? {
+                              transform: 'translateY(-2px)',
+                              boxShadow: '0 6px 16px rgba(33, 150, 243, 0.2)'
+                            } : {}
+                          }}>
+                            <CardContent>
+                              <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                                <Typography variant="h6" sx={{ color: '#00d4ff' }}>
+                                  {coupon.icon} {coupon.name}
+                                </Typography>
+                                {coupon.used && <CheckCircleIcon sx={{ color: '#4caf50' }} />}
+                              </Box>
+                              
+                              <Typography 
+                                variant="h4" 
+                                sx={{ 
+                                  color: '#00d4ff',
+                                  fontFamily: 'monospace',
+                                  fontWeight: 'bold',
+                                  mb: 2,
+                                  textAlign: 'center',
+                                  backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                                  padding: '8px',
+                                  borderRadius: '8px'
+                                }}
+                              >
+                                {coupon.code}
+                              </Typography>
+                              
+                              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 1 }}>
+                                {coupon.description}
+                              </Typography>
+
+                              <Box display="flex" alignItems="center" mb={1}>
+                                <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+                                  📅 Expire le {new Date(coupon.expiresAt).toLocaleDateString()}
+                                </Typography>
+                              </Box>
+
+                              <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+                                Créé le {new Date(coupon.createdAt).toLocaleDateString()}
+                              </Typography>
+                              
+                              {coupon.used && (
+                                <Chip 
+                                  label="Utilisé"
+                                  color="success"
+                                  size="small"
+                                  sx={{ mt: 1 }}
+                                />
+                              )}
+                            </CardContent>
+                            
+                            <CardActions>
+                              <Tooltip title="Copier le code">
+                                <IconButton 
+                                  onClick={() => copyCouponCode(coupon.code)}
+                                  size="small"
+                                  sx={{ color: '#00d4ff' }}
+                                >
+                                  <ContentCopyIcon />
+                                </IconButton>
+                              </Tooltip>
+                              
+                              {!coupon.used && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => useCoupon(coupon.id)}
+                                  sx={{ 
+                                    color: '#00d4ff',
+                                    borderColor: '#00d4ff'
+                                  }}
+                                >
+                                  Marquer utilisé
+                                </Button>
+                              )}
+                            </CardActions>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  )}
+                </Box>
+              )}
+
+              {pointsTab === 2 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom sx={{ color: '#00d4ff', mb: 3 }}>
+                    📊 Historique des points
+                  </Typography>
+                  {(!pointsData.history || pointsData.history.length === 0) ? (
+                    <Alert severity="info" sx={{ backgroundColor: 'rgba(33, 150, 243, 0.1)', color: '#00d4ff' }}>
+                      Aucune activité récente
+                    </Alert>
+                  ) : (
+                    <List sx={{ backgroundColor: 'rgba(0, 212, 255, 0.05)', borderRadius: '12px' }}>
+                      {pointsData.history.map((entry, index) => (
+                        <React.Fragment key={entry.id}>
+                          <ListItem>
+                            <ListItemIcon>
+                              {entry.type === 'earn' ? (
+                                <EmojiEventsIcon sx={{ color: '#4caf50' }} />
+                              ) : (
+                                <RedeemIcon sx={{ color: '#00d4ff' }} />
+                              )}
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={
+                                <Box display="flex" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="body1" sx={{ color: 'white' }}>
+                                    {entry.description}
+                                  </Typography>
+                                  <Typography 
+                                    variant="h6" 
+                                    sx={{ 
+                                      color: entry.type === 'earn' ? '#4caf50' : '#f44336',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    {entry.type === 'earn' ? '+' : '-'}{entry.amount} pts
+                                  </Typography>
+                                </Box>
+                              }
+                              secondary={
+                                <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+                                  {new Date(entry.date).toLocaleString()} • {entry.source}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          {index < pointsData.history.length - 1 && <Divider sx={{ backgroundColor: 'rgba(0, 212, 255, 0.1)' }} />}
+                        </React.Fragment>
+                      ))}
+                    </List>
+                  )}
+                </Box>
               )}
             </Box>
           )}
 
-          {/* 🆕 Dialog de saisie manuelle des kilomètres */}
+          {/* ===== DIALOG DE SAISIE MANUELLE ===== */}
           <Dialog
             open={manualEntry.open}
             onClose={() => setManualEntry({ open: false, challengeId: null, challengeTitle: '', value: '', unit: 'km' })}
@@ -1413,30 +1814,28 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                 🚗 Entrez les données de votre défi pour mettre à jour votre progression automatiquement
               </Typography>
               
-              <div className="web3-input-wrapper">
-                <TextField
-                  fullWidth
-                  type="number"
-                  label={`Valeur en ${manualEntry.unit}`}
-                  value={manualEntry.value}
-                  onChange={(e) => setManualEntry(prev => ({ ...prev, value: e.target.value }))}
-                  placeholder={`ex: ${manualEntry.unit === 'km' ? '25.5' : '100'}`}
-                  InputProps={{
-                    endAdornment: <Typography sx={{ color: '#00d4ff', ml: 1 }}>{manualEntry.unit}</Typography>,
-                    sx: { 
-                      color: '#00d4ff',
-                      '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                      '&:hover fieldset': { borderColor: '#00d4ff' },
-                      '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                    }
-                  }}
-                  InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                />
-                <div className="web3-input-glow" />
-              </div>
+              <TextField
+                fullWidth
+                type="number"
+                label={`Valeur en ${manualEntry.unit}`}
+                value={manualEntry.value}
+                onChange={(e) => setManualEntry(prev => ({ ...prev, value: e.target.value }))}
+                placeholder={`ex: ${manualEntry.unit === 'km' ? '25.5' : '100'}`}
+                InputProps={{
+                  endAdornment: <Typography sx={{ color: '#00d4ff', ml: 1 }}>{manualEntry.unit}</Typography>,
+                  sx: { 
+                    color: '#00d4ff',
+                    '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                    '&:hover fieldset': { borderColor: '#00d4ff' },
+                    '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                  }
+                }}
+                InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                sx={{ mt: 2 }}
+              />
 
               <Typography variant="caption" sx={{ color: 'rgba(0, 255, 136, 0.7)', mt: 2, display: 'block' }}>
-                💡 Le système calculera automatiquement votre progression et mettra à jour le statut du défi
+                💡 Le système calculera automatiquement votre progression et vous attribuera des points bonus
               </Typography>
             </DialogContent>
 
@@ -1447,18 +1846,88 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
               >
                 🚫 Annuler
               </Button>
-              <button
+              <Button
                 onClick={() => handleSubmitProgress(manualEntry.challengeId, manualEntry.value, manualEntry.unit)}
                 disabled={!manualEntry.value || parseFloat(manualEntry.value) <= 0 || submitting}
-                className="web3-button-primary"
-                style={{ padding: '12px 24px' }}
+                variant="contained"
+                sx={{ 
+                  backgroundColor: '#00d4ff',
+                  '&:hover': { backgroundColor: '#0099cc' }
+                }}
               >
                 {submitting ? '⏳ Traitement...' : '📊 Enregistrer'}
-              </button>
+              </Button>
             </DialogActions>
           </Dialog>
 
-          {/* Dialog de création/modification avec design Web3 */}
+          {/* ===== DIALOG D'ÉCHANGE DE COUPON ===== */}
+          <Dialog 
+            open={couponExchangeDialog} 
+            onClose={() => setCouponExchangeDialog(false)}
+            PaperProps={{
+              sx: {
+                backgroundColor: '#0a0a0a',
+                color: 'white',
+                border: '1px solid rgba(0, 212, 255, 0.3)',
+                borderRadius: '16px',
+                boxShadow: '0 0 50px rgba(0, 212, 255, 0.2)'
+              }
+            }}
+          >
+            <DialogTitle sx={{ color: '#00d4ff', textAlign: 'center' }}>
+              Confirmer l'échange
+            </DialogTitle>
+            <DialogContent>
+              {selectedCouponType && (
+                <Box>
+                  {(() => {
+                    const coupon = availableCoupons.find(c => c.id === selectedCouponType);
+                    return coupon ? (
+                      <>
+                        <Typography variant="h6" gutterBottom sx={{ color: '#00d4ff' }}>
+                          {coupon.icon} {coupon.name}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }} paragraph>
+                          {coupon.description}
+                        </Typography>
+                        <Alert 
+                          severity="warning" 
+                          sx={{ 
+                            backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                            color: '#ffa726',
+                            border: '1px solid rgba(255, 152, 0, 0.3)'
+                          }}
+                        >
+                          Cet échange coûtera <strong>{coupon.cost} points</strong>.
+                          Il vous restera <strong>{pointsData.points - coupon.cost} points</strong>.
+                        </Alert>
+                      </>
+                    ) : null;
+                  })()}
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button 
+                onClick={() => setCouponExchangeDialog(false)}
+                sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+              >
+                Annuler
+              </Button>
+              <Button 
+                onClick={exchangeCoupon} 
+                variant="contained"
+                sx={{ 
+                  backgroundColor: '#00d4ff',
+                  '&:hover': { backgroundColor: '#0099cc' }
+                }}
+              >
+                Confirmer l'échange
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* ===== DIALOG DE CRÉATION/MODIFICATION ===== */}
           {canManageChallenges() && (
             <Dialog
               open={openDialog}
@@ -1489,51 +1958,43 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
               <DialogContent sx={{ p: 3 }}>
                 <Grid container spacing={3} sx={{ mt: 0.5 }}>
                   <Grid item xs={12}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        label="Nom du Défi"
-                        value={currentChallenge?.title || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, title: e.target.value })}
-                        error={!currentChallenge?.title}
-                        helperText={!currentChallenge?.title ? 'Le nom est requis pour activer le défi' : ''}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      label="Nom du Défi"
+                      value={currentChallenge?.title || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, title: e.target.value })}
+                      error={!currentChallenge?.title}
+                      helperText={!currentChallenge?.title ? 'Le nom est requis pour activer le défi' : ''}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={12}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        label="Description Neural"
-                        value={currentChallenge?.description || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, description: e.target.value })}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={3}
+                      label="Description Neural"
+                      value={currentChallenge?.description || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, description: e.target.value })}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={6}>
@@ -1542,7 +2003,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                       <Select
                         value={currentChallenge?.type || 'eco_driving'}
                         onChange={(e) => setCurrentChallenge({ ...currentChallenge, type: e.target.value })}
-                        className="web3-input"
                         sx={{
                           color: '#00d4ff',
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 212, 255, 0.3)' },
@@ -1567,7 +2027,6 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                       <Select
                         value={currentChallenge?.difficulty || 'beginner'}
                         onChange={(e) => setCurrentChallenge({ ...currentChallenge, difficulty: e.target.value })}
-                        className="web3-input"
                         sx={{
                           color: '#00d4ff',
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 212, 255, 0.3)' },
@@ -1584,121 +2043,101 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                   </Grid>
 
                   <Grid item xs={4}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Valeur Cible"
-                        value={currentChallenge?.target_value || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, target_value: parseFloat(e.target.value) || 0 })}
-                        error={currentChallenge?.target_value <= 0}
-                        helperText={currentChallenge?.target_value <= 0 ? 'Valeur > 0 requise' : ''}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Valeur Cible"
+                      value={currentChallenge?.target_value || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, target_value: parseFloat(e.target.value) || 0 })}
+                      error={currentChallenge?.target_value <= 0}
+                      helperText={currentChallenge?.target_value <= 0 ? 'Valeur > 0 requise' : ''}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={4}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        label="Unité"
-                        value={currentChallenge?.unit || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, unit: e.target.value })}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      label="Unité"
+                      value={currentChallenge?.unit || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, unit: e.target.value })}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={4}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Durée (jours)"
-                        value={currentChallenge?.duration_days || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, duration_days: parseInt(e.target.value) || 0 })}
-                        error={currentChallenge?.duration_days <= 0}
-                        helperText={currentChallenge?.duration_days <= 0 ? 'Durée > 0 requise' : ''}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Durée (jours)"
+                      value={currentChallenge?.duration_days || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, duration_days: parseInt(e.target.value) || 0 })}
+                      error={currentChallenge?.duration_days <= 0}
+                      helperText={currentChallenge?.duration_days <= 0 ? 'Durée > 0 requise' : ''}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={6}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Points Neuraux"
-                        value={currentChallenge?.reward_points || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, reward_points: parseInt(e.target.value) || 0 })}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Points Neuraux"
+                      value={currentChallenge?.reward_points || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, reward_points: parseInt(e.target.value) || 0 })}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={6}>
-                    <div className="web3-input-wrapper">
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Cyber-Crédits (€)"
-                        value={currentChallenge?.reward_credit_euros || ''}
-                        onChange={(e) => setCurrentChallenge({ ...currentChallenge, reward_credit_euros: parseFloat(e.target.value) || 0 })}
-                        className="web3-input"
-                        InputProps={{ 
-                          sx: { 
-                            color: '#00d4ff',
-                            '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
-                            '&:hover fieldset': { borderColor: '#00d4ff' },
-                            '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
-                          } 
-                        }}
-                        InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
-                      />
-                      <div className="web3-input-glow" />
-                    </div>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Cyber-Crédits (€)"
+                      value={currentChallenge?.reward_credit_euros || ''}
+                      onChange={(e) => setCurrentChallenge({ ...currentChallenge, reward_credit_euros: parseFloat(e.target.value) || 0 })}
+                      InputProps={{ 
+                        sx: { 
+                          color: '#00d4ff',
+                          '& fieldset': { borderColor: 'rgba(0, 212, 255, 0.3)' },
+                          '&:hover fieldset': { borderColor: '#00d4ff' },
+                          '&.Mui-focused fieldset': { borderColor: '#00d4ff' }
+                        } 
+                      }}
+                      InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                    />
                   </Grid>
 
                   <Grid item xs={6}>
@@ -1747,19 +2186,22 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                 >
                   🚫 Annuler
                 </Button>
-                <button
+                <Button
                   onClick={handleSaveChallenge}
                   disabled={!currentChallenge?.title || currentChallenge?.target_value <= 0 || currentChallenge?.duration_days <= 0}
-                  className="web3-button-primary"
-                  style={{ padding: '12px 24px' }}
+                  variant="contained"
+                  sx={{ 
+                    backgroundColor: '#00d4ff',
+                    '&:hover': { backgroundColor: '#0099cc' }
+                  }}
                 >
                   {dialogMode === 'create' ? '🚀 Créer Mission' : '💾 Sauvegarder'}
-                </button>
+                </Button>
               </DialogActions>
             </Dialog>
           )}
 
-          {/* Snackbar avec design Web3 */}
+          {/* ===== SNACKBAR ===== */}
           <Snackbar
             open={snackbar.open}
             autoHideDuration={6000}

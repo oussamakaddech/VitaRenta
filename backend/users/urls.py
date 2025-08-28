@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    AssignUserToAgencyView,  EcoScoreViewSet, FeedbackViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView, UserProfileView, UserStatsView,
+    AssignUserToAgencyView,  EcoScoreViewSet, FeedbackViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView,  UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
     UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView,
     MaintenancePredictionViewSet, EcoChallengeViewSet, UserEcoChallengeViewSet, 
@@ -27,12 +27,12 @@ router.register(r'iot-data', IOTDataViewSet)
 router.register(r'eco-score', EcoScoreViewSet)
 router.register(r'maintenance-prediction', MaintenancePredictionViewSet)
 router.register(r'feedback', FeedbackViewSet)
-router.register(r'eco-challenges', EcoChallengeViewSet, basename='eco-challenges')
 router.register(r'user-eco-challenges', UserEcoChallengeViewSet, basename='user-eco-challenges')
 router.register(r'eco-challenge-progress', EcoChallengeProgressViewSet, basename='eco-challenge-progress')
 router.register(r'eco-challenge-rewards', EcoChallengeRewardViewSet, basename='eco-challenge-rewards')
 router.register(r'user-eco-challenges', UserEcoChallengeViewSet, basename='user-eco-challenge')
 router.register(r'eco-challenges', EcoChallengeViewSet, basename='eco-challenge')
+# urls.py - Ajouts pour points et coupons
 urlpatterns = [
     # Authentication routes
     path('login/', LoginView.as_view(), name='login'),

@@ -230,3 +230,53 @@ class AdminOrAgencyOrOwner(BasePermission):
             return True
         
         return False
+# challenge_permissions.py
+
+from rest_framework.permissions import BasePermission
+from rest_framework import permissions
+
+class IsAdminOrAgencyForChallenges(BasePermission):
+    """
+    Permission to allow admins and agencies to manage eco-challenges.
+    Clients can only view and participate.
+    """
+    message = "Vous n'avez pas les permissions nécessaires pour cette action."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        special_actions = ['bulk_action', 'duplicate', 'export_data']
+
+        if hasattr(view, 'action') and view.action in special_actions:
+            return hasattr(request.user, 'role') and request.user.role in ['admin', 'agence']
+
+        if hasattr(request.user, 'role') and request.user.role == 'admin':
+            return True
+
+        if hasattr(request.user, 'role') and request.user.role == 'agence':
+            return True
+
+        if hasattr(request.user, 'role') and request.user.role == 'client':
+            safe_actions = ['list', 'retrieve', 'available', 'featured', 'analytics', 'participants']
+            if hasattr(view, 'action') and view.action in safe_actions:
+                return True
+            return request.method in permissions.SAFE_METHODS
+
+        return request.method in permissions.SAFE_METHODS
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user.is_authenticated:
+            return False
+
+        if hasattr(request.user, 'role') and request.user.role == 'admin':
+            return True
+
+        if hasattr(request.user, 'role') and request.user.role == 'agence':
+            if hasattr(obj, 'created_by'):
+                return obj.created_by == request.user or obj.created_by is None
+            return True
+
+        if hasattr(request.user, 'role') and request.user.role == 'client':
+            return request.method in permissions.SAFE_METHODS
+
+        return request.method in permissions.SAFE_METHODS
