@@ -6,7 +6,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from sympy import Sum
-from .models import EcoScore, IOTData, MaintenancePrediction, User, Vehicule, Agence, Reservation, EcoChallenge, UserEcoChallenge, EcoChallengeProgress, EcoChallengeReward
+from .models import EcoScore, IOTData, MaintenancePrediction, PointsHistory, User, Vehicule, Agence, Reservation, EcoChallenge, UserEcoChallenge, EcoChallengeProgress, EcoChallengeReward
 import re
 from django.utils import timezone
 from datetime import datetime
@@ -974,3 +974,108 @@ class ChallengeAnalyticsSerializer(serializers.Serializer):
     challenges_by_difficulty = serializers.DictField()
     monthly_trends = serializers.ListField()
     top_performers = serializers.ListField()
+# À ajouter à la fin de serializers.py
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Sérialiseur pour les utilisateurs (vue admin)"""
+    agence_name = serializers.CharField(source='agence.nom', read_only=True)
+    total_challenges = serializers.SerializerMethodField()
+    total_points = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'nom', 'username', 'role', 'is_active',
+            'date_joined', 'last_login', 'agence', 'agence_name',
+            'total_challenges', 'total_points'
+        ]
+    
+    def get_total_challenges(self, obj):
+        """Nombre total de défis de l'utilisateur"""
+        try:
+            return obj.eco_challenges.count()
+        except:
+            return 0
+    
+    def get_total_points(self, obj):
+        """Total des points gagnés par l'utilisateur"""
+        try:
+            return obj.eco_rewards.aggregate(total=Sum('points_awarded'))['total'] or 0
+        except:
+            return 0
+
+class AdminPointsHistorySerializer(serializers.ModelSerializer):
+    """Sérialiseur pour l'historique des points"""
+    added_by_name = serializers.CharField(source='added_by.nom', read_only=True)
+    added_by_email = serializers.CharField(source='added_by.email', read_only=True)
+    user_name = serializers.CharField(source='user.nom', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    
+    class Meta:
+        model = PointsHistory
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'points', 'reason',
+            'source', 'added_by', 'added_by_name', 'added_by_email', 'created_at'
+        ]
+
+class AdminAddPointsSerializer(serializers.Serializer):
+    """Sérialiseur pour ajouter des points"""
+    user_id = serializers.UUIDField(required=True)
+    points = serializers.IntegerField(required=True, min_value=1, max_value=10000)
+    reason = serializers.CharField(max_length=500, required=False, default='Ajout par administrateur')
+    source = serializers.ChoiceField(
+        choices=['admin', 'bonus', 'correction', 'system'],
+        default='admin',
+        required=False
+    )
+    
+    def validate_points(self, value):
+        """Valider le nombre de points"""
+        if value <= 0:
+            raise serializers.ValidationError("Le nombre de points doit être positif")
+        if value > 10000:
+            raise serializers.ValidationError("Maximum 10000 points par ajout")
+        return value
+
+class AdminUserStatsSerializer(serializers.Serializer):
+    """Sérialiseur pour les statistiques utilisateur"""
+    user_id = serializers.UUIDField()
+    total_challenges = serializers.IntegerField()
+    active_challenges = serializers.IntegerField()
+    completed_challenges = serializers.IntegerField()
+    total_points = serializers.IntegerField()
+    total_credits = serializers.DecimalField(max_digits=8, decimal_places=2)
+    completion_rate = serializers.FloatField()
+
+class AdminAllUsersChallengesSerializer(serializers.ModelSerializer):
+    """Sérialiseur pour tous les défis utilisateur (vue admin)"""
+    user_name = serializers.CharField(source='user.nom', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    user_role = serializers.CharField(source='user.role', read_only=True)
+    challenge_title = serializers.CharField(source='challenge.title', read_only=True)
+    challenge_type = serializers.CharField(source='challenge.type', read_only=True)
+    progress_percentage = serializers.SerializerMethodField()
+    days_remaining = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserEcoChallenge
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'user_role',
+            'challenge', 'challenge_title', 'challenge_type',
+            'status', 'progress', 'progress_percentage', 'started_at',
+            'completed_at', 'deadline', 'days_remaining', 'reward_claimed'
+        ]
+    
+    def get_progress_percentage(self, obj):
+        """Calcul du pourcentage de progression"""
+        try:
+            return float(obj.progress_percentage)
+        except:
+            return 0.0
+    
+    def get_days_remaining(self, obj):
+        """Calcul des jours restants"""
+        try:
+            return obj.days_remaining
+        except:
+            return 0

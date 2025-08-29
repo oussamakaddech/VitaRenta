@@ -1,5 +1,4 @@
-// apiService.js - Version corrigée et optimisée
-
+// apiService.js - Version corrigée et optimisée avec fonctionnalités ADMIN
 import axios from 'axios';
 
 // Configuration de base
@@ -8,14 +7,14 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 // Instance Axios principale
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // ✅ Réduit de 30s à 15s pour de meilleures performances
+  timeout: 15000,
   headers: { 
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
 });
 
-// ✅ Variable pour éviter les appels multiples de refresh
+// Variable pour éviter les appels multiples de refresh
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -27,11 +26,10 @@ const processQueue = (error, token = null) => {
       prom.resolve(token);
     }
   });
-  
   failedQueue = [];
 };
 
-// ✅ Intercepteur de requête amélioré
+// Intercepteur de requête amélioré
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
@@ -39,7 +37,6 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // ✅ Ajout d'un identifiant unique pour chaque requête
     config.metadata = { startTime: new Date() };
     
     return config;
@@ -50,10 +47,9 @@ api.interceptors.request.use(
   }
 );
 
-// ✅ Intercepteur de réponse robuste avec gestion des files d'attente
+// Intercepteur de réponse robuste avec gestion des files d'attente
 api.interceptors.response.use(
   (response) => {
-    // ✅ Log des performances optionnel
     if (process.env.NODE_ENV === 'development') {
       const duration = new Date() - response.config.metadata.startTime;
       console.log(`API Call: ${response.config.method?.toUpperCase()} ${response.config.url} - ${duration}ms`);
@@ -65,7 +61,6 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
-        // ✅ Si un refresh est déjà en cours, ajouter à la file d'attente
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then(token => {
@@ -90,7 +85,6 @@ api.interceptors.response.use(
           const newAccessToken = response.data.access;
           localStorage.setItem('access_token', newAccessToken);
           
-          // ✅ Traiter la file d'attente avec le nouveau token
           processQueue(null, newAccessToken);
           
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -99,16 +93,13 @@ api.interceptors.response.use(
         } catch (refreshError) {
           console.error('Token refresh failed:', refreshError);
           
-          // ✅ Traiter la file d'attente avec erreur
           processQueue(refreshError, null);
           
-          // ✅ Nettoyage sécurisé
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user_data');
           
           if (!publicPages.includes(currentPath)) {
-            // ✅ Utiliser un événement personnalisé au lieu de redirection forcée
             window.dispatchEvent(new CustomEvent('auth:logout'));
           }
           
@@ -117,7 +108,6 @@ api.interceptors.response.use(
           isRefreshing = false;
         }
       } else {
-        // ✅ Pas de refresh token disponible
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_data');
@@ -130,7 +120,6 @@ api.interceptors.response.use(
       }
     }
     
-    // ✅ Gestion spécifique des autres codes d'erreur
     if (error.response?.status >= 500) {
       console.error('Server error:', error.response.status, error.response.data);
     }
@@ -139,7 +128,7 @@ api.interceptors.response.use(
   }
 );
 
-// ✅ Service EcoChallenges amélioré avec validation
+// Service EcoChallenges amélioré avec validation et fonctionnalités ADMIN
 export const ecoChallengesService = {
   // Récupérer tous les défis avec pagination
   getAll: (params = {}) => {
@@ -220,7 +209,7 @@ export const ecoChallengesService = {
     if (!id) throw new Error('ID est requis');
     return api.get(`/api/eco-challenges/${id}/export_data/`, { 
       responseType: 'blob',
-      timeout: 30000 // ✅ Timeout plus long pour l'export
+      timeout: 30000
     });
   },
 
@@ -279,10 +268,141 @@ export const ecoChallengesService = {
       Object.entries(params).filter(([_, value]) => value !== null && value !== undefined && value !== '')
     );
     return api.get('/api/eco-challenge-rewards/', { params: cleanParams });
+  },
+
+  // ✅ NOUVELLES FONCTIONNALITÉS ADMIN
+  // ==========================================
+
+  // Récupérer tous les utilisateurs (ADMIN seulement)
+  getAllUsers: () => {
+    return api.get('/api/admin/users/');
+  },
+
+  // Récupérer tous les défis de tous les utilisateurs (ADMIN seulement)
+  getAllUsersChallenges: (params = {}) => {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+    );
+    return api.get('/api/admin/user-challenges/', { params: cleanParams });
+  },
+
+  // Ajouter des points à un utilisateur spécifique (ADMIN seulement)
+  addPointsToUser: (userId, points, reason = 'Bonus administrateur') => {
+    if (!userId) throw new Error('userId est requis');
+    if (!points || points <= 0) throw new Error('points doit être supérieur à 0');
+    
+    return api.post('/api/admin/add-points/', {
+      user_id: userId,
+      points: parseInt(points),
+      reason: reason,
+      source: 'admin'
+    });
+  },
+
+  // Récupérer les statistiques détaillées d'un utilisateur (ADMIN seulement)
+  getUserStats: (userId) => {
+    if (!userId) throw new Error('userId est requis');
+    return api.get(`/api/admin/users/${userId}/stats/`);
+  },
+
+  // Récupérer l'historique des points d'un utilisateur (ADMIN seulement)
+  getUserPointsHistory: (userId, params = {}) => {
+    if (!userId) throw new Error('userId est requis');
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+    );
+    return api.get(`/api/admin/users/${userId}/points-history/`, { params: cleanParams });
+  },
+
+  // Réinitialiser les points d'un utilisateur (ADMIN seulement)
+  resetUserPoints: (userId, reason = 'Réinitialisation admin') => {
+    if (!userId) throw new Error('userId est requis');
+    return api.post(`/api/admin/users/${userId}/reset-points/`, {
+      reason: reason
+    });
+  },
+
+  // Forcer la complétion d'un défi pour un utilisateur (ADMIN seulement)
+  forceCompleteUserChallenge: (userChallengeId, reason = 'Complétion forcée admin') => {
+    if (!userChallengeId) throw new Error('userChallengeId est requis');
+    return api.post(`/api/admin/user-challenges/${userChallengeId}/force-complete/`, {
+      reason: reason
+    });
+  },
+
+  // Récupérer les statistiques globales de la plateforme (ADMIN seulement)
+  getPlatformStats: () => {
+    return api.get('/api/admin/platform-stats/');
+  },
+
+  // Récupérer les défis d'un utilisateur spécifique avec détails admin
+  getUserChallengesAdmin: (userId, params = {}) => {
+    if (!userId) throw new Error('userId est requis');
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+    );
+    return api.get(`/api/admin/users/${userId}/challenges/`, { params: cleanParams });
+  },
+
+  // Modifier le statut d'un défi utilisateur (ADMIN seulement)
+  updateUserChallengeStatus: (userChallengeId, status, reason = '') => {
+    if (!userChallengeId) throw new Error('userChallengeId est requis');
+    if (!status) throw new Error('status est requis');
+    
+    const validStatuses = ['active', 'paused', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Status doit être l'un de: ${validStatuses.join(', ')}`);
+    }
+    
+    return api.patch(`/api/admin/user-challenges/${userChallengeId}/status/`, {
+      status: status,
+      reason: reason
+    });
+  },
+
+  // Créer un utilisateur (ADMIN seulement)
+  createUser: (userData) => {
+    if (!userData?.username || !userData?.email) {
+      throw new Error('username et email sont requis');
+    }
+    return api.post('/api/admin/users/', userData);
+  },
+
+  // Modifier un utilisateur (ADMIN seulement)
+  updateUser: (userId, userData) => {
+    if (!userId) throw new Error('userId est requis');
+    return api.patch(`/api/admin/users/${userId}/`, userData);
+  },
+
+  // Désactiver/activer un utilisateur (ADMIN seulement)
+  toggleUserStatus: (userId, isActive) => {
+    if (!userId) throw new Error('userId est requis');
+    return api.patch(`/api/admin/users/${userId}/toggle-status/`, {
+      is_active: Boolean(isActive)
+    });
+  },
+
+  // Export des données utilisateur (ADMIN seulement)
+  exportUserData: (userId, format = 'csv') => {
+    if (!userId) throw new Error('userId est requis');
+    return api.get(`/api/admin/users/${userId}/export/`, {
+      params: { format },
+      responseType: 'blob',
+      timeout: 30000
+    });
+  },
+
+  // Export des données globales (ADMIN seulement)
+  exportAllUsersData: (format = 'csv') => {
+    return api.get('/api/admin/export/users/', {
+      params: { format },
+      responseType: 'blob',
+      timeout: 60000 // Plus long timeout pour l'export global
+    });
   }
 };
 
-// ✅ Service d'authentification amélioré
+// Service d'authentification amélioré
 export const authService = {
   login: async (credentials) => {
     if (!credentials?.username || !credentials?.password) {
@@ -292,7 +412,6 @@ export const authService = {
     try {
       const response = await api.post('/login/', credentials);
       
-      // ✅ Stockage automatique des tokens
       if (response.data.access) {
         localStorage.setItem('access_token', response.data.access);
       }
@@ -329,7 +448,6 @@ export const authService = {
       
       return response;
     } catch (error) {
-      // ✅ Nettoyage en cas d'échec
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       throw error;
@@ -342,7 +460,6 @@ export const authService = {
     } catch (error) {
       console.warn('Logout API call failed:', error);
     } finally {
-      // ✅ Nettoyage toujours effectué
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('user_data');
@@ -353,12 +470,11 @@ export const authService = {
     const token = localStorage.getItem('access_token');
     if (!token) return false;
     
-    // ✅ Vérification basique de l'expiration (optionnel)
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       return payload.exp * 1000 > Date.now();
     } catch {
-      return !!token; // Fallback si le token n'est pas JWT
+      return !!token;
     }
   },
 
@@ -375,10 +491,9 @@ export const authService = {
   }
 };
 
-// ✅ Utilitaires d'erreur étendus
+// Utilitaires d'erreur étendus
 export const errorUtils = {
   getErrorMessage: (error) => {
-    // ✅ Gestion des erreurs de réseau
     if (!error.response) {
       if (error.code === 'NETWORK_ERROR' || !navigator.onLine) {
         return 'Problème de connexion réseau. Vérifiez votre connexion internet.';
@@ -391,7 +506,6 @@ export const errorUtils = {
 
     const data = error.response.data;
     
-    // ✅ Gestion hiérarchique des messages d'erreur
     if (data?.error) return data.error;
     if (data?.message) return data.message;
     if (data?.detail) return data.detail;
@@ -402,7 +516,6 @@ export const errorUtils = {
         : data.non_field_errors;
     }
     
-    // ✅ Gestion des erreurs de validation de champs
     if (data && typeof data === 'object') {
       const fieldErrors = Object.entries(data)
         .filter(([field, _]) => field !== 'non_field_errors')
@@ -415,7 +528,6 @@ export const errorUtils = {
       if (fieldErrors) return fieldErrors;
     }
     
-    // ✅ Messages par défaut selon le code de statut
     switch (error.response.status) {
       case 400: return 'Données invalides';
       case 401: return 'Authentification requise';
@@ -436,15 +548,13 @@ export const errorUtils = {
   isNetworkError: (error) => !error.response && error.code === 'NETWORK_ERROR',
   isTimeoutError: (error) => error.code === 'ECONNABORTED',
 
-  // ✅ Fonction pour déterminer si une erreur est récupérable
   isRetryableError: (error) => {
-    if (!error.response) return true; // Erreurs réseau
+    if (!error.response) return true;
     const status = error.response.status;
-    return status >= 500 || status === 429; // Erreurs serveur ou rate limiting
+    return status >= 500 || status === 429;
   }
 };
 
-// ✅ Export par défaut amélioré
 export default {
   api,
   ecoChallengesService,

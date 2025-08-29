@@ -1274,3 +1274,44 @@ class ChallengeRewardConfig(models.Model):
         null=True,
         blank=True
     )    
+# À ajouter dans models.py après les autres modèles
+
+class PointsHistory(models.Model):
+    """Historique des ajouts/suppressions de points par les admins"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='points_history'
+    )
+    points = models.IntegerField(help_text="Nombre de points (positif = ajout, négatif = suppression)")
+    reason = models.TextField(default='', blank=True, help_text="Raison de l'ajout/suppression")
+    source = models.CharField(
+        max_length=20,
+        choices=[
+            ('admin', 'Administrateur'),
+            ('challenge', 'Défi complété'),
+            ('bonus', 'Bonus'),
+            ('penalty', 'Pénalité'),
+            ('system', 'Système'),
+        ],
+        default='admin'
+    )
+    added_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='points_added',
+        help_text="Administrateur qui a ajouté les points"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Historique des Points"
+        verbose_name_plural = "Historiques des Points"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        action = "Ajout" if self.points > 0 else "Suppression"
+        return f"{action} de {abs(self.points)} points pour {self.user.email}"

@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    AssignUserToAgencyView,  EcoScoreViewSet, FeedbackViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView,  UserProfileView, UserStatsView,
+    AdminAddPointsView, AdminAllUsersChallengesView, AdminManualProgressView, AdminPlatformStatsView, AdminUserViewSet, AssignUserToAgencyView,  EcoScoreViewSet, FeedbackViewSet, IOTDataViewSet, LoginView, LogoutView, PasswordResetConfirmView, PasswordResetRequestView, SignUpView,  UserProfileView, UserStatsView,
     UserPhotoUploadView, VehiculeViewSet, AgenceViewSet, ReservationViewSet,
     UserViewSet, UpdateAgenceView, DemandForecastView, RecommendationView,
     MaintenancePredictionViewSet, EcoChallengeViewSet, UserEcoChallengeViewSet, 
@@ -32,6 +32,8 @@ router.register(r'eco-challenge-progress', EcoChallengeProgressViewSet, basename
 router.register(r'eco-challenge-rewards', EcoChallengeRewardViewSet, basename='eco-challenge-rewards')
 router.register(r'user-eco-challenges', UserEcoChallengeViewSet, basename='user-eco-challenge')
 router.register(r'eco-challenges', EcoChallengeViewSet, basename='eco-challenge')
+router.register(r'admin/users', AdminUserViewSet, basename='admin-users')
+
 # urls.py - Ajouts pour points et coupons
 urlpatterns = [
     # Authentication routes
@@ -41,7 +43,23 @@ urlpatterns = [
     path('iot-data/generate_test_data/', IOTDataViewSet.as_view({'post': 'generate_test_data'}), name='generate_test_data'),
     path('update-agence/', UpdateAgenceView.as_view(), name='update-agence'),
     path('assign_user_to_agency/', AssignUserToAgencyView.as_view(), name='assign_user_to_agence'),
-
+    path('api/admin/users/', AdminUserViewSet.as_view({'get': 'list', 'post': 'create'}), name='admin-users'),
+    path('api/admin/users/<uuid:pk>/', AdminUserViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='admin-user-detail'),
+    path('api/admin/users/<uuid:pk>/stats/', AdminUserViewSet.as_view({'get': 'stats'}), name='admin-user-stats'),
+    path('api/admin/users/<uuid:pk>/challenges/', AdminUserViewSet.as_view({'get': 'challenges'}), name='admin-user-challenges'),
+    path('api/admin/users/<uuid:pk>/points-history/', AdminUserViewSet.as_view({'get': 'points_history'}), name='admin-user-points-history'),
+     path('api/admin/add-points/', AdminAddPointsView.as_view(), name='admin-add-points'),
+    path('api/admin/user-challenges/', AdminAllUsersChallengesView.as_view(), name='admin-all-user-challenges'),
+    path('api/admin/platform-stats/', AdminPlatformStatsView.as_view(), name='admin-platform-stats'),
+    path('api/admin/manual-progress/', AdminManualProgressView.as_view(), name='admin-manual-progress'),
+    # Ajout de points
+    path('api/admin/add-points/', AdminAddPointsView.as_view(), name='admin-add-points'),
+    
+    # Tous les défis utilisateur
+    path('api/admin/user-challenges/', AdminAllUsersChallengesView.as_view(), name='admin-all-user-challenges'),
+    
+    # Statistiques plateforme
+    path('api/admin/platform-stats/', AdminPlatformStatsView.as_view(), name='admin-platform-stats'),
     # JWT routes
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

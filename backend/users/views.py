@@ -774,7 +774,7 @@ class ReservationViewSet(ModelViewSet):
             logger.error(f"Erreur lors de la suppression de la réservation: {str(e)}")
             raise
     
-    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated, IsAdminOrAgency])
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def update_status(self, request, pk=None):
         try:
             reservation = get_object_or_404(Reservation, id=pk)
@@ -2479,3 +2479,431 @@ class EcoChallengeRewardViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Erreur mes récompenses: {str(e)}")
             return Response({'error': 'Erreur lors de la récupération des récompenses'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# backend/admin_views.py
+
+from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from django.db.models import Sum, Count, Q, Avg
+from django.db import transaction
+from django.utils import timezone
+from datetime import timedelta
+import logging
+
+from .models import (
+    User, UserEcoChallenge, EcoChallenge, EcoChallengeProgress, 
+    EcoChallengeReward, PointsHistory, ChallengeStatus
+)
+from .serializers import (
+    UserSerializer, AdminUserSerializer, UserEcoChallengeSerializer,
+    AdminPointsHistorySerializer, AdminUserStatsSerializer,
+    AdminAddPointsSerializer, AdminAllUsersChallengesSerializer
+)
+# Ajoutez ces imports après les imports existants dans views.py
+from .permissions import IsAdminOnly  # Ajoutez si pas déjà importé
+
+from .permissions import (
+    IsAdminOnly, CanManageUsers, CanAddPoints, CanViewAllUserChallenges,
+    CanViewPlatformStats, IsAdminOrOwnerUser
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# VUES ADMINISTRATION - AJOUTÉES À LA FIN DE views.py
+# ============================================================================
+
+# ============================================================================
+# VUES ADMINISTRATION - INTÉGRÉES DANS views.py
+# ============================================================================
+
+class AdminUserViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des utilisateurs par les admins"""
+    
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    
+    def get_permissions(self):
+        """Permissions dynamiques selon l'action"""
+        if self.action in ['list', 'retrieve']:
+            # Pour les actions de lecture, vérifier si l'utilisateur est admin
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            # Pour les autres actions, permission admin stricte
+            permission_classes = [permissions.IsAuthenticated, IsAdminOnly]
+        
+        return [permission() for permission in permission_classes]
+    
+    def list(self, request):
+        """Liste des utilisateurs avec vérification admin"""
+        # Vérification manuelle du rôle admin
+        if not (request.user.is_authenticated and 
+                hasattr(request.user, 'role') and 
+                request.user.role == 'admin'):
+            return Response({'error': 'Accès réservé aux administrateurs'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            
+            return Response({
+                'users': serializer.data,
+                'count': queryset.count(),
+                'message': 'Liste des utilisateurs récupérée avec succès'
+            })
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération utilisateurs: {str(e)}")
+            return Response({'error': 'Erreur lors de la récupération des utilisateurs'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_queryset(self):
+        """Filtrage et recherche des utilisateurs"""
+        queryset = super().get_queryset()
+        params = self.request.query_params
+
+        # Filtrage par rôle
+        if params.get('role'):
+            queryset = queryset.filter(role=params.get('role'))
+
+        # Recherche par nom ou email
+        if params.get('search'):
+            search_term = params.get('search')
+            queryset = queryset.filter(
+                Q(nom__icontains=search_term) |
+                Q(email__icontains=search_term) |
+                Q(username__icontains=search_term)
+            )
+
+        return queryset.order_by('-date_joined').select_related('agence')
+
+    # Ajoutez les autres actions (stats, challenges, etc.) ici...
+
+
+class AdminAddPointsView(APIView):
+    """✨ Vue pour ajouter des points à un utilisateur (admin uniquement)"""
+    
+    permission_classes = [permissions.IsAuthenticated, IsAdminOnly]
+    
+    def post(self, request):
+        """Ajouter des points à un utilisateur avec validation complète"""
+        user_id = request.data.get('user_id')
+        points = request.data.get('points')
+        reason = request.data.get('reason', 'Ajout par administrateur')
+        source = request.data.get('source', 'admin')
+        
+        # Validation des données
+        if not user_id or not points:
+            return Response({'error': 'user_id et points sont requis'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            points = int(points)
+            if points <= 0:
+                return Response({'error': 'Le nombre de points doit être positif'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            if points > 10000:
+                return Response({'error': 'Maximum 10000 points par ajout'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({'error': 'Le nombre de points doit être un entier valide'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Récupérer l'utilisateur
+            user = get_object_or_404(User, id=user_id)
+            
+            with transaction.atomic():
+                # Créer une récompense pour intégration avec le système
+                reward = EcoChallengeReward.objects.create(
+                    user=user,
+                    title=f"Points administrateur - {points} pts",
+                    description=reason,
+                    reward_type='points',
+                    points=points,
+                    points_awarded=points,
+                    credit_awarded=0,
+                    claimed=True,
+                    claimed_at=timezone.now(),
+                    awarded_by=request.user,
+                    applied_to_account=True
+                )
+            
+            logger.info(f"Points ajoutés: {points} à {user.email} par {request.user.email}")
+            
+            return Response({
+                'success': True,
+                'message': f'{points} points ajoutés avec succès à {user.email}',
+                'reward_id': str(reward.id),
+                'user': {
+                    'id': str(user.id),
+                    'email': user.email,
+                    'nom': user.nom
+                },
+                'points': points,
+                'reason': reason,
+                'added_by': request.user.nom,
+                'created_at': reward.awarded_at
+            })
+            
+        except Exception as e:
+            logger.error(f"Erreur ajout points: {str(e)}")
+            return Response({'error': 'Erreur lors de l\'ajout des points'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AdminAllUsersChallengesView(APIView):
+    """🗂️ Vue pour récupérer tous les défis de tous les utilisateurs"""
+    
+    permission_classes = [permissions.IsAuthenticated, IsAdminOnly]
+    
+    def get(self, request):
+        """Récupérer tous les défis avec filtrage avancé"""
+        try:
+            queryset = UserEcoChallenge.objects.all().select_related('user', 'challenge')
+            
+            # Filtres disponibles
+            user_id = request.query_params.get('user_id')
+            if user_id:
+                queryset = queryset.filter(user_id=user_id)
+            
+            challenge_id = request.query_params.get('challenge_id')
+            if challenge_id:
+                queryset = queryset.filter(challenge_id=challenge_id)
+                
+            status_filter = request.query_params.get('status')
+            if status_filter:
+                queryset = queryset.filter(status=status_filter)
+                
+            user_role = request.query_params.get('user_role')
+            if user_role:
+                queryset = queryset.filter(user__role=user_role)
+            
+            # Recherche
+            search = request.query_params.get('search')
+            if search:
+                queryset = queryset.filter(
+                    Q(user__nom__icontains=search) |
+                    Q(user__email__icontains=search) |
+                    Q(challenge__title__icontains=search)
+                )
+            
+            # Ordre
+            queryset = queryset.order_by('-started_at')
+            
+            # Pagination
+            page_size = int(request.query_params.get('page_size', 50))
+            page = int(request.query_params.get('page', 1))
+            start = (page - 1) * page_size
+            end = start + page_size
+            
+            paginated_challenges = queryset[start:end]
+            
+            serializer = UserEcoChallengeSerializer(paginated_challenges, many=True)
+            
+            return Response({
+                'user_challenges': serializer.data,
+                'count': len(serializer.data),
+                'total_count': queryset.count(),
+                'page': page,
+                'page_size': page_size,
+                'filters': {
+                    'user_id': user_id,
+                    'challenge_id': challenge_id,
+                    'status': status_filter,
+                    'user_role': user_role,
+                    'search': search
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération tous défis utilisateurs: {str(e)}")
+            return Response({'error': 'Erreur lors de la récupération des défis'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AdminPlatformStatsView(APIView):
+    """📈 Vue pour les statistiques globales de la plateforme"""
+    
+    permission_classes = [permissions.IsAuthenticated, IsAdminOnly]
+    
+    def get(self, request):
+        """Récupérer un tableau de bord complet des statistiques"""
+        try:
+            # Statistiques utilisateurs
+            total_users = User.objects.count()
+            active_users = User.objects.filter(is_active=True).count()
+            users_by_role = dict(User.objects.values('role').annotate(count=Count('id')).values_list('role', 'count'))
+            
+            # Statistiques défis
+            total_challenges = EcoChallenge.objects.count()
+            active_challenges = EcoChallenge.objects.filter(is_active=True).count()
+            featured_challenges = EcoChallenge.objects.filter(featured=True).count()
+            
+            # Statistiques participations
+            total_participations = UserEcoChallenge.objects.count()
+            active_participations = UserEcoChallenge.objects.filter(status=ChallengeStatus.ACTIVE).count()
+            completed_participations = UserEcoChallenge.objects.filter(status=ChallengeStatus.COMPLETED).count()
+            
+            # Taux de completion global
+            completion_rate = (completed_participations / total_participations * 100) if total_participations > 0 else 0
+            
+            # Statistiques récompenses
+            total_rewards = EcoChallengeReward.objects.count()
+            total_points_awarded = EcoChallengeReward.objects.aggregate(total=Sum('points_awarded'))['total'] or 0
+            total_credits_awarded = EcoChallengeReward.objects.aggregate(total=Sum('credit_awarded'))['total'] or 0
+            
+            # Activité récente (7 derniers jours)
+            week_ago = timezone.now() - timedelta(days=7)
+            new_users_week = User.objects.filter(date_joined__gte=week_ago).count()
+            new_participations_week = UserEcoChallenge.objects.filter(started_at__gte=week_ago).count()
+            completions_week = UserEcoChallenge.objects.filter(completed_at__gte=week_ago).count()
+            
+            # Top performers (utilisateurs les plus actifs)
+            top_users = User.objects.annotate(
+                challenges_count=Count('eco_challenges'),
+                points_earned=Sum('eco_rewards__points_awarded')
+            ).filter(challenges_count__gt=0).order_by('-challenges_count', '-points_earned')[:10]
+            
+            top_users_data = []
+            for user in top_users:
+                top_users_data.append({
+                    'id': str(user.id),
+                    'nom': user.nom,
+                    'email': user.email,
+                    'challenges_count': user.challenges_count or 0,
+                    'points_earned': user.points_earned or 0,
+                    'role': user.role
+                })
+            
+            stats = {
+                'users': {
+                    'total': total_users,
+                    'active': active_users,
+                    'inactive': total_users - active_users,
+                    'by_role': users_by_role,
+                    'new_this_week': new_users_week,
+                    'activity_rate': round((active_users / total_users * 100) if total_users > 0 else 0, 2),
+                },
+                'challenges': {
+                    'total': total_challenges,
+                    'active': active_challenges,
+                    'featured': featured_challenges,
+                    'total_participations': total_participations,
+                    'active_participations': active_participations,
+                    'completed_participations': completed_participations,
+                    'completion_rate': round(completion_rate, 2),
+                    'new_participations_week': new_participations_week,
+                    'completions_week': completions_week,
+                },
+                'rewards': {
+                    'total_rewards': total_rewards,
+                    'total_points_awarded': total_points_awarded,
+                    'total_credits_awarded': float(total_credits_awarded),
+                    'admin_rewards': EcoChallengeReward.objects.filter(awarded_by__isnull=False).count(),
+                },
+                'activity': {
+                    'new_users_week': new_users_week,
+                    'new_participations_week': new_participations_week,
+                    'completions_week': completions_week,
+                },
+                'top_performers': top_users_data,
+                'generated_at': timezone.now().isoformat()
+            }
+            
+            return Response(stats)
+            
+        except Exception as e:
+            logger.error(f"Erreur statistiques plateforme: {str(e)}")
+            return Response({'error': 'Erreur lors de la récupération des statistiques'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AdminManualProgressView(APIView):
+    """⚡ Vue pour mettre à jour manuellement la progression"""
+    
+    permission_classes = [permissions.IsAuthenticated, IsAdminOnly]
+    
+    def post(self, request):
+        """Mettre à jour la progression d'un défi utilisateur"""
+        user_challenge_id = request.data.get('user_challenge_id')
+        progress_value = request.data.get('progress_value')
+        unit = request.data.get('unit', 'unité')
+        reason = request.data.get('reason', 'Mise à jour par administrateur')
+        
+        if not user_challenge_id or progress_value is None:
+            return Response({'error': 'user_challenge_id et progress_value sont requis'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            progress_value = float(progress_value)
+            if progress_value < 0:
+                return Response({'error': 'La valeur de progression ne peut pas être négative'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({'error': 'La valeur de progression doit être un nombre valide'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Récupérer le défi utilisateur
+            user_challenge = get_object_or_404(UserEcoChallenge, id=user_challenge_id)
+            
+            with transaction.atomic():
+                # Créer une entrée de progression
+                progress_entry = EcoChallengeProgress.objects.create(
+                    user_challenge=user_challenge,
+                    value=progress_value,
+                    recorded_at=timezone.now()
+                )
+                
+                # Mettre à jour la progression totale
+                total_progress = EcoChallengeProgress.objects.filter(
+                    user_challenge=user_challenge
+                ).aggregate(total=Sum('value'))['total'] or 0
+                
+                user_challenge.progress = total_progress
+                
+                # Vérifier si le défi est complété
+                if user_challenge.is_completed and user_challenge.status == ChallengeStatus.ACTIVE:
+                    user_challenge.status = ChallengeStatus.COMPLETED
+                    user_challenge.completed_at = timezone.now()
+                    
+                    # Créer une récompense automatique
+                    EcoChallengeReward.objects.create(
+                        user=user_challenge.user,
+                        user_challenge=user_challenge,
+                        challenge=user_challenge.challenge,
+                        title=f"Défi complété - {user_challenge.challenge.title}",
+                        description=f"Félicitations ! Défi complété via intervention admin: {reason}",
+                        reward_type='points',
+                        points=user_challenge.challenge.reward_points,
+                        points_awarded=user_challenge.challenge.reward_points,
+                        credit_awarded=user_challenge.challenge.reward_credit_euros,
+                        awarded_by=request.user
+                    )
+                
+                user_challenge.save()
+            
+            logger.info(f"Progression mise à jour par admin: {progress_value} pour défi {user_challenge_id}")
+            
+            return Response({
+                'success': True,
+                'message': 'Progression mise à jour avec succès',
+                'user_challenge_id': str(user_challenge.id),
+                'new_progress': float(user_challenge.progress),
+                'progress_percentage': user_challenge.progress_percentage,
+                'status': user_challenge.status,
+                'completed': user_challenge.status == ChallengeStatus.COMPLETED,
+                'user': {
+                    'nom': user_challenge.user.nom,
+                    'email': user_challenge.user.email
+                },
+                'challenge': {
+                    'title': user_challenge.challenge.title,
+                    'target_value': float(user_challenge.challenge.target_value)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Erreur mise à jour progression: {str(e)}")
+            return Response({'error': 'Erreur lors de la mise à jour de la progression'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -5,7 +5,8 @@ import {
   TextField, Select, MenuItem, FormControl, InputLabel, Grid, Tabs, Tab,
   Checkbox, FormControlLabel, Alert, Snackbar, Card, CardContent, CardActions,
   Chip, IconButton, Tooltip, TablePagination, List, ListItem, ListItemText,
-  ListItemIcon, LinearProgress, Paper, Divider
+  ListItemIcon, LinearProgress, Paper, Divider, Table, TableBody, TableCell, 
+  TableHead, TableRow
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -22,6 +23,9 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import HistoryIcon from '@mui/icons-material/History';
 import RedeemIcon from '@mui/icons-material/Redeem';
+import PersonIcon from '@mui/icons-material/Person';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 import { ecoChallengesService, errorUtils, authService } from '../services/apiService';
 import './EcoChallenges.css';
@@ -79,6 +83,17 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
   const [pointsTab, setPointsTab] = useState(0);
   const [couponExchangeDialog, setCouponExchangeDialog] = useState(false);
   const [selectedCouponType, setSelectedCouponType] = useState(null);
+
+  // ===== NOUVEAUX ÉTATS POUR L'ADMINISTRATION =====
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [adminUserChallenges, setAdminUserChallenges] = useState([]);
+  const [userStats, setUserStats] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [pointsToAdd, setPointsToAdd] = useState('');
+  const [pointsReason, setPointsReason] = useState('');
+  const [showChallengesDialog, setShowChallengesDialog] = useState(false);
 
   // ===== SAUVEGARDE AUTOMATIQUE DES POINTS =====
   useEffect(() => {
@@ -235,6 +250,87 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
     return { level, progress, nextLevelPoints };
   }, [pointsData.totalEarned]);
 
+  // ===== NOUVELLES FONCTIONS ADMIN =====
+
+  // Charger tous les utilisateurs (ADMIN)
+  const loadAdminUsers = useCallback(async () => {
+    try {
+      setAdminLoading(true);
+      const response = await ecoChallengesService.getAllUsers();
+      setAdminUsers(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Erreur chargement utilisateurs:', error);
+      showSnackbar('Erreur lors du chargement des utilisateurs', 'error');
+    } finally {
+      setAdminLoading(false);
+    }
+  }, []);
+
+  // Charger les défis d'un utilisateur spécifique (ADMIN)
+  const loadAdminUserChallenges = useCallback(async (userId) => {
+    try {
+      setAdminLoading(true);
+      const [challengesResponse, statsResponse] = await Promise.all([
+        ecoChallengesService.getUserChallengesAdmin(userId),
+        ecoChallengesService.getUserStats(userId)
+      ]);
+
+      setAdminUserChallenges(Array.isArray(challengesResponse.data) ? challengesResponse.data : []);
+      setUserStats(statsResponse.data);
+    } catch (error) {
+      console.error('Erreur chargement défis utilisateur:', error);
+      showSnackbar('Erreur lors du chargement des défis utilisateur', 'error');
+    } finally {
+      setAdminLoading(false);
+    }
+  }, []);
+
+  // Ajouter des points à un utilisateur (ADMIN)
+  const handleAddPointsToUser = useCallback(async () => {
+    if (!selectedUserId || !pointsToAdd || parseInt(pointsToAdd) <= 0) {
+      showSnackbar('Veuillez sélectionner un utilisateur et entrer un nombre de points valide', 'warning');
+      return;
+    }
+
+    try {
+      setAdminLoading(true);
+      await ecoChallengesService.addPointsToUser(
+        selectedUserId, 
+        parseInt(pointsToAdd), 
+        pointsReason || 'Bonus administrateur'
+      );
+      
+      showSnackbar(`✅ ${pointsToAdd} points ajoutés à l'utilisateur avec succès !`, 'success');
+      setPointsToAdd('');
+      setPointsReason('');
+      
+      // Recharger les stats de l'utilisateur
+      if (selectedUserId) {
+        await loadAdminUserChallenges(selectedUserId);
+      }
+    } catch (error) {
+      console.error('Erreur ajout points:', error);
+      showSnackbar('Erreur lors de l\'ajout des points', 'error');
+    } finally {
+      setAdminLoading(false);
+    }
+  }, [selectedUserId, pointsToAdd, pointsReason, loadAdminUserChallenges]);
+
+  // Voir les défis d'un utilisateur (ADMIN)
+  const handleViewUserChallenges = useCallback(() => {
+    if (selectedUserId) {
+      loadAdminUserChallenges(selectedUserId);
+      setShowChallengesDialog(true);
+    }
+  }, [selectedUserId, loadAdminUserChallenges]);
+
+  // Sélection d'utilisateur (ADMIN)
+  const handleUserSelect = useCallback((userId) => {
+    setSelectedUserId(userId);
+    const user = adminUsers.find(u => u.id === userId);
+    setSelectedUser(user);
+  }, [adminUsers]);
+
   // ===== VÉRIFICATION D'AUTHENTIFICATION =====
   useEffect(() => {
     const checkAuthentication = async () => {
@@ -322,6 +418,10 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
       return !challenge.created_by || challenge.created_by === authData.user.id;
     }
     return false;
+  }, [authData.user]);
+
+  const isAdmin = useCallback(() => {
+    return authData.user?.role === 'admin';
   }, [authData.user]);
 
   // ===== GESTION DES ERREURS API =====
@@ -485,10 +585,17 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
         break;
       case 2:
         break;
+      case 3:
+        if (isAdmin()) {
+          loadAdminUsers();
+        } else {
+          setCurrentTab(0);
+        }
+        break;
       default:
         break;
     }
-  }, [currentTab, loadChallenges, loadUserChallenges, canParticipate, isAuthChecking, authData.token]);
+  }, [currentTab, loadChallenges, loadUserChallenges, canParticipate, isAdmin, isAuthChecking, authData.token, loadAdminUsers]);
 
   // ===== GESTIONNAIRE DE CHANGEMENT D'ONGLET =====
   const handleTabChange = useCallback((event, newValue) => {
@@ -496,9 +603,13 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
       showSnackbar('Vous n\'avez pas accès à cette section', 'warning');
       return;
     }
+    if (newValue === 3 && !isAdmin()) {
+      showSnackbar('Accès administrateur requis', 'warning');
+      return;
+    }
     setCurrentTab(newValue);
     setPage(0);
-  }, [canParticipate, showSnackbar]);
+  }, [canParticipate, isAdmin, showSnackbar]);
 
   // ===== CRÉER UN DÉFI =====
   const handleCreateChallenge = useCallback(() => {
@@ -955,6 +1066,8 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
               <Tab icon={<EmojiEventsIcon />} label="Défis Disponibles" />
               {canParticipate() && <Tab icon={<CheckCircleIcon />} label="Mes Défis" />}
               <Tab icon={<StarIcon />} label="Points & Coupons" />
+              {/* ✅ NOUVEL ONGLET ADMIN */}
+              {isAdmin() && <Tab icon={<PersonIcon />} label="Administration" />}
             </Tabs>
           </Box>
 
@@ -1784,6 +1897,237 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
             </Box>
           )}
 
+          {/* ===== NOUVEL ONGLET ADMINISTRATION ===== */}
+          {currentTab === 3 && isAdmin() && (
+            <Box sx={{ p: 3 }}>
+              <Typography variant="h4" gutterBottom sx={{ color: '#00d4ff', mb: 3 }}>
+                👑 Administration des Utilisateurs
+              </Typography>
+
+              {/* Vérification des permissions */}
+              {!isAdmin() ? (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Accès réservé aux administrateurs uniquement
+                </Alert>
+              ) : (
+                <>
+                  {/* Sélection d'utilisateur */}
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                      <Card sx={{ background: 'rgba(0, 212, 255, 0.05)', border: '1px solid rgba(0, 212, 255, 0.2)' }}>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom sx={{ color: '#00d4ff' }}>
+                            <PersonIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                            Sélectionner un utilisateur
+                          </Typography>
+                          
+                          <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel sx={{ color: 'rgba(0, 212, 255, 0.7)' }}>Utilisateur</InputLabel>
+                            <Select
+                              value={selectedUserId}
+                              onChange={(e) => handleUserSelect(e.target.value)}
+                              sx={{ color: '#00d4ff' }}
+                            >
+                              <MenuItem value="">-- Choisir un utilisateur --</MenuItem>
+                              {adminUsers.map(user => (
+                                <MenuItem key={user.id} value={user.id}>
+                                  {user.username} ({user.email}) - {user.role}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+
+                          {selectedUser && (
+                            <Box sx={{ p: 2, background: 'rgba(0, 212, 255, 0.1)', borderRadius: 2 }}>
+                              <Typography variant="body1" sx={{ color: 'white' }}>
+                                <strong>Utilisateur sélectionné :</strong> {selectedUser.username}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                                Email: {selectedUser.email} | Rôle: {selectedUser.role}
+                              </Typography>
+                            </Box>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Actions admin */}
+                    <Grid item xs={12} md={6}>
+                      <Card sx={{ background: 'rgba(0, 212, 255, 0.05)', border: '1px solid rgba(0, 212, 255, 0.2)' }}>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom sx={{ color: '#00d4ff' }}>
+                            <AddIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                            Ajouter des points
+                          </Typography>
+
+                          <Grid container spacing={2}>
+                            <Grid item xs={12}>
+                              <TextField
+                                fullWidth
+                                type="number"
+                                label="Nombre de points"
+                                value={pointsToAdd}
+                                onChange={(e) => setPointsToAdd(e.target.value)}
+                                disabled={!selectedUserId || adminLoading}
+                                InputProps={{ 
+                                  sx: { color: '#00d4ff' }
+                                }}
+                                InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                              />
+                            </Grid>
+                            <Grid item xs={12}>
+                              <TextField
+                                fullWidth
+                                label="Raison (optionnel)"
+                                value={pointsReason}
+                                onChange={(e) => setPointsReason(e.target.value)}
+                                disabled={!selectedUserId || adminLoading}
+                                placeholder="Ex: Bonus performance, Événement spécial..."
+                                InputProps={{ 
+                                  sx: { color: '#00d4ff' }
+                                }}
+                                InputLabelProps={{ sx: { color: 'rgba(0, 212, 255, 0.7)' } }}
+                              />
+                            </Grid>
+                            <Grid item xs={12}>
+                              <Button
+                                fullWidth
+                                variant="contained"
+                                onClick={handleAddPointsToUser}
+                                disabled={!selectedUserId || !pointsToAdd || adminLoading}
+                                sx={{ 
+                                  backgroundColor: '#00d4ff',
+                                  '&:hover': { backgroundColor: '#0099cc' }
+                                }}
+                              >
+                                {adminLoading ? 'Ajout...' : 'Ajouter les points'}
+                              </Button>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Actions de visualisation */}
+                    <Grid item xs={12}>
+                      <Card sx={{ background: 'rgba(0, 212, 255, 0.05)', border: '1px solid rgba(0, 212, 255, 0.2)' }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            <Button
+                              variant="outlined"
+                              onClick={handleViewUserChallenges}
+                              disabled={!selectedUserId || adminLoading}
+                              startIcon={<VisibilityIcon />}
+                              sx={{ 
+                                color: '#00d4ff', 
+                                borderColor: '#00d4ff',
+                                '&:hover': { borderColor: '#0099cc', backgroundColor: 'rgba(0, 212, 255, 0.1)' }
+                              }}
+                            >
+                              Voir les défis de l'utilisateur
+                            </Button>
+                            
+                            <Button
+                              variant="outlined"
+                              onClick={loadAdminUsers}
+                              startIcon={<RefreshIcon />}
+                              sx={{ 
+                                color: '#00d4ff', 
+                                borderColor: '#00d4ff',
+                                '&:hover': { borderColor: '#0099cc', backgroundColor: 'rgba(0, 212, 255, 0.1)' }
+                              }}
+                            >
+                              Actualiser la liste
+                            </Button>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+
+                  {/* Dialog des défis utilisateur */}
+                  <Dialog 
+                    open={showChallengesDialog} 
+                    onClose={() => setShowChallengesDialog(false)}
+                    maxWidth="md"
+                    fullWidth
+                    PaperProps={{
+                      sx: {
+                        backgroundColor: '#0a0a0a',
+                        color: 'white',
+                        border: '1px solid rgba(0, 212, 255, 0.3)'
+                      }
+                    }}
+                  >
+                    <DialogTitle sx={{ color: '#00d4ff' }}>
+                      Défis de {selectedUser?.username}
+                    </DialogTitle>
+                    <DialogContent>
+                      {userStats && (
+                        <Box sx={{ mb: 3, p: 2, background: 'rgba(0, 212, 255, 0.1)', borderRadius: 2 }}>
+                          <Typography variant="h6" gutterBottom>Statistiques</Typography>
+                          <Grid container spacing={2}>
+                            <Grid item xs={4}>
+                              <Typography variant="body2">Points totaux: <strong>{userStats.total_points || 0}</strong></Typography>
+                            </Grid>
+                            <Grid item xs={4}>
+                              <Typography variant="body2">Défis actifs: <strong>{userStats.active_challenges || 0}</strong></Typography>
+                            </Grid>
+                            <Grid item xs={4}>
+                              <Typography variant="body2">Défis terminés: <strong>{userStats.completed_challenges || 0}</strong></Typography>
+                            </Grid>
+                          </Grid>
+                        </Box>
+                      )}
+
+                      {adminUserChallenges.length === 0 ? (
+                        <Alert severity="info">Cet utilisateur n'a aucun défi en cours</Alert>
+                      ) : (
+                        <Table>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ color: '#00d4ff' }}>Défi</TableCell>
+                              <TableCell sx={{ color: '#00d4ff' }}>Statut</TableCell>
+                              <TableCell sx={{ color: '#00d4ff' }}>Progression</TableCell>
+                              <TableCell sx={{ color: '#00d4ff' }}>Points</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {adminUserChallenges.map((userChallenge) => (
+                              <TableRow key={userChallenge.id}>
+                                <TableCell sx={{ color: 'white' }}>
+                                  {userChallenge.challenge?.title || 'Défi sans nom'}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip 
+                                    label={userChallenge.status} 
+                                    color={userChallenge.status === 'completed' ? 'success' : 'primary'}
+                                    size="small"
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ color: 'white' }}>
+                                  {Math.round(userChallenge.progress_percentage || 0)}%
+                                </TableCell>
+                                <TableCell sx={{ color: 'white' }}>
+                                  {userChallenge.challenge?.reward_points || 0} pts
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setShowChallengesDialog(false)} sx={{ color: '#00d4ff' }}>
+                        Fermer
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+                </>
+              )}
+            </Box>
+          )}
+
           {/* ===== DIALOG DE SAISIE MANUELLE ===== */}
           <Dialog
             open={manualEntry.open}
@@ -1952,7 +2296,7 @@ const AdvancedEcoChallengeManager = React.memo(({ token, user }) => {
                 textTransform: 'uppercase',
                 letterSpacing: '0.1em'
               }}>
-                {dialogMode === 'create' ? '🚀 Créer Nouveau Défi Neural' : '⚡ Modifier Défi Cybernétique'}
+              {dialogMode === 'create' ? '🚀 Créer Nouveau Défi Neural' : '⚡ Modifier Défi Cybernétique'}
               </DialogTitle>
               
               <DialogContent sx={{ p: 3 }}>

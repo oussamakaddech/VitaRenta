@@ -1,14 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './CarDiagnosticChatBot.css';
-import './Web3Effects.css';
 
-// Base de connaissances des problèmes de voitures
+// Base de connaissances des problèmes de voitures (inchangée)
 const carProblems = {
-  // Problèmes moteur
-  'moteur': {
+  moteur: {
     keywords: ['moteur', 'ralenti', 'démarre pas', 'toussote', 'cale', 'puissance', 'accélération', 'fume', 'huile', 'surchauffe'],
     problems: {
-      'ne_demarre_pas': {
+      ne_demarre_pas: {
         symptoms: ['moteur ne démarre pas', 'ne démarre pas', 'démarre pas', 'ne tourne pas'],
         explanation: "Si votre moteur ne démarre pas, plusieurs causes sont possibles :",
         causes: [
@@ -25,7 +23,7 @@ const carProblems = {
           "Si le problème persiste, consultez un mécanicien"
         ]
       },
-      'ralenti_irregulier': {
+      ralenti_irregulier: {
         symptoms: ['ralenti irrégulier', 'moteur toussote', 'ralenti instable', 'moteur cale', 'à-coups'],
         explanation: "Un ralenti irrégulier peut indiquer plusieurs problèmes :",
         causes: [
@@ -42,7 +40,7 @@ const carProblems = {
           "Faites diagnostiquer par un professionnel si le problème persiste"
         ]
       },
-      'perte_puissance': {
+      perte_puissance: {
         symptoms: ['perte de puissance', 'manque de puissance', 'accélération faible', 'moteur mou', 'n\'accélère pas'],
         explanation: "Une perte de puissance peut avoir plusieurs origines :",
         causes: [
@@ -59,7 +57,7 @@ const carProblems = {
           "Diagnostic électronique recommandé"
         ]
       },
-      'surchauffe': {
+      surchauffe: {
         symptoms: ['moteur surchauffe', 'température élevée', 'voyant température', 'vapeur sous le capot'],
         explanation: "La surchauffe moteur est un problème grave qui nécessite une action immédiate :",
         causes: [
@@ -76,7 +74,7 @@ const carProblems = {
           "Consultez un mécanicien en urgence"
         ]
       },
-      'consommation_excessive': {
+      consommation_excessive: {
         symptoms: ['consomme trop', 'consommation élevée', 'boit de l\'essence', 'autonomie réduite'],
         explanation: "Une consommation excessive peut avoir plusieurs causes :",
         causes: [
@@ -95,12 +93,10 @@ const carProblems = {
       }
     }
   },
-  
-  // Problèmes de freinage
-  'freins': {
+  freins: {
     keywords: ['freins', 'freine mal', 'pédale', 'grincement', 'vibration freinage', 'liquide frein'],
     problems: {
-      'grincement_freins': {
+      grincement_freins: {
         symptoms: ['grincement au freinage', 'bruit métallique', 'crissement', 'couinement'],
         explanation: "Un grincement au freinage indique généralement :",
         causes: [
@@ -116,7 +112,7 @@ const carProblems = {
           "Intervention urgente si le bruit persiste"
         ]
       },
-      'pedale_molle': {
+      pedale_molle: {
         symptoms: ['pédale de frein molle', 'pédale qui s\'enfonce', 'freinage inefficace', 'pédale spongieuse'],
         explanation: "Une pédale de frein molle est un problème de sécurité critique :",
         causes: [
@@ -132,7 +128,7 @@ const carProblems = {
           "Ne pas utiliser le véhicule tant que le problème n'est pas résolu"
         ]
       },
-      'vibrations_freinage': {
+      vibrations_freinage: {
         symptoms: ['vibrations au freinage', 'volant qui tremble', 'pédale qui vibre'],
         explanation: "Les vibrations au freinage indiquent un problème de disques :",
         causes: [
@@ -150,12 +146,10 @@ const carProblems = {
       }
     }
   },
-  
-  // Problèmes électriques
-  'electrique': {
+  electrique: {
     keywords: ['batterie', 'alternateur', 'voyant', 'éclairage', 'décharge', 'démarreur', 'fusible'],
     problems: {
-      'batterie_decharge': {
+      batterie_decharge: {
         symptoms: ['batterie se décharge', 'voyant batterie', 'démarrage difficile', 'phares faibles'],
         explanation: "Une batterie qui se décharge peut avoir plusieurs causes :",
         causes: [
@@ -171,7 +165,7 @@ const carProblems = {
           "Remplacez la batterie si nécessaire"
         ]
       },
-      'alternateur_defaillant': {
+      alternateur_defaillant: {
         symptoms: ['voyant batterie allumé', 'éclairage faible', 'batterie se vide en roulant'],
         explanation: "Un alternateur défaillant ne recharge plus correctement la batterie :",
         causes: [
@@ -189,12 +183,10 @@ const carProblems = {
       }
     }
   },
-  
-  // Problèmes de transmission
-  'transmission': {
+  transmission: {
     keywords: ['boite', 'vitesse', 'embrayage', 'transmission', 'patine', 'claquement'],
     problems: {
-      'embrayage_patine': {
+      embrayage_patine: {
         symptoms: ['embrayage patine', 'perte de transmission', 'régime moteur monte', 'odeur de brûlé'],
         explanation: "Un embrayage qui patine nécessite une attention immédiate :",
         causes: [
@@ -210,7 +202,7 @@ const carProblems = {
           "Intervention rapide pour éviter d'endommager le volant moteur"
         ]
       },
-      'boite_vitesse_difficile': {
+      boite_vitesse_difficile: {
         symptoms: ['passage de vitesse difficile', 'craque en passant les vitesses', 'vitesse qui saute'],
         explanation: "Des difficultés de passage de vitesse peuvent indiquer :",
         causes: [
@@ -228,12 +220,10 @@ const carProblems = {
       }
     }
   },
-
-  // Problèmes de climatisation
-  'climatisation': {
+  climatisation: {
     keywords: ['clim', 'climatisation', 'air conditionné', 'froid', 'chaud', 'buée'],
     problems: {
-      'clim_ne_refroidit_pas': {
+      clim_ne_refroidit_pas: {
         symptoms: ['climatisation ne refroidit pas', 'air pas froid', 'clim inefficace'],
         explanation: "Une climatisation qui ne refroidit pas peut avoir plusieurs causes :",
         causes: [
@@ -251,12 +241,10 @@ const carProblems = {
       }
     }
   },
-
-  // Problèmes de pneus et suspension
-  'pneus_suspension': {
+  pneus_suspension: {
     keywords: ['pneu', 'suspension', 'amortisseur', 'vibration', 'usure', 'direction'],
     problems: {
-      'usure_irreguliere_pneus': {
+      usure_irreguliere_pneus: {
         symptoms: ['usure irrégulière des pneus', 'pneus usés d\'un côté', 'usure anormale'],
         explanation: "Une usure irrégulière des pneus révèle souvent un problème de géométrie :",
         causes: [
@@ -272,7 +260,7 @@ const carProblems = {
           "Effectuez une rotation des pneus régulièrement"
         ]
       },
-      'vibrations_volant': {
+      vibrations_volant: {
         symptoms: ['volant qui vibre', 'vibrations en roulant', 'tremblement volant'],
         explanation: "Les vibrations au volant peuvent avoir plusieurs origines :",
         causes: [
@@ -297,7 +285,7 @@ const CarDiagnosticChatBot = () => {
     {
       id: 1,
       type: 'bot',
-      content: "🚗 Bonjour ! Je suis votre assistant spécialisé dans le diagnostic automobile. Décrivez-moi le problème que vous rencontrez avec votre véhicule, et je vous aiderai à le comprendre et le résoudre.",
+      content: "🚗 Bonjour ! Je suis votre assistant IA spécialisé dans le diagnostic automobile cyberpunk. Décrivez-moi le problème que vous rencontrez avec votre véhicule, et je vous aiderai à le comprendre et le résoudre grâce à ma technologie neural avancée.",
       timestamp: new Date()
     }
   ]);
@@ -314,20 +302,84 @@ const CarDiagnosticChatBot = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Fonction pour analyser le message de l'utilisateur
+  // Génération des particules neurales
+  useEffect(() => {
+    const createNeuralParticles = () => {
+      const container = document.querySelector('.cdc-chatbot-container');
+      if (!container) return;
+
+      // Particules neurales
+      const createParticle = (type) => {
+        const particle = document.createElement('div');
+        particle.className = type;
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 12 + 's';
+        
+        const particlesContainer = container.querySelector('.web3-neural-particles') || 
+          (() => {
+            const div = document.createElement('div');
+            div.className = 'web3-neural-particles';
+            container.appendChild(div);
+            return div;
+          })();
+        
+        particlesContainer.appendChild(particle);
+        
+        setTimeout(() => {
+          if (particle.parentNode) {
+            particle.parentNode.removeChild(particle);
+          }
+        }, 12000);
+      };
+
+      // Créer différents types de particules
+      createParticle('web3-neural-particle');
+      
+      if (Math.random() < 0.3) {
+        createParticle('web3-data-sparkle');
+      }
+      
+      // Connexions neurales occasionnelles
+      if (Math.random() < 0.1) {
+        const connection = document.createElement('div');
+        connection.className = 'web3-neural-connection';
+        connection.style.left = Math.random() * 80 + '%';
+        connection.style.top = Math.random() * 80 + '%';
+        connection.style.width = Math.random() * 200 + 50 + 'px';
+        connection.style.transform = 'rotate(' + Math.random() * 360 + 'deg)';
+        
+        const particlesContainer = container.querySelector('.web3-neural-particles') || 
+          (() => {
+            const div = document.createElement('div');
+            div.className = 'web3-neural-particles';
+            container.appendChild(div);
+            return div;
+          })();
+        
+        particlesContainer.appendChild(connection);
+        
+        setTimeout(() => {
+          if (connection.parentNode) {
+            connection.parentNode.removeChild(connection);
+          }
+        }, 3000);
+      }
+    };
+
+    const interval = setInterval(createNeuralParticles, 800);
+    return () => clearInterval(interval);
+  }, []);
+
   const analyzeUserMessage = (message) => {
     const normalizedMessage = message.toLowerCase();
     let matchedProblems = [];
 
-    // Parcourir toutes les catégories et problèmes
     Object.entries(carProblems).forEach(([category, categoryData]) => {
-      // Vérifier les mots-clés de la catégorie
-      const categoryMatch = categoryData.keywords.some(keyword => 
+      const categoryMatch = categoryData.keywords.some(keyword =>
         normalizedMessage.includes(keyword.toLowerCase())
       );
 
       if (categoryMatch) {
-        // Chercher les problèmes spécifiques dans cette catégorie
         Object.entries(categoryData.problems).forEach(([problemKey, problemData]) => {
           const symptomMatch = problemData.symptoms.some(symptom =>
             normalizedMessage.includes(symptom.toLowerCase())
@@ -343,7 +395,6 @@ const CarDiagnosticChatBot = () => {
           }
         });
 
-        // Si aucun problème spécifique n'est trouvé, suggérer les problèmes de la catégorie
         if (matchedProblems.length === 0) {
           Object.entries(categoryData.problems).forEach(([problemKey, problemData]) => {
             matchedProblems.push({
@@ -360,42 +411,40 @@ const CarDiagnosticChatBot = () => {
     return matchedProblems.sort((a, b) => b.relevance - a.relevance).slice(0, 2);
   };
 
-  // Fonction pour générer une réponse du bot
   const generateBotResponse = (userMessage) => {
     const matchedProblems = analyzeUserMessage(userMessage);
 
     if (matchedProblems.length === 0) {
       return {
         type: 'bot',
-        content: "🤔 Je n'ai pas pu identifier le problème spécifique. Pourriez-vous me donner plus de détails ? Par exemple :\n\n• Quel type de bruit entendez-vous ?\n• Le problème survient-il au démarrage, en roulant, ou à l'arrêt ?\n• Y a-t-il des voyants allumés sur le tableau de bord ?\n• Depuis quand avez-vous remarqué ce problème ?",
+        content: "🤖 **Analyse Neural en cours...** Mon IA n'a pas pu identifier le problème spécifique. Pourriez-vous me donner plus de détails pour optimiser le diagnostic ?\n\n**🔍 Données requises :**\n• Quel type de bruit entendez-vous ?\n• Le problème survient-il au démarrage, en roulant, ou à l'arrêt ?\n• Y a-t-il des voyants allumés sur le tableau de bord ?\n• Depuis quand avez-vous remarqué ce problème ?\n\n**⚡ Système de diagnostic avancé prêt à analyser...**",
         timestamp: new Date()
       };
     }
 
     const mainProblem = matchedProblems[0];
-    let response = `🔧 **${mainProblem.data.explanation}**\n\n`;
-
-    // Ajouter les causes possibles
-    response += "**🔍 Causes possibles :**\n";
+    let response = `🚀 **Diagnostic IA Completed** - ${mainProblem.data.explanation}\n\n`;
+    
+    response += "**🔍 Analyse Neural - Causes détectées :**\n";
     mainProblem.data.causes.forEach(cause => {
       response += `${cause}\n`;
     });
 
-    response += "\n**💡 Solutions recommandées :**\n";
+    response += "\n**💡 Solutions recommandées par l'IA :**\n";
     mainProblem.data.solutions.forEach(solution => {
       response += `• ${solution}\n`;
     });
 
-    // Ajouter un avertissement de sécurité si nécessaire
-    if (mainProblem.category === 'freins' || mainProblem.problem === 'ne_demarre_pas') {
-      response += "\n⚠️ **Important :** En cas de doute, consultez immédiatement un professionnel. La sécurité est primordiale !";
+    if (mainProblem.category === 'freins' || mainProblem.problem === 'surchauffe') {
+      response += "\n⚠️ **⚡ ALERTE SÉCURITÉ CRITIQUE ⚡** En cas de doute, consultez immédiatement un professionnel. Votre sécurité est la priorité absolue du système !";
     }
 
-    // Suggestions de problèmes connexes
     if (matchedProblems.length > 1) {
-      response += "\n\n🔗 **Vous pourriez aussi être intéressé par :**\n";
+      response += "\n\n🔗 **Diagnostic secondaire détecté :**\n";
       response += `• ${matchedProblems[1].data.explanation}`;
     }
+
+    response += "\n\n**🤖 IA Diagnostic System v2.1 - Analyse terminée**";
 
     return {
       type: 'bot',
@@ -407,7 +456,6 @@ const CarDiagnosticChatBot = () => {
   const handleSendMessage = () => {
     if (!inputValue.trim()) return;
 
-    // Ajouter le message de l'utilisateur
     const userMessage = {
       id: messages.length + 1,
       type: 'user',
@@ -419,14 +467,12 @@ const CarDiagnosticChatBot = () => {
     setInputValue('');
     setIsTyping(true);
 
-    // Simuler le temps de réflexion du bot
     setTimeout(() => {
       const botResponse = generateBotResponse(userMessage.content);
       botResponse.id = messages.length + 2;
-      
       setMessages(prev => [...prev, botResponse]);
       setIsTyping(false);
-    }, 1500);
+    }, 2000);
   };
 
   const handleKeyPress = (e) => {
@@ -450,108 +496,106 @@ const CarDiagnosticChatBot = () => {
   ];
 
   const handleQuickQuestion = (question) => {
-    setInputValue(question);
+    const userMessage = {
+      id: messages.length + 1,
+      type: 'user',
+      content: question,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsTyping(true);
+
+    setTimeout(() => {
+      const botResponse = generateBotResponse(question);
+      botResponse.id = messages.length + 2;
+      setMessages(prev => [...prev, botResponse]);
+      setIsTyping(false);
+    }, 2000);
   };
 
   return (
-    <div className="web3-chatbot-container">
-      <div className="web3-background-effects">
-        <div className="floating-particles"></div>
-        <div className="neon-grid"></div>
-        <div className="hologram-overlay"></div>
-      </div>
-      
-      <div className="chatbot-container web3-glass">
-        <div className="chatbot-header web3-header">
-          <div className="chatbot-header-info">
-            <div className="chatbot-avatar web3-avatar">
-              <div className="avatar-inner">
-                🚗
+    <div className="cdc-chatbot-container">
+      <div className="cdc-container" ref={chatContainerRef}>
+        <div className="cdc-header">
+          <div className="cdc-header-info">
+            <div className="cdc-avatar">
+              🤖
+            </div>
+            <div className="cdc-title">
+              <h3>CarDiag Neural AI</h3>
+              <div className="cdc-status">
+                <div className="cdc-status-dot"></div>
+                <span>Système IA en ligne</span>
               </div>
-              <div className="avatar-pulse"></div>
             </div>
-            <div className="chatbot-title">
-              <h3 className="web3-title">Assistant Diagnostic Auto</h3>
-              <span className="chatbot-status web3-status">
-                <span className="status-dot"></span>
-                IA Connectée
-              </span>
-            </div>
-          </div>
-          <div className="web3-header-effects">
-            <div className="energy-bar"></div>
           </div>
         </div>
 
-        <div className="chatbot-messages web3-messages" ref={chatContainerRef}>
+        <div className="cdc-messages">
           {messages.map((message) => (
-            <div key={message.id} className={`message ${message.type} web3-message`}>
-              <div className="message-content web3-message-content">
-                {message.content.split('\n').map((line, index) => (
-                  <div key={index}>
-                    {line.includes('**') ? (
-                      <span dangerouslySetInnerHTML={{
-                        __html: line.replace(/\*\*(.*?)\*\*/g, '<strong class="web3-bold">$1</strong>')
-                      }} />
-                    ) : (
-                      line
-                    )}
-                  </div>
-                ))}
+            <div key={message.id} className={`cdc-message ${message.type}`}>
+              <div className="cdc-message-content">
+                {message.content}
               </div>
-              <div className="message-time web3-time">
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="cdc-message-time">
+                {message.timestamp.toLocaleTimeString('fr-FR', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
               </div>
             </div>
           ))}
-          
+
           {isTyping && (
-            <div className="message bot web3-message">
-              <div className="message-content typing web3-typing">
-                <div className="typing-indicator web3-typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+            <div className="cdc-message bot">
+              <div className="cdc-message-content cdc-typing">
+                <div className="web3-ai-brain-loader">
+                  <div className="web3-brain-core"></div>
+                  <div className="web3-brain-waves">
+                    <div className="wave wave-1"></div>
+                    <div className="wave wave-2"></div>
+                    <div className="wave wave-3"></div>
+                  </div>
                 </div>
-                <span className="typing-text">IA en cours d'analyse...</span>
+                <span>IA analysant le diagnostic neural...</span>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="quick-questions web3-quick-questions">
-          <p className="web3-quick-title">Questions fréquentes :</p>
-          <div className="quick-questions-grid web3-grid">
+        <div className="cdc-quick-questions">
+          <h4 className="cdc-quick-title">⚡ Diagnostics rapides Neural AI</h4>
+          <div className="cdc-quick-questions-grid">
             {quickQuestions.map((question, index) => (
               <button
                 key={index}
-                className="quick-question-btn web3-quick-btn"
+                className="cdc-quick-question-btn"
                 onClick={() => handleQuickQuestion(question)}
               >
-                <span className="btn-text">{question}</span>
-                <div className="btn-glow"></div>
+                {question}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="chatbot-input web3-input">
-          <div className="input-container web3-input-container">
+        <div className="cdc-input">
+          <div className="cdc-input-container">
             <textarea
+              className="cdc-message-input"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Décrivez votre problème automobile..."
-              rows="2"
-              className="message-input web3-textarea"
+              placeholder="Décrivez votre problème automobile... L'IA vous aidera ⚡"
+              disabled={isTyping}
             />
             <button
+              className="cdc-button-primary"
               onClick={handleSendMessage}
               disabled={!inputValue.trim() || isTyping}
-              className="web3-button web3-button-primary"
             >
-              📤 Envoyer
+              {isTyping ? '🧠' : '🚀'}
             </button>
           </div>
         </div>

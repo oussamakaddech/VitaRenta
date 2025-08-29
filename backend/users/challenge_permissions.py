@@ -280,3 +280,51 @@ class IsAdminOrAgencyForChallenges(BasePermission):
             return request.method in permissions.SAFE_METHODS
 
         return request.method in permissions.SAFE_METHODS
+# À ajouter dans permissions.py après les permissions existantes
+
+class CanManageUsers(BasePermission):
+    """Permission pour gérer les utilisateurs (admin seulement)"""
+    message = "Seuls les administrateurs peuvent gérer les utilisateurs."
+    
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            hasattr(request.user, 'role') and
+            request.user.role == 'admin'
+        )
+
+class CanAddPoints(BasePermission):
+    """Permission pour ajouter des points (admin seulement)"""
+    message = "Seuls les administrateurs peuvent ajouter des points."
+    
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            hasattr(request.user, 'role') and
+            request.user.role == 'admin'
+        )
+
+class CanViewAllUserChallenges(BasePermission):
+    """Permission pour voir tous les défis utilisateur (admin et agence)"""
+    message = "Permission insuffisante pour voir tous les défis utilisateur."
+    
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            hasattr(request.user, 'role') and
+            request.user.role in ['admin', 'agence']
+        )
+
+class IsAdminOrOwnerUser(BasePermission):
+    """Permission pour admin ou propriétaire de l'objet User"""
+    
+    def has_permission(self, request, view):
+        return request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        # Admin a tous les droits
+        if hasattr(request.user, 'role') and request.user.role == 'admin':
+            return True
+        
+        # Utilisateur peut seulement voir/modifier ses propres données
+        return obj == request.user

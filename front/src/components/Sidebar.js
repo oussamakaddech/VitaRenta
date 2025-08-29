@@ -117,27 +117,7 @@ const Sidebar = ({ token, user, onLogout }) => {
                         </div>
                     </Link>
                     
-                    {user && (
-                        <div className="user-info">
-                            <div className="user-avatar">
-                                {user.role === 'admin' ? '🛡️' : user.role === 'agence' ? '🏢' : '👤'}
-                            </div>
-                            <div className="user-details">
-                                <span className="user-name">{user.name || user.email}</span>
-                                <span className="user-role">
-                                    {user.role === 'admin' ? 'Administrateur' : 
-                                     user.role === 'agence' ? 'Agence' : 'Client'}
-                                </span>
-                                {/* ✅ AMÉLIORATION : Statut de session pour admin/agence */}
-                                {isAdminOrAgence && (
-                                    <div className="session-status">
-                                        <span className="status-dot online"></span>
-                                        Session active
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                   
                 </div>
 
                 <div className="sidebar-menu">

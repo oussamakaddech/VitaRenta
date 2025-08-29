@@ -5,7 +5,7 @@ import debounce from 'lodash/debounce';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import './VehiculeList.css';
 
-// Configuration des images statiques par marque
+// Configuration des images statiques par marque (amélioré avec fallback)
 const CAR_IMAGES = {
   toyota: 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
   peugeot: 'https://images.unsplash.com/photo-1600501667514-3c0b0a0c7d5c?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80',
@@ -52,7 +52,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
   const [viewMode, setViewMode] = useState('grid');
   const [sortBy, setSortBy] = useState('prix_asc');
   const [showFilters, setShowFilters] = useState(false);
-  const [favorites, setFavorites] = useState([]);
+  const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || []);
   const [currentPage, setCurrentPage] = useState(1);
   const [vehiclesPerPage] = useState(12);
   const [showVehicleDetails, setShowVehicleDetails] = useState(null);
@@ -71,6 +71,11 @@ const VehiculeList = ({ token, user, onLogout }) => {
     siege_enfant: false
   });
 
+  // Persistance des favoris
+  useEffect(() => {
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+  }, [favorites]);
+
   // Fonction pour obtenir l'image de la voiture
   const getStaticCarImage = useCallback((marque = '') => {
     const marqueLower = marque.toLowerCase();
@@ -88,14 +93,14 @@ const VehiculeList = ({ token, user, onLogout }) => {
 
   // Récupération des véhicules
   const fetchVehicles = useCallback(async () => {
+    const controller = new AbortController();
     try {
       setLoading(true);
       setError(null);
-      
+
       let url = `${API_BASE_URL}/api/vehicules/`;
       const params = [];
 
-      // Construction des paramètres de requête
       if (searchTerm) params.push(`search=${encodeURIComponent(searchTerm)}`);
       if (filters.marque) params.push(`marque=${encodeURIComponent(filters.marque)}`);
       if (filters.carburant) params.push(`carburant=${filters.carburant}`);
@@ -110,7 +115,8 @@ const VehiculeList = ({ token, user, onLogout }) => {
 
       const response = await axios.get(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        timeout: 30000
+        timeout: 30000,
+        signal: controller.signal
       });
 
       let vehiclesData = Array.isArray(response.data) ? response.data : response.data.results || [];
@@ -121,12 +127,17 @@ const VehiculeList = ({ token, user, onLogout }) => {
 
       setVehicles(vehiclesData);
       setFilteredVehicles(vehiclesData);
+
     } catch (err) {
-      console.error('Error fetching vehicles:', err);
-      handleApiError(err);
+      if (!axios.isCancel(err)) {
+        console.error('Error fetching vehicles:', err);
+        handleApiError(err);
+      }
     } finally {
       setLoading(false);
     }
+
+    return () => controller.abort();
   }, [searchTerm, filters, token, getStaticCarImage]);
 
   // Gestion des erreurs API
@@ -153,6 +164,8 @@ const VehiculeList = ({ token, user, onLogout }) => {
           break;
         case 404:
           errorMsg = 'Service indisponible.';
+          break;
+        default:
           break;
       }
     }
@@ -223,6 +236,12 @@ const VehiculeList = ({ token, user, onLogout }) => {
     if (searchInput) searchInput.value = '';
   };
 
+  // Gestion de la recherche
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    debouncedSearch(value);
+  };
+
   // Gestion des favoris
   const toggleFavorite = (vehicleId) => {
     setFavorites(prev => 
@@ -268,35 +287,35 @@ const VehiculeList = ({ token, user, onLogout }) => {
   // Calcul du prix total
   const calculateTotalPrice = () => {
     if (!selectedVehicle || !reservationData.date_debut || !reservationData.date_fin) return 0;
-
+    
     const startDate = new Date(reservationData.date_debut);
     const endDate = new Date(reservationData.date_fin);
     const days = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
-
+    
     let total = days * (selectedVehicle.prix_par_jour || 0);
-
+    
     if (reservationData.assurance_complete) total += 20 * days;
     if (reservationData.conducteur_supplementaire) total += 10 * days;
     if (reservationData.gps) total += 5 * days;
     if (reservationData.siege_enfant) total += 8 * days;
-
+    
     return total;
   };
 
   // Validation des données de réservation
   const validateReservationData = (data, vehicle) => {
     const errors = [];
-
+    
     if (!data.date_debut) errors.push('Date de début requise');
     if (!data.date_fin) errors.push('Date de fin requise');
     if (!vehicle?.id) errors.push('Véhicule requis');
     if (vehicle?.statut !== 'disponible') errors.push('Le véhicule n\'est pas disponible');
-
+    
     const startDate = new Date(data.date_debut);
     const endDate = new Date(data.date_fin);
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-
+    
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       errors.push('Dates invalides');
     } else {
@@ -306,7 +325,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
         errors.push('La réservation ne peut pas dépasser 30 jours');
       }
     }
-
+    
     return errors;
   };
 
@@ -359,6 +378,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
       closeReservationModal();
       await fetchVehicles();
       showSuccessNotification('Réservation confirmée !');
+
     } catch (err) {
       console.error('Error during reservation:', err);
       handleReservationError(err);
@@ -370,10 +390,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
   // Gestion des erreurs de réservation
   const handleReservationError = (err) => {
     let errorMessage = 'Erreur lors de la réservation';
-
+    
     if (err.response) {
       const { status, data } = err.response;
-      
       switch (status) {
         case 401:
           errorMessage = 'Session expirée. Veuillez vous reconnecter.';
@@ -385,11 +404,11 @@ const VehiculeList = ({ token, user, onLogout }) => {
           break;
         case 400:
           errorMessage = data.non_field_errors?.[0] || 
-                        data.vehicule_id?.[0] || 
-                        data.date_debut?.[0] || 
-                        data.date_fin?.[0] || 
-                        Object.values(data)[0]?.[0] || 
-                        'Données invalides';
+                         data.vehicule_id?.[0] || 
+                         data.date_debut?.[0] || 
+                         data.date_fin?.[0] || 
+                         Object.values(data)[0]?.[0] || 
+                         'Données invalides';
           break;
         case 404:
           errorMessage = 'Véhicule non trouvé.';
@@ -403,14 +422,14 @@ const VehiculeList = ({ token, user, onLogout }) => {
     } else {
       errorMessage = 'Impossible de contacter le serveur.';
     }
-
+    
     setError(errorMessage);
   };
 
   // Notification de succès
   const showSuccessNotification = (message) => {
     const notification = document.createElement('div');
-    notification.className = 'auto-success-notification';
+    notification.className = 'auto-success-notification show';
     notification.innerHTML = `
       <div class="auto-notification-content">
         <i class="fas fa-check-circle"></i>
@@ -421,10 +440,6 @@ const VehiculeList = ({ token, user, onLogout }) => {
     document.body.appendChild(notification);
     
     setTimeout(() => {
-      notification.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
       notification.classList.remove('show');
       setTimeout(() => {
         document.body.removeChild(notification);
@@ -433,109 +448,118 @@ const VehiculeList = ({ token, user, onLogout }) => {
   };
 
   // Gestion du scroll
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrolled = window.scrollY > 100;
-      setIsScrolled(scrolled);
-      setShowScrollTop(window.scrollY > 300);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+  const handleScroll = useCallback(() => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    setIsScrolled(scrollTop > 100);
+    setShowScrollTop(scrollTop > 500);
   }, []);
 
-  // Scroll vers le haut
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Chargement initial
+  // Gestion de la pagination
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Effects
   useEffect(() => {
     fetchVehicles();
   }, [fetchVehicles]);
 
-  // Nettoyage des erreurs et succès
   useEffect(() => {
-    if (error || success) {
-      const timer = setTimeout(() => {
-        setError(null);
-        setSuccess(null);
-      }, 5000);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(null), 5000);
       return () => clearTimeout(timer);
     }
-  }, [error, success]);
+  }, [success]);
 
-  // Rendu du composant principal
+  // Composant Skeleton pour loading
+  const SkeletonCard = () => (
+    <div className="auto-vehicle-card skeleton" aria-hidden="true">
+      <div className="auto-vehicle-image skeleton-img"></div>
+      <div className="auto-vehicle-content">
+        <h3 className="skeleton-text"></h3>
+        <div className="auto-vehicle-specs">
+          <div className="skeleton-spec"></div>
+          <div className="skeleton-spec"></div>
+          <div className="skeleton-spec"></div>
+          <div className="skeleton-spec"></div>
+        </div>
+        <div className="auto-vehicle-footer skeleton-footer"></div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="auto-app-container">
-      {/* En-tête */}
+      {/* Header */}
       <header className={`auto-header ${isScrolled ? 'scrolled' : ''}`}>
         <div className="auto-header-container">
           <div className="auto-logo">
             <h1>AutoRent</h1>
           </div>
           
-          <nav className="auto-nav">
-            <ul className="auto-nav-menu">
-              <li><a href="#home" className="auto-nav-link active">Accueil</a></li>
-              <li><a href="#vehicles" className="auto-nav-link">Véhicules</a></li>
-              <li><a href="#services" className="auto-nav-link">Services</a></li>
-              <li><a href="#about" className="auto-nav-link">À propos</a></li>
-              <li><a href="#contact" className="auto-nav-link">Contact</a></li>
-            </ul>
+          <nav className={`auto-nav-menu ${mobileMenuOpen ? 'open' : ''}`}>
+            <a href="#vehicles" className="auto-nav-link">Véhicules</a>
+            <a href="#services" className="auto-nav-link">Services</a>
+            <a href="#about" className="auto-nav-link">À propos</a>
+            <a href="#contact" className="auto-nav-link">Contact</a>
           </nav>
 
-          <div className="auto-header-actions">
+          <div className="auto-user-section">
             {user ? (
-              <div className="auto-user-menu">
-                <div className="auto-user-avatar">
-                  {user.username?.charAt(0).toUpperCase() || 'U'}
-                </div>
-                <button onClick={onLogout} className="auto-btn auto-btn-secondary">
-                  <i className="fas fa-sign-out-alt"></i>
-                  Déconnexion
-                </button>
+              <div className="auto-user-avatar">
+                {user.first_name?.[0] || user.username?.[0] || 'U'}
               </div>
             ) : (
-              <button 
-                onClick={() => navigate('/login')} 
-                className="auto-btn auto-btn-primary"
-              >
-                <i className="fas fa-sign-in-alt"></i>
+              <button className="auto-btn auto-btn-primary" onClick={() => navigate('/login')}>
                 Connexion
               </button>
             )}
+            
+            <button 
+              className="auto-mobile-menu-toggle"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              <i className={`fas ${mobileMenuOpen ? 'fa-times' : 'fa-bars'}`}></i>
+            </button>
           </div>
-
-          <button 
-            className="auto-mobile-menu-toggle"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            <i className={`fas ${mobileMenuOpen ? 'fa-times' : 'fa-bars'}`}></i>
-          </button>
         </div>
       </header>
 
-      {/* Section Hero */}
-      <section className="auto-hero" id="home">
+      {/* Hero Section avec recherche améliorée */}
+      <section className="auto-hero">
         <div className="auto-hero-bg"></div>
         <div className="auto-hero-content">
           <div className="auto-hero-text">
             <h1 className="auto-hero-title">
-              Découvrez notre flotte de <span>véhicules premium</span> et réservez en quelques clics
+              Trouvez votre <span>véhicule parfait</span>
             </h1>
             <p className="auto-hero-subtitle">
               Une expérience de location simple et efficace
             </p>
             
             <div className="auto-search-bar-hero">
+              <i className="fas fa-search"></i>
               <input
                 type="text"
-                placeholder="Rechercher par marque, modèle ou type..."
                 className="auto-search-input-hero"
-                onChange={(e) => debouncedSearch(e.target.value)}
+                placeholder="Rechercher par marque, modèle ou localisation..."
+                onChange={handleSearchChange}
+                aria-label="Recherche de véhicules"
               />
-              <button className="auto-btn auto-btn-primary">
+              <button className="auto-btn auto-btn-primary" aria-label="Rechercher">
                 <i className="fas fa-search"></i>
                 Rechercher
               </button>
@@ -543,18 +567,16 @@ const VehiculeList = ({ token, user, onLogout }) => {
           </div>
           
           <div className="auto-hero-visual">
-            <div className="auto-hero-car">
-              <i className="fas fa-car"></i>
-            </div>
+            <i className="fas fa-car" style={{ fontSize: '6rem', color: 'rgba(255,255,255,0.8)' }}></i>
           </div>
         </div>
       </section>
 
-      {/* Section Fonctionnalités */}
-      <section className="auto-features" id="services">
-        <div className="container">
-          <div className="text-center">
-            <h2 className="auto-section-title">Une plateforme moderne pour la location de véhicules</h2>
+      {/* Features Section */}
+      <section className="auto-features">
+        <div className="auto-container">
+          <div className="auto-section-header">
+            <h2 className="auto-section-title">Nos Services</h2>
             <p className="auto-section-subtitle">
               Découvrez nos services premium et notre engagement envers votre satisfaction
             </p>
@@ -596,29 +618,46 @@ const VehiculeList = ({ token, user, onLogout }) => {
         </div>
       </section>
 
-      {/* Section Véhicules */}
+      {/* Vehicles Section */}
       <section className="auto-vehicles" id="vehicles">
-        <div className="container">
-          <div className="text-center">
-            <h2 className="auto-section-title">
-              Découvrez notre sélection de véhicules de qualité
-            </h2>
+        <div className="auto-container">
+          <div className="auto-section-header">
+            <h2 className="auto-section-title">Nos Véhicules</h2>
           </div>
 
-          {/* Section Filtres */}
+          {/* Messages d'erreur et de succès */}
+          {error && (
+            <div className="auto-error-message" role="alert">
+              <i className="fas fa-exclamation-triangle"></i>
+              {error}
+              <button onClick={() => setError(null)} aria-label="Fermer l'erreur">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+          )}
+
+          {success && (
+            <div className="auto-success-message" role="alert">
+              <i className="fas fa-check-circle"></i>
+              {success}
+            </div>
+          )}
+
+          {/* Filtres et tri */}
           <div className="auto-filters-section">
             <div className="auto-filters-header">
-              <h3>Filtrer les véhicules</h3>
+              <h3>Filtres de recherche</h3>
               <div className="auto-filters-actions">
                 <button 
                   className="auto-btn auto-btn-secondary"
                   onClick={() => setShowFilters(!showFilters)}
+                  aria-expanded={showFilters}
                 >
                   <i className="fas fa-filter"></i>
                   {showFilters ? 'Masquer' : 'Afficher'} les filtres
                 </button>
                 <button 
-                  className="auto-btn auto-btn-outline"
+                  className="auto-btn auto-btn-secondary"
                   onClick={resetFilters}
                 >
                   <i className="fas fa-undo"></i>
@@ -630,8 +669,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
             {showFilters && (
               <div className="auto-filters-grid">
                 <div className="auto-filter-group">
-                  <label>Marque</label>
+                  <label htmlFor="marque">Marque</label>
                   <select 
+                    id="marque"
                     value={filters.marque} 
                     onChange={(e) => handleFilterChange('marque', e.target.value)}
                   >
@@ -639,30 +679,35 @@ const VehiculeList = ({ token, user, onLogout }) => {
                     <option value="Toyota">Toyota</option>
                     <option value="Peugeot">Peugeot</option>
                     <option value="Renault">Renault</option>
+                    <option value="Volkswagen">Volkswagen</option>
                     <option value="BMW">BMW</option>
                     <option value="Mercedes">Mercedes</option>
                     <option value="Audi">Audi</option>
                     <option value="Tesla">Tesla</option>
+                    <option value="Nissan">Nissan</option>
+                    <option value="Ford">Ford</option>
                   </select>
                 </div>
 
                 <div className="auto-filter-group">
-                  <label>Carburant</label>
+                  <label htmlFor="carburant">Carburant</label>
                   <select 
+                    id="carburant"
                     value={filters.carburant} 
                     onChange={(e) => handleFilterChange('carburant', e.target.value)}
                   >
-                    <option value="">Tous les carburants</option>
-                    <option value="Essence">Essence</option>
-                    <option value="Diesel">Diesel</option>
-                    <option value="Électrique">Électrique</option>
-                    <option value="Hybride">Hybride</option>
+                    <option value="">Tous</option>
+                    <option value="essence">Essence</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="electrique">Électrique</option>
+                    <option value="hybride">Hybride</option>
                   </select>
                 </div>
 
                 <div className="auto-filter-group">
-                  <label>Prix minimum (€/jour)</label>
+                  <label htmlFor="prix_min">Prix min (€/jour)</label>
                   <input
+                    id="prix_min"
                     type="number"
                     value={filters.prix_min}
                     onChange={(e) => handleFilterChange('prix_min', e.target.value)}
@@ -672,8 +717,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 </div>
 
                 <div className="auto-filter-group">
-                  <label>Prix maximum (€/jour)</label>
+                  <label htmlFor="prix_max">Prix max (€/jour)</label>
                   <input
+                    id="prix_max"
                     type="number"
                     value={filters.prix_max}
                     onChange={(e) => handleFilterChange('prix_max', e.target.value)}
@@ -683,8 +729,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 </div>
 
                 <div className="auto-filter-group">
-                  <label>Places minimum</label>
+                  <label htmlFor="places_min">Places minimum</label>
                   <select 
+                    id="places_min"
                     value={filters.places_min} 
                     onChange={(e) => handleFilterChange('places_min', e.target.value)}
                   >
@@ -697,31 +744,9 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 </div>
 
                 <div className="auto-filter-group">
-                  <label>Localisation</label>
-                  <input
-                    type="text"
-                    value={filters.localisation}
-                    onChange={(e) => handleFilterChange('localisation', e.target.value)}
-                    placeholder="Ville ou région"
-                  />
-                </div>
-
-                <div className="auto-filter-group">
-                  <label>Statut</label>
+                  <label htmlFor="transmission">Transmission</label>
                   <select 
-                    value={filters.statut} 
-                    onChange={(e) => handleFilterChange('statut', e.target.value)}
-                  >
-                    <option value="">Tous</option>
-                    <option value="disponible">Disponible</option>
-                    <option value="loue">Loué</option>
-                    <option value="maintenance">Maintenance</option>
-                  </select>
-                </div>
-
-                <div className="auto-filter-group">
-                  <label>Transmission</label>
-                  <select 
+                    id="transmission"
                     value={filters.transmission} 
                     onChange={(e) => handleFilterChange('transmission', e.target.value)}
                   >
@@ -730,49 +755,77 @@ const VehiculeList = ({ token, user, onLogout }) => {
                     <option value="automatique">Automatique</option>
                   </select>
                 </div>
+
+                <div className="auto-filter-group">
+                  <label htmlFor="statut">Statut</label>
+                  <select 
+                    id="statut"
+                    value={filters.statut} 
+                    onChange={(e) => handleFilterChange('statut', e.target.value)}
+                  >
+                    <option value="">Tous</option>
+                    <option value="disponible">Disponible</option>
+                    <option value="indisponible">Indisponible</option>
+                  </select>
+                </div>
+
+                <div className="auto-filter-group">
+                  <label htmlFor="localisation">Localisation</label>
+                  <input
+                    id="localisation"
+                    type="text"
+                    value={filters.localisation}
+                    onChange={(e) => handleFilterChange('localisation', e.target.value)}
+                    placeholder="Ville..."
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Section Tri et Vues */}
+          {/* Contrôles de tri et vue */}
           <div className="auto-sort-section">
+            <div className="auto-sort-info">
+              <span>{sortedVehicles.length} véhicule{sortedVehicles.length > 1 ? 's' : ''} trouvé{sortedVehicles.length > 1 ? 's' : ''}</span>
+            </div>
+            
             <div className="auto-sort-controls">
-              <div className="auto-sort-group">
-                <label>Trier par :</label>
-                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-                  <option value="prix_asc">Prix croissant</option>
-                  <option value="prix_desc">Prix décroissant</option>
-                  <option value="marque">Marque</option>
-                  <option value="carburant">Carburant</option>
-                  <option value="places">Nombre de places</option>
-                  <option value="recent">Plus récents</option>
-                </select>
-              </div>
-
               <div className="auto-view-controls">
                 <button 
                   className={`auto-view-btn ${viewMode === 'grid' ? 'active' : ''}`}
                   onClick={() => setViewMode('grid')}
+                  aria-label="Vue grille"
                 >
                   <i className="fas fa-th"></i>
                 </button>
                 <button 
                   className={`auto-view-btn ${viewMode === 'list' ? 'active' : ''}`}
                   onClick={() => setViewMode('list')}
+                  aria-label="Vue liste"
                 >
                   <i className="fas fa-list"></i>
                 </button>
               </div>
-            </div>
-
-            <div className="auto-results-info">
-              <span>{sortedVehicles.length} véhicule(s) trouvé(s)</span>
+              
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
+                className="auto-sort-select"
+                aria-label="Trier par"
+              >
+                <option value="prix_asc">Prix croissant</option>
+                <option value="prix_desc">Prix décroissant</option>
+                <option value="marque">Marque A-Z</option>
+                <option value="carburant">Type de carburant</option>
+                <option value="places">Nombre de places</option>
+                <option value="recent">Plus récents</option>
+              </select>
             </div>
           </div>
 
-          {/* Messages d'état */}
-          {error && (
-            <div className="auto-error-state">
+          {/* États de chargement et d'erreur */}
+          {!loading && error && (
+            <div className="auto-error-state" role="alert">
               <i className="fas fa-exclamation-triangle"></i>
               <h2>Oups ! Une erreur s'est produite</h2>
               <p>{error}</p>
@@ -786,218 +839,236 @@ const VehiculeList = ({ token, user, onLogout }) => {
             </div>
           )}
 
-          {success && (
-            <div className="auto-success-message">
-              <i className="fas fa-check-circle"></i>
-              {success}
-            </div>
-          )}
-
-          {/* État de chargement */}
-          {loading && (
-            <div className="auto-loading-state">
-              <div className="auto-loading-spinner">
-                <div className="auto-spinner-car">🚗</div>
-                <p>Chargement des véhicules...</p>
-              </div>
-            </div>
-          )}
-
           {/* Grille des véhicules */}
           {!loading && !error && (
-            <div className={`auto-vehicles-grid ${viewMode === 'list' ? 'list-view' : ''}`}>
-              {paginatedVehicles.map((vehicle) => (
-                <div key={vehicle.id} className="auto-vehicle-card">
-                  <div className="auto-vehicle-image">
-                    <img 
-                      src={vehicle.image} 
-                      alt={`${vehicle.marque} ${vehicle.modele}`}
-                      onError={(e) => {
-                        e.target.src = CAR_IMAGES.default;
-                      }}
-                    />
-                    
-                    <div className="auto-vehicle-overlay">
-                      <button 
-                        className={`auto-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
-                        onClick={() => toggleFavorite(vehicle.id)}
-                      >
-                        <i className={`fas ${favorites.includes(vehicle.id) ? 'fa-heart' : 'fa-heart'}`}></i>
-                      </button>
+            <>
+              <div className={`auto-vehicles-grid ${viewMode === 'list' ? 'list-view' : ''}`}>
+                {paginatedVehicles.map((vehicle) => (
+                  <div key={vehicle.id} className="auto-vehicle-card">
+                    <div className="auto-vehicle-image">
+                      <img 
+                        src={vehicle.image} 
+                        alt={`${vehicle.marque} ${vehicle.modele}`}
+                        onError={(e) => {
+                          e.target.src = CAR_IMAGES.default;
+                        }}
+                      />
                       
-                      <button 
-                        className="auto-details-btn"
-                        onClick={() => openVehicleDetails(vehicle)}
-                      >
-                        <i className="fas fa-eye"></i>
-                      </button>
+                      <div className="auto-vehicle-overlay">
+                        <button 
+                          className={`auto-favorite-btn ${favorites.includes(vehicle.id) ? 'active' : ''}`}
+                          onClick={() => toggleFavorite(vehicle.id)}
+                          aria-label={favorites.includes(vehicle.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                        >
+                          <i className={`fas fa-heart ${favorites.includes(vehicle.id) ? '' : 'far'}`}></i>
+                        </button>
+                        
+                        <button 
+                          className="auto-details-btn"
+                          onClick={() => openVehicleDetails(vehicle)}
+                          aria-label="Voir détails"
+                        >
+                          <i className="fas fa-info"></i>
+                        </button>
+                      </div>
+
+                      <div className="auto-vehicle-badges">
+                        <span className="fuel-badge">{vehicle.carburant}</span>
+                        <span className={`status-badge ${vehicle.statut === 'disponible' ? 'available' : 'unavailable'}`}>
+                          {vehicle.statut}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="auto-vehicle-badges">
-                      <span className="fuel-badge">{vehicle.carburant}</span>
-                      <span className={`status-badge ${vehicle.statut}`}>
-                        {vehicle.statut}
-                      </span>
+                    <div className="auto-vehicle-content">
+                      <h3 className="auto-vehicle-title">
+                        {vehicle.marque} {vehicle.modele}
+                      </h3>
+
+                      <div className="auto-vehicle-specs">
+                        <div className="auto-spec-item">
+                          <i className="fas fa-users"></i>
+                          <span>{vehicle.nombre_places} places</span>
+                        </div>
+                        
+                        <div className="auto-spec-item">
+                          <i className="fas fa-gas-pump"></i>
+                          <span>{vehicle.carburant}</span>
+                        </div>
+                        
+                        <div className="auto-spec-item">
+                          <i className="fas fa-cogs"></i>
+                          <span>{vehicle.transmission || 'Manuelle'}</span>
+                        </div>
+                        
+                        <div className="auto-spec-item">
+                          <i className="fas fa-map-marker-alt"></i>
+                          <span>{vehicle.localisation || 'Non spécifiée'}</span>
+                        </div>
+                      </div>
+
+                      <div className="auto-vehicle-footer">
+                        <div className="auto-vehicle-price">
+                          <span className="auto-price-amount">{vehicle.prix_par_jour}€</span>
+                          <span className="auto-price-period">/jour</span>
+                        </div>
+                        
+                        <button 
+                          className={`auto-btn auto-btn-primary ${vehicle.statut !== 'disponible' ? 'disabled' : ''}`}
+                          onClick={() => openReservationModal(vehicle)}
+                          disabled={vehicle.statut !== 'disponible'}
+                          aria-label={vehicle.statut === 'disponible' ? 'Réserver' : 'Indisponible'}
+                        >
+                          <i className="fas fa-calendar-plus"></i>
+                          {vehicle.statut === 'disponible' ? 'Réserver' : 'Indisponible'}
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="auto-vehicle-content">
-                    <h3 className="auto-vehicle-title">
-                      {vehicle.marque} {vehicle.modele}
-                    </h3>
-
-                    <div className="auto-vehicle-specs">
-                      <div className="auto-spec-item">
-                        <i className="fas fa-users"></i>
-                        <span>{vehicle.nombre_places} places</span>
-                      </div>
-                      
-                      <div className="auto-spec-item">
-                        <i className="fas fa-gas-pump"></i>
-                        <span>{vehicle.carburant}</span>
-                      </div>
-                      
-                      <div className="auto-spec-item">
-                        <i className="fas fa-cogs"></i>
-                        <span>{vehicle.transmission || 'Automatique'}</span>
-                      </div>
-                      
-                      <div className="auto-spec-item">
-                        <i className="fas fa-map-marker-alt"></i>
-                        <span>{vehicle.localisation}</span>
-                      </div>
-                    </div>
-
-                    <div className="auto-vehicle-footer">
-                      <div className="auto-vehicle-price">
-                        <span className="auto-price-amount">{vehicle.prix_par_jour}€</span>
-                        <span className="auto-price-period">/jour</span>
-                      </div>
-
-                      <button 
-                        className={`auto-btn auto-btn-primary ${vehicle.statut !== 'disponible' ? 'disabled' : ''}`}
-                        onClick={() => openReservationModal(vehicle)}
-                        disabled={vehicle.statut !== 'disponible'}
-                      >
-                        <i className="fas fa-calendar-plus"></i>
-                        {vehicle.statut === 'disponible' ? 'Réserver' : 'Indisponible'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Pagination */}
-          {!loading && !error && totalPages > 1 && (
-            <div className="auto-pagination">
-              <button 
-                className="auto-pagination-btn"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                <i className="fas fa-chevron-left"></i>
-                Précédent
-              </button>
-
-              <div className="auto-pagination-numbers">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pageNum = i + 1;
-                  return (
-                    <button
-                      key={pageNum}
-                      className={`auto-pagination-number ${currentPage === pageNum ? 'active' : ''}`}
-                      onClick={() => setCurrentPage(pageNum)}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
+                ))}
               </div>
 
-              <button 
-                className="auto-pagination-btn"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Suivant
-                <i className="fas fa-chevron-right"></i>
-              </button>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="auto-pagination" role="navigation" aria-label="Pagination">
+                  <button 
+                    className="auto-pagination-btn"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    aria-label="Page précédente"
+                  >
+                    <i className="fas fa-chevron-left"></i>
+                    Précédent
+                  </button>
+                  
+                  <div className="auto-pagination-numbers">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          className={`auto-pagination-number ${currentPage === pageNum ? 'active' : ''}`}
+                          onClick={() => handlePageChange(pageNum)}
+                          aria-label={`Page ${pageNum}`}
+                          aria-current={currentPage === pageNum ? 'page' : undefined}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button 
+                    className="auto-pagination-btn"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    aria-label="Page suivante"
+                  >
+                    Suivant
+                    <i className="fas fa-chevron-right"></i>
+                  </button>
+                </div>
+              )}
+              
+              {paginatedVehicles.length === 0 && (
+                <div className="auto-no-results">
+                  <i className="fas fa-car"></i>
+                  <h3>Aucun véhicule trouvé</h3>
+                  <p>Essayez de modifier vos critères de recherche</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Loading skeletons */}
+          {loading && (
+            <div className={`auto-vehicles-grid ${viewMode === 'list' ? 'list-view' : ''}`}>
+              {Array.from({ length: vehiclesPerPage }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           )}
         </div>
       </section>
 
-      {/* Section Témoignages */}
+      {/* Testimonials Section */}
       <section className="auto-testimonials">
-        <div className="container">
-          <div className="text-center">
-            <h2 className="auto-section-title">
-              Découvrez les témoignages de nos clients satisfaits
-            </h2>
+        <div className="auto-container">
+          <div className="auto-section-header">
+            <h2 className="auto-section-title">Ce que disent nos clients</h2>
           </div>
-
+          
           <div className="auto-testimonials-grid">
             <div className="auto-testimonial-card">
               <div className="auto-testimonial-content">
                 <div className="auto-testimonial-rating">
-                  {[...Array(5)].map((_, i) => (
-                    <i key={i} className="fas fa-star"></i>
-                  ))}
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
                 </div>
                 <p className="auto-testimonial-text">
-                  "Service exceptionnel ! La réservation est rapide et sécurisée. 
-                  Je recommande vivement cette plateforme."
+                  "Service exceptionnel ! La réservation est rapide et sécurisée. Je recommande vivement cette plateforme."
                 </p>
               </div>
               <div className="auto-testimonial-author">
                 <div className="auto-author-avatar">M</div>
                 <div>
-                  <h4>Marie Dubois</h4>
-                  <p>Cliente fidèle</p>
+                  <div className="auto-author-name">Marie Dubois</div>
+                  <div className="auto-author-role">Cliente fidèle</div>
                 </div>
               </div>
             </div>
-
+            
             <div className="auto-testimonial-card">
               <div className="auto-testimonial-content">
                 <div className="auto-testimonial-rating">
-                  {[...Array(5)].map((_, i) => (
-                    <i key={i} className="fas fa-star"></i>
-                  ))}
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
                 </div>
                 <p className="auto-testimonial-text">
-                  "Excellente expérience avec des véhicules de qualité et un processus 
-                  de paiement transparent."
+                  "Excellente expérience avec des véhicules de qualité et un processus de paiement transparent."
                 </p>
               </div>
               <div className="auto-testimonial-author">
-                <div className="auto-author-avatar">J</div>
+                <div className="auto-author-avatar">P</div>
                 <div>
-                  <h4>Jean Martin</h4>
-                  <p>Professionnel</p>
+                  <div className="auto-author-name">Pierre Martin</div>
+                  <div className="auto-author-role">Professionnel</div>
                 </div>
               </div>
             </div>
-
+            
             <div className="auto-testimonial-card">
               <div className="auto-testimonial-content">
                 <div className="auto-testimonial-rating">
-                  {[...Array(5)].map((_, i) => (
-                    <i key={i} className="fas fa-star"></i>
-                  ))}
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
+                  <i className="fas fa-star" aria-hidden="true"></i>
                 </div>
                 <p className="auto-testimonial-text">
-                  "La plateforme rend la location de voitures tellement simple et fiable ! 
-                  Innovation remarquable."
+                  "La plateforme rend la location de voitures tellement simple et fiable ! Innovation remarquable."
                 </p>
               </div>
               <div className="auto-testimonial-author">
                 <div className="auto-author-avatar">S</div>
                 <div>
-                  <h4>Sophie Laurent</h4>
-                  <p>Entrepreneuse</p>
+                  <div className="auto-author-name">Sophie Laurent</div>
+                  <div className="auto-author-role">Entrepreneuse</div>
                 </div>
               </div>
             </div>
@@ -1005,22 +1076,19 @@ const VehiculeList = ({ token, user, onLogout }) => {
         </div>
       </section>
 
-      {/* Section CTA */}
+      {/* CTA Section */}
       <section className="auto-cta">
         <div className="auto-cta-content">
-          <h2 className="auto-cta-title">
-            Réservez votre véhicule dès maintenant
-          </h2>
+          <h2 className="auto-cta-title">Prêt à partir ?</h2>
           <p className="auto-cta-subtitle">
-            Rejoignez des milliers de clients satisfaits et découvrez 
-            une nouvelle façon de louer des véhicules.
+            Rejoignez des milliers de clients satisfaits et découvrez une nouvelle façon de louer des véhicules.
           </p>
           <div className="auto-cta-buttons">
-            <button className="auto-btn auto-btn-primary auto-btn-lg">
-              <i className="fas fa-car"></i>
-              Voir les véhicules
+            <button className="auto-btn auto-btn-primary" onClick={() => navigate('/register')}>
+              <i className="fas fa-user-plus"></i>
+              Créer un compte
             </button>
-            <button className="auto-btn auto-btn-secondary auto-btn-lg">
+            <button className="auto-btn auto-btn-secondary">
               <i className="fas fa-phone"></i>
               Nous contacter
             </button>
@@ -1036,100 +1104,92 @@ const VehiculeList = ({ token, user, onLogout }) => {
               <h3>AutoRent</h3>
             </div>
             <p className="auto-footer-description">
-              Votre partenaire de confiance pour la location de véhicules premium. 
-              Service professionnel, véhicules de qualité, expérience exceptionnelle.
+              La plateforme de location de location de véhicules la plus fiable et innovante du marché.
             </p>
             <div className="auto-social-links">
-              <a href="#" className="auto-social-link">
+              <a href="#" className="auto-social-link" aria-label="Facebook">
                 <i className="fab fa-facebook-f"></i>
               </a>
-              <a href="#" className="auto-social-link">
+              <a href="#" className="auto-social-link" aria-label="Twitter">
                 <i className="fab fa-twitter"></i>
               </a>
-              <a href="#" className="auto-social-link">
+              <a href="#" className="auto-social-link" aria-label="Instagram">
                 <i className="fab fa-instagram"></i>
               </a>
-              <a href="#" className="auto-social-link">
+              <a href="#" className="auto-social-link" aria-label="LinkedIn">
                 <i className="fab fa-linkedin-in"></i>
               </a>
             </div>
           </div>
-
+          
           <div className="auto-footer-section">
             <h4 className="auto-footer-title">Services</h4>
             <ul className="auto-footer-links">
               <li><a href="#" className="auto-footer-link">Location courte durée</a></li>
               <li><a href="#" className="auto-footer-link">Location longue durée</a></li>
               <li><a href="#" className="auto-footer-link">Véhicules de luxe</a></li>
-              <li><a href="#" className="auto-footer-link">Assurance complète</a></li>
+              <li><a href="#" className="auto-footer-link">Assurance premium</a></li>
             </ul>
           </div>
-
+          
           <div className="auto-footer-section">
             <h4 className="auto-footer-title">Support</h4>
             <ul className="auto-footer-links">
               <li><a href="#" className="auto-footer-link">Centre d'aide</a></li>
-              <li><a href="#" className="auto-footer-link">Nous contacter</a></li>
               <li><a href="#" className="auto-footer-link">FAQ</a></li>
-              <li><a href="#" className="auto-footer-link">Conditions générales</a></li>
+              <li><a href="#" className="auto-footer-link">Nous contacter</a></li>
+              <li><a href="#" className="auto-footer-link">Signaler un problème</a></li>
             </ul>
           </div>
-
+          
           <div className="auto-footer-section">
             <h4 className="auto-footer-title">Contact</h4>
             <ul className="auto-footer-contact">
-              <li>
-                <i className="fas fa-map-marker-alt"></i>
-                <span>123 Rue de la Location, 75001 Paris</span>
-              </li>
               <li>
                 <i className="fas fa-phone"></i>
                 <span>+33 1 23 45 67 89</span>
               </li>
               <li>
                 <i className="fas fa-envelope"></i>
-                <span>contact@autorent.com</span>
+                <span>contact@autorent.fr</span>
+              </li>
+              <li>
+                <i className="fas fa-map-marker-alt"></i>
+                <span>123 Rue de la Location, Paris</span>
               </li>
             </ul>
           </div>
         </div>
-
+        
         <div className="auto-footer-bottom">
           <p>&copy; 2024 AutoRent. Tous droits réservés.</p>
           <div className="auto-footer-legal">
-            <a href="#" className="auto-footer-link">Politique de confidentialité</a>
             <a href="#" className="auto-footer-link">Mentions légales</a>
-            <a href="#" className="auto-footer-link">Cookies</a>
+            <a href="#" className="auto-footer-link">Politique de confidentialité</a>
+            <a href="#" className="auto-footer-link">CGU</a>
           </div>
         </div>
       </footer>
 
-      {/* Modales */}
-      {/* Modale de réservation */}
+      {/* Modal de réservation */}
       {showReservationModal && selectedVehicle && (
-        <div className="auto-modal-overlay" onClick={closeReservationModal}>
-          <div className="auto-modal auto-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="auto-modal-overlay" onClick={closeReservationModal} role="presentation">
+          <div className="auto-modal auto-modal-large" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="reservation-title">
             <div className="auto-modal-header">
-              <h2>
+              <h2 id="reservation-title">
                 <i className="fas fa-calendar-plus"></i>
                 Réserver ce véhicule
               </h2>
-              <button 
-                className="auto-modal-close"
-                onClick={closeReservationModal}
-              >
+              <button className="auto-modal-close" onClick={closeReservationModal} aria-label="Fermer la modale">
                 <i className="fas fa-times"></i>
               </button>
             </div>
 
             <div className="auto-modal-vehicle">
-              <img 
-                src={selectedVehicle.image} 
-                alt={`${selectedVehicle.marque} ${selectedVehicle.modele}`}
-              />
+              <img src={selectedVehicle.image} alt={`${selectedVehicle.marque} ${selectedVehicle.modele}`} />
               <div>
                 <h3>{selectedVehicle.marque} {selectedVehicle.modele}</h3>
-                <p>{selectedVehicle.prix_par_jour}€/jour • {selectedVehicle.carburant}</p>
+                <p><strong>{selectedVehicle.prix_par_jour}€/jour</strong> • {selectedVehicle.carburant}</p>
                 <span className={`auto-status-badge ${selectedVehicle.statut}`}>
                   {selectedVehicle.statut}
                 </span>
@@ -1139,43 +1199,36 @@ const VehiculeList = ({ token, user, onLogout }) => {
             <form className="auto-modal-form" onSubmit={(e) => e.preventDefault()}>
               <div className="auto-form-row">
                 <div className="auto-form-group">
-                  <label>Date de début *</label>
+                  <label htmlFor="date_debut">Date de début *</label>
                   <input
+                    id="date_debut"
                     type="date"
                     value={reservationData.date_debut}
-                    onChange={(e) => setReservationData(prev => ({
-                      ...prev,
-                      date_debut: e.target.value
-                    }))}
-                    required
+                    onChange={(e) => setReservationData(prev => ({ ...prev, date_debut: e.target.value }))}
                     min={new Date().toISOString().split('T')[0]}
+                    required
                   />
                 </div>
-
                 <div className="auto-form-group">
-                  <label>Date de fin *</label>
+                  <label htmlFor="date_fin">Date de fin *</label>
                   <input
+                    id="date_fin"
                     type="date"
                     value={reservationData.date_fin}
-                    onChange={(e) => setReservationData(prev => ({
-                      ...prev,
-                      date_fin: e.target.value
-                    }))}
-                    required
+                    onChange={(e) => setReservationData(prev => ({ ...prev, date_fin: e.target.value }))}
                     min={reservationData.date_debut || new Date().toISOString().split('T')[0]}
+                    required
                   />
                 </div>
               </div>
 
               <div className="auto-form-group">
-                <label>Notes additionnelles</label>
+                <label htmlFor="notes">Notes supplémentaires</label>
                 <textarea
+                  id="notes"
                   value={reservationData.notes}
-                  onChange={(e) => setReservationData(prev => ({
-                    ...prev,
-                    notes: e.target.value
-                  }))}
-                  placeholder="Commentaires ou demandes spéciales..."
+                  onChange={(e) => setReservationData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Informations complémentaires..."
                   rows="3"
                 />
               </div>
@@ -1187,10 +1240,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                   <input
                     type="checkbox"
                     checked={reservationData.assurance_complete}
-                    onChange={(e) => setReservationData(prev => ({
-                      ...prev,
-                      assurance_complete: e.target.checked
-                    }))}
+                    onChange={(e) => setReservationData(prev => ({ ...prev, assurance_complete: e.target.checked }))}
                   />
                   <span>Assurance complète (+20€/jour)</span>
                 </label>
@@ -1199,10 +1249,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                   <input
                     type="checkbox"
                     checked={reservationData.conducteur_supplementaire}
-                    onChange={(e) => setReservationData(prev => ({
-                      ...prev,
-                      conducteur_supplementaire: e.target.checked
-                    }))}
+                    onChange={(e) => setReservationData(prev => ({ ...prev, conducteur_supplementaire: e.target.checked }))}
                   />
                   <span>Conducteur supplémentaire (+10€/jour)</span>
                 </label>
@@ -1211,10 +1258,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                   <input
                     type="checkbox"
                     checked={reservationData.gps}
-                    onChange={(e) => setReservationData(prev => ({
-                      ...prev,
-                      gps: e.target.checked
-                    }))}
+                    onChange={(e) => setReservationData(prev => ({ ...prev, gps: e.target.checked }))}
                   />
                   <span>GPS (+5€/jour)</span>
                 </label>
@@ -1223,10 +1267,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                   <input
                     type="checkbox"
                     checked={reservationData.siege_enfant}
-                    onChange={(e) => setReservationData(prev => ({
-                      ...prev,
-                      siege_enfant: e.target.checked
-                    }))}
+                    onChange={(e) => setReservationData(prev => ({ ...prev, siege_enfant: e.target.checked }))}
                   />
                   <span>Siège enfant (+8€/jour)</span>
                 </label>
@@ -1238,14 +1279,14 @@ const VehiculeList = ({ token, user, onLogout }) => {
               </div>
 
               <div className="auto-modal-actions">
-                <button 
+                <button
                   type="button"
                   className="auto-btn auto-btn-secondary"
                   onClick={closeReservationModal}
                 >
                   Annuler
                 </button>
-                <button 
+                <button
                   type="button"
                   className="auto-btn auto-btn-primary"
                   onClick={handleReservation}
@@ -1254,7 +1295,7 @@ const VehiculeList = ({ token, user, onLogout }) => {
                   {reservationLoading ? (
                     <>
                       <i className="fas fa-spinner fa-spin"></i>
-                      Réservation...
+                      Traitement...
                     </>
                   ) : (
                     <>
@@ -1269,19 +1310,16 @@ const VehiculeList = ({ token, user, onLogout }) => {
         </div>
       )}
 
-      {/* Modale détails véhicule */}
+      {/* Modal de détails du véhicule */}
       {showVehicleDetails && (
-        <div className="auto-modal-overlay" onClick={closeVehicleDetails}>
-          <div className="auto-modal auto-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="auto-modal-overlay" onClick={closeVehicleDetails} role="presentation">
+          <div className="auto-modal auto-modal-large" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="details-title">
             <div className="auto-modal-header">
-              <h2>
+              <h2 id="details-title">
                 <i className="fas fa-car"></i>
                 Détails du véhicule
               </h2>
-              <button 
-                className="auto-modal-close"
-                onClick={closeVehicleDetails}
-              >
+              <button className="auto-modal-close" onClick={closeVehicleDetails} aria-label="Fermer la modale">
                 <i className="fas fa-times"></i>
               </button>
             </div>
@@ -1300,26 +1338,29 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 <strong>Modèle:</strong> {showVehicleDetails.modele}
               </div>
               <div className="auto-detail-item">
-                <strong>Année:</strong> {showVehicleDetails.annee || 'N/A'}
+                <strong>Immatriculation:</strong> {showVehicleDetails.immatriculation}
               </div>
               <div className="auto-detail-item">
-                <strong>Places:</strong> {showVehicleDetails.nombre_places}
+                <strong>Année:</strong> {showVehicleDetails.annee || 'Non spécifiée'}
               </div>
               <div className="auto-detail-item">
                 <strong>Carburant:</strong> {showVehicleDetails.carburant}
               </div>
               <div className="auto-detail-item">
-                <strong>Transmission:</strong> {showVehicleDetails.transmission || 'Automatique'}
+                <strong>Transmission:</strong> {showVehicleDetails.transmission || 'Manuelle'}
               </div>
               <div className="auto-detail-item">
-                <strong>Localisation:</strong> {showVehicleDetails.localisation}
+                <strong>Places:</strong> {showVehicleDetails.nombre_places}
+              </div>
+              <div className="auto-detail-item">
+                <strong>Localisation:</strong> {showVehicleDetails.localisation || 'Non spécifiée'}
               </div>
               <div className="auto-detail-item">
                 <strong>Prix:</strong> {showVehicleDetails.prix_par_jour}€/jour
               </div>
               <div className="auto-detail-item">
                 <strong>Statut:</strong> 
-                <span className={`auto-status-badge ${showVehicleDetails.statut}`}>
+                <span className={`auto-status-badge ${showVehicleDetails.statut === 'disponible' ? 'available' : 'unavailable'}`}>
                   {showVehicleDetails.statut}
                 </span>
               </div>
@@ -1333,13 +1374,13 @@ const VehiculeList = ({ token, user, onLogout }) => {
             )}
 
             <div className="auto-modal-actions">
-              <button 
+              <button
                 className="auto-btn auto-btn-secondary"
                 onClick={closeVehicleDetails}
               >
                 Fermer
               </button>
-              <button 
+              <button
                 className={`auto-btn auto-btn-primary ${showVehicleDetails.statut !== 'disponible' ? 'disabled' : ''}`}
                 onClick={() => {
                   closeVehicleDetails();
@@ -1348,27 +1389,24 @@ const VehiculeList = ({ token, user, onLogout }) => {
                 disabled={showVehicleDetails.statut !== 'disponible'}
               >
                 <i className="fas fa-calendar-plus"></i>
-                Réserver maintenant
+                Réserver ce véhicule
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bouton scroll vers le haut */}
+      {/* Bouton scroll to top */}
       {showScrollTop && (
-        <button 
-          className="auto-scroll-top visible"
-          onClick={scrollToTop}
-        >
+        <button className="auto-scroll-top visible" onClick={scrollToTop} aria-label="Retour en haut">
           <i className="fas fa-chevron-up"></i>
         </button>
       )}
 
-      {/* Paiement sécurisé notification */}
+      {/* Badge de sécurité */}
       <div className="auto-security-badge">
         <i className="fas fa-shield-alt"></i>
-        <span>Paiement sécurisé</span>
+        <span>Paiements sécurisés</span>
       </div>
     </div>
   );

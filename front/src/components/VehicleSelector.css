@@ -1,56 +1,651 @@
-.vehicle-selector {
-    margin-bottom: 20px;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* Variables CSS spécifiques au VehicleRentalSelector */
+:root {
+  --vehicle-rental-selector-primary: #3498db;
+  --vehicle-rental-selector-primary-dark: #2980b9;
+  --vehicle-rental-selector-success: #2ecc71;
+  --vehicle-rental-selector-warning: #f39c12;
+  --vehicle-rental-selector-error: #e74c3c;
+  --vehicle-rental-selector-gray-100: #f8f9fa;
+  --vehicle-rental-selector-gray-200: #e9ecef;
+  --vehicle-rental-selector-gray-300: #dee2e6;
+  --vehicle-rental-selector-gray-400: #adb5bd;
+  --vehicle-rental-selector-gray-500: #6c757d;
+  --vehicle-rental-selector-gray-600: #495057;
+  --vehicle-rental-selector-gray-700: #343a40;
+  --vehicle-rental-selector-gray-900: #212529;
+  --vehicle-rental-selector-white: #ffffff;
+  --vehicle-rental-selector-border-radius: 0.5rem;
+  --vehicle-rental-selector-border-radius-sm: 0.375rem;
+  --vehicle-rental-selector-border-radius-lg: 0.75rem;
+  --vehicle-rental-selector-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  --vehicle-rental-selector-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.15);
+  --vehicle-rental-selector-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --vehicle-rental-selector-transition-fast: all 0.15s ease;
 }
 
-.vehicle-selector label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-    color: #333;
+/* Conteneur principal */
+.vehicle-rental-selector-container {
+  margin-bottom: 1.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.vehicle-select-dropdown {
+/* Sélecteur principal */
+.vehicle-rental-selector {
+  background: linear-gradient(135deg, var(--vehicle-rental-selector-gray-100) 0%, var(--vehicle-rental-selector-gray-200) 100%);
+  border-radius: var(--vehicle-rental-selector-border-radius-lg);
+  box-shadow: var(--vehicle-rental-selector-shadow);
+  border: 1px solid var(--vehicle-rental-selector-gray-300);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.vehicle-rental-selector::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--vehicle-rental-selector-primary), var(--vehicle-rental-selector-success));
+  border-radius: var(--vehicle-rental-selector-border-radius-lg) var(--vehicle-rental-selector-border-radius-lg) 0 0;
+}
+
+/* Header du sélecteur */
+.vehicle-rental-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vehicle-rental-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--vehicle-rental-selector-gray-600);
+  font-size: 1rem;
+  user-select: none;
+}
+
+.vehicle-rental-selector-label i {
+  color: var(--vehicle-rental-selector-primary);
+  font-size: 1.125rem;
+}
+
+.vehicle-rental-selector-loading-icon {
+  color: var(--vehicle-rental-selector-warning);
+  margin-left: 0.5rem;
+}
+
+.vehicle-rental-selector-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.vehicle-rental-selector-control-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--vehicle-rental-selector-gray-300);
+  background: var(--vehicle-rental-selector-white);
+  border-radius: var(--vehicle-rental-selector-border-radius);
+  cursor: pointer;
+  transition: var(--vehicle-rental-selector-transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vehicle-rental-selector-gray-500);
+}
+
+.vehicle-rental-selector-control-btn:hover:not(:disabled) {
+  background: var(--vehicle-rental-selector-primary);
+  color: var(--vehicle-rental-selector-white);
+  border-color: var(--vehicle-rental-selector-primary);
+  transform: translateY(-1px);
+}
+
+.vehicle-rental-selector-control-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Barre de recherche */
+.vehicle-rental-selector-search {
+  margin-bottom: 1rem;
+}
+
+.vehicle-rental-selector-search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.vehicle-rental-selector-search-input-wrapper i {
+  position: absolute;
+  left: 1rem;
+  color: var(--vehicle-rental-selector-gray-400);
+  font-size: 0.875rem;
+  z-index: 2;
+}
+
+.vehicle-rental-selector-search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  border: 2px solid var(--vehicle-rental-selector-gray-300);
+  border-radius: var(--vehicle-rental-selector-border-radius);
+  font-size: 0.875rem;
+  background: var(--vehicle-rental-selector-white);
+  color: var(--vehicle-rental-selector-gray-600);
+  transition: var(--vehicle-rental-selector-transition);
+}
+
+.vehicle-rental-selector-search-input:focus {
+  outline: none;
+  border-color: var(--vehicle-rental-selector-primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.vehicle-rental-selector-search-input:disabled {
+  background: var(--vehicle-rental-selector-gray-100);
+  cursor: not-allowed;
+}
+
+/* Wrapper du dropdown */
+.vehicle-rental-selector-dropdown-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Dropdown principal */
+.vehicle-rental-selector-dropdown {
+  width: 100%;
+  padding: 0.875rem 3rem 0.875rem 1rem;
+  border: 2px solid var(--vehicle-rental-selector-gray-300);
+  border-radius: var(--vehicle-rental-selector-border-radius);
+  font-size: 1rem;
+  background: var(--vehicle-rental-selector-white);
+  color: var(--vehicle-rental-selector-gray-600);
+  transition: var(--vehicle-rental-selector-transition);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23adb5bd' d='m2 0-2 2h4zm0 5 2-2h-4z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 12px;
+}
+
+.vehicle-rental-selector-dropdown:focus {
+  outline: none;
+  border-color: var(--vehicle-rental-selector-primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+  transform: translateY(-1px);
+}
+
+.vehicle-rental-selector-dropdown:hover:not(:disabled) {
+  border-color: var(--vehicle-rental-selector-gray-400);
+}
+
+.vehicle-rental-selector-dropdown:disabled {
+  background: var(--vehicle-rental-selector-gray-100);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Options du dropdown */
+.vehicle-rental-selector-dropdown option {
+  padding: 0.5rem;
+  color: var(--vehicle-rental-selector-gray-600);
+}
+
+.vehicle-rental-selector-dropdown optgroup {
+  font-weight: 600;
+  color: var(--vehicle-rental-selector-gray-700);
+  background: var(--vehicle-rental-selector-gray-100);
+}
+
+.vehicle-rental-selector-option-disabled {
+  color: var(--vehicle-rental-selector-gray-400);
+  font-style: italic;
+}
+
+/* Indicateur de statut */
+.vehicle-rental-selector-status-indicator {
+  position: absolute;
+  right: 2.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.vehicle-rental-selector-error-indicator {
+  color: var(--vehicle-rental-selector-error);
+  animation: vehicle-rental-selector-pulse 2s infinite;
+}
+
+/* Informations sur les véhicules */
+.vehicle-rental-selector-info {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(52, 152, 219, 0.05);
+  border-radius: var(--vehicle-rental-selector-border-radius-sm);
+  border-left: 4px solid var(--vehicle-rental-selector-primary);
+}
+
+.vehicle-rental-selector-info-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.vehicle-rental-selector-info-content:last-child {
+  margin-bottom: 0;
+}
+
+.vehicle-rental-selector-info-content i {
+  color: var(--vehicle-rental-selector-primary);
+  font-size: 0.875rem;
+}
+
+.vehicle-rental-selector-info-content span {
+  font-size: 0.875rem;
+  color: var(--vehicle-rental-selector-gray-700);
+  font-weight: 500;
+}
+
+.vehicle-rental-selector-error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: var(--vehicle-rental-selector-border-radius-sm);
+  border-left: 3px solid var(--vehicle-rental-selector-error);
+}
+
+.vehicle-rental-selector-error-message i {
+  color: var(--vehicle-rental-selector-error);
+  font-size: 0.875rem;
+}
+
+.vehicle-rental-selector-error-message span {
+  font-size: 0.875rem;
+  color: var(--vehicle-rental-selector-error);
+  font-weight: 500;
+}
+
+/* Aperçu du véhicule sélectionné */
+.vehicle-rental-selector-selected-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--vehicle-rental-selector-white);
+  border-radius: var(--vehicle-rental-selector-border-radius);
+  border: 1px solid var(--vehicle-rental-selector-gray-300);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.vehicle-rental-selector-selected-info h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--vehicle-rental-selector-gray-700);
+}
+
+.vehicle-rental-selector-selected-price {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--vehicle-rental-selector-primary);
+}
+
+/* États d'erreur, chargement et vide */
+.vehicle-rental-selector-loading,
+.vehicle-rental-selector-error,
+.vehicle-rental-selector-empty {
+  padding: 2rem;
+  text-align: center;
+  border-radius: var(--vehicle-rental-selector-border-radius-lg);
+  margin-bottom: 1.5rem;
+  border: 1px solid;
+}
+
+/* État de chargement */
+.vehicle-rental-selector-loading {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  color: #1976d2;
+  border-color: #90caf9;
+}
+
+.vehicle-rental-selector-loading-spinner {
+  margin-bottom: 1rem;
+}
+
+.vehicle-rental-selector-loading-spinner i {
+  font-size: 2.5rem;
+  animation: vehicle-rental-selector-spin 1s linear infinite;
+  color: var(--vehicle-rental-selector-primary);
+}
+
+.vehicle-rental-selector-progress-bar {
+  width: 200px;
+  height: 4px;
+  background: rgba(52, 152, 219, 0.2);
+  border-radius: 2px;
+  margin: 1rem auto 0;
+  overflow: hidden;
+}
+
+.vehicle-rental-selector-progress-fill {
+  height: 100%;
+  background: var(--vehicle-rental-selector-primary);
+  border-radius: 2px;
+  animation: vehicle-rental-selector-progress 2s ease-in-out infinite;
+}
+
+/* État d'erreur */
+.vehicle-rental-selector-error {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  color: #d32f2f;
+  border-color: #ef9a9a;
+}
+
+.vehicle-rental-selector-error-icon {
+  margin-bottom: 1rem;
+}
+
+.vehicle-rental-selector-error-icon i {
+  font-size: 2.5rem;
+  color: var(--vehicle-rental-selector-error);
+}
+
+.vehicle-rental-selector-error h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--vehicle-rental-selector-error);
+}
+
+.vehicle-rental-selector-error p {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #c62828;
+}
+
+.vehicle-rental-selector-error-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.vehicle-rental-selector-retry-btn,
+.vehicle-rental-selector-login-btn {
+  background: var(--vehicle-rental-selector-primary);
+  color: var(--vehicle-rental-selector-white);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--vehicle-rental-selector-border-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--vehicle-rental-selector-transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.vehicle-rental-selector-retry-btn:hover:not(:disabled),
+.vehicle-rental-selector-login-btn:hover:not(:disabled) {
+  background: var(--vehicle-rental-selector-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+}
+
+.vehicle-rental-selector-retry-btn:active,
+.vehicle-rental-selector-login-btn:active {
+  transform: translateY(0);
+}
+
+.vehicle-rental-selector-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vehicle-rental-selector-retry-info {
+  margin-top: 1rem;
+}
+
+.vehicle-rental-selector-retry-info small {
+  color: var(--vehicle-rental-selector-gray-500);
+  font-size: 0.8rem;
+}
+
+/* État vide */
+.vehicle-rental-selector-empty {
+  background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+  color: #ff8f00;
+  border-color: #ffcc02;
+}
+
+.vehicle-rental-selector-empty-icon {
+  margin-bottom: 1rem;
+}
+
+.vehicle-rental-selector-empty-icon i {
+  font-size: 2.5rem;
+  color: var(--vehicle-rental-selector-warning);
+}
+
+.vehicle-rental-selector-empty h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--vehicle-rental-selector-warning);
+}
+
+.vehicle-rental-selector-empty p {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #f57c00;
+}
+
+.vehicle-rental-selector-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.vehicle-rental-selector-refresh-btn {
+  background: var(--vehicle-rental-selector-warning);
+  color: var(--vehicle-rental-selector-white);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--vehicle-rental-selector-border-radius-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--vehicle-rental-selector-transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vehicle-rental-selector-refresh-btn:hover:not(:disabled) {
+  background: #e67e22;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(243, 156, 18, 0.3);
+}
+
+.vehicle-rental-selector-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Animations */
+@keyframes vehicle-rental-selector-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes vehicle-rental-selector-progress {
+  0% {
+    width: 0%;
+  }
+  50% {
+    width: 70%;
+  }
+  100% {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
-    background-color: white;
+  }
 }
 
-.vehicle-select-dropdown:focus {
-    outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+@keyframes vehicle-rental-selector-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
-.vehicle-selector-loading,
-.vehicle-selector-error,
-.vehicle-selector-empty {
-    padding: 15px;
-    text-align: center;
-    border-radius: 4px;
-    margin-bottom: 20px;
+@keyframes vehicle-rental-selector-fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.vehicle-selector-loading {
-    background-color: #e3f2fd;
-    color: #1976d2;
+/* Animations d'apparition */
+.vehicle-rental-selector {
+  animation: vehicle-rental-selector-fadeIn 0.3s ease-out;
 }
 
-.vehicle-selector-error {
-    background-color: #ffebee;
-    color: #d32f2f;
-}
+/* Masquer le header si nécessaire */
 header {
-    display: none !important;
+  display: none !important;
 }
 
-.vehicle-selector-empty {
-    background-color: #fff8e1;
-    color: #ff8f00;
+/* Design responsive */
+@media (max-width: 768px) {
+  .vehicle-rental-selector {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .vehicle-rental-selector-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .vehicle-rental-selector-dropdown {
+    padding: 0.75rem 2.5rem 0.75rem 0.875rem;
+    font-size: 0.875rem;
+  }
+
+  .vehicle-rental-selector-search-input {
+    padding: 0.625rem 0.875rem 0.625rem 2.25rem;
+    font-size: 0.875rem;
+  }
+
+  .vehicle-rental-selector-info-content span,
+  .vehicle-rental-selector-error-message span {
+    font-size: 0.8rem;
+  }
+
+  .vehicle-rental-selector-loading,
+  .vehicle-rental-selector-error,
+  .vehicle-rental-selector-empty {
+    padding: 1.5rem;
+  }
+
+  .vehicle-rental-selector-error-actions,
+  .vehicle-rental-selector-empty-actions {
+    flex-direction: column;
+  }
+
+  .vehicle-rental-selector-retry-btn,
+  .vehicle-rental-selector-login-btn,
+  .vehicle-rental-selector-refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .vehicle-rental-selector {
+    padding: 0.75rem;
+    border-radius: var(--vehicle-rental-selector-border-radius);
+  }
+
+  .vehicle-rental-selector-label {
+    font-size: 0.9rem;
+  }
+
+  .vehicle-rental-selector-dropdown {
+    padding: 0.625rem 2rem 0.625rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .vehicle-rental-selector-loading-spinner i,
+  .vehicle-rental-selector-error-icon i,
+  .vehicle-rental-selector-empty-icon i {
+    font-size: 2rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .vehicle-rental-selector {
+    border: 2px solid var(--vehicle-rental-selector-gray-900);
+  }
+  
+  .vehicle-rental-selector-dropdown {
+    border: 2px solid var(--vehicle-rental-selector-gray-900);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .vehicle-rental-selector,
+  .vehicle-rental-selector-dropdown,
+  .vehicle-rental-selector-control-btn,
+  .vehicle-rental-selector-retry-btn,
+  .vehicle-rental-selector-login-btn,
+  .vehicle-rental-selector-refresh-btn {
+    animation: none;
+    transition: none;
+  }
+  
+  .vehicle-rental-selector-loading-spinner i {
+    animation: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .vehicle-rental-selector {
+    box-shadow: none;
+    border: 1px solid var(--vehicle-rental-selector-gray-900);
+  }
+  
+  .vehicle-rental-selector-controls {
+    display: none;
+  }
 }

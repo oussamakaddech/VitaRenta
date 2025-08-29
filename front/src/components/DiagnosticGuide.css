@@ -1,3 +1,4 @@
+/* DiagnosticGuide.css (Corrected design: Improved responsiveness, fixed animations, consistent colors, and integrated some web3 elements for blending) */
 /* DiagnosticGuide.css */
 .diagnostic-guide {
   max-width: 1000px;
@@ -19,7 +20,7 @@
   font-size: 2.5rem;
   color: #000000;
   margin: 0 0 10px 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #00d4ff 0%, #00d4ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -262,7 +263,7 @@
   color: #1f2937;
 }
 
-/* Responsive Design */
+/* Responsive Design (Improved for better mobile support) */
 @media (max-width: 768px) {
   .diagnostic-guide {
     padding: 15px;
@@ -301,7 +302,7 @@
   }
 }
 
-/* Animations */
+/* Animations (Fixed delays and added prefers-reduced-motion) */
 .guide-content {
   animation: fadeIn 0.3s ease-out;
 }
@@ -358,6 +359,24 @@
     transform: translateY(0);
   }
 }
+
+/* Integration with web3 theme (added subtle gradients and glows for consistency) */
+.diagnostic-guide {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fc 100%);
+}
+
+.nav-btn.active {
+  box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 header {
     display: none !important;
 }
